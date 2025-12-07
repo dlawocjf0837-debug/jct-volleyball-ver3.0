@@ -1,0 +1,412 @@
+
+import React from 'react';
+
+export interface Stats {
+    height: number;
+    shuttleRun: number;
+    flexibility: number;
+    fiftyMeterDash: number;
+    underhand: number;
+    serve: number;
+}
+
+export const STAT_KEYS: (keyof Stats)[] = ['height', 'shuttleRun', 'flexibility', 'fiftyMeterDash', 'underhand', 'serve'];
+
+export const STAT_NAME_KEYS: Record<keyof Stats, string> = {
+    height: 'stat_height',
+    shuttleRun: 'stat_shuttleRun',
+    flexibility: 'stat_flexibility',
+    fiftyMeterDash: 'stat_fiftyMeterDash',
+    underhand: 'stat_underhand',
+    serve: 'stat_serve',
+};
+
+
+export interface Player {
+    id: string;
+    originalName: string;
+    anonymousName: string;
+    class: string;
+    studentNumber: string;
+    gender: string;
+    stats: Stats;
+    isCaptain: boolean;
+    totalScore: number;
+}
+
+export enum Screen {
+    Input = 'INPUT',
+    Builder = 'BUILDER',
+}
+
+export type TeamId = string;
+
+export interface Team {
+    id: TeamId;
+    name: string;
+    captainId: string;
+    playerIds: string[];
+    color: string;
+    emblem?: string;
+}
+
+export interface SavedTeamInfo {
+    teamName: string;
+    captainId: string;
+
+    playerIds: string[];
+    cheerUrl?: string;
+    cheerUrl2?: string;
+    cheerName2?: string;
+    emblem?: string;
+    color?: string;
+    slogan?: string;
+    memo?: string;
+}
+export interface TeamSet {
+    id: string;
+    className: string;
+    savedAt: string;
+    teams: SavedTeamInfo[];
+    players: Record<string, Player>;
+    teamCount?: number;
+}
+
+export type UserEmblem = {
+    id: string;
+    data: string;
+}
+
+export interface PlayerStats {
+    points: number;
+    serviceAces: number;
+    serviceFaults: number;
+    blockingPoints: number;
+    spikeSuccesses: number;
+    // New stats
+    serveIn: number;
+    digs: number;
+    assists: number;
+}
+
+export interface TeamMatchState {
+    name: string;
+    key?: string;
+    cheerUrl?: string;
+    cheerUrl2?: string;
+    cheerName2?: string;
+    emblem?: string;
+    color?: string;
+    slogan?: string;
+    score: number;
+    setsWon: number;
+    timeouts: number;
+    fairPlay: number;
+    threeHitPlays: number;
+    serviceAces: number;
+    serviceFaults: number;
+    blockingPoints: number;
+    spikeSuccesses: number;
+    players: Record<string, Player>;
+    playerStats: Record<string, PlayerStats>;
+    onCourtPlayerIds: string[];
+    benchPlayerIds: string[];
+}
+
+export type ScoreEventType = 'ACE' | 'FAULT' | 'BLOCK' | 'SPIKE' | 'SCORE' | 'TIMEOUT' | 'GAME_END' | 'SUB' | 'FAIRPLAY' | '3HIT' | 'SERVE_IN' | 'DIG' | 'ASSIST' | 'UNKNOWN';
+
+export interface ScoreEvent {
+    score: { a: number; b: number };
+    descriptionKey: string;
+    replacements?: Record<string, string | number>;
+    time?: number;
+    substitution?: {
+        team: 'A' | 'B';
+        playerIn: string;
+        playerOut: string;
+    };
+    type: ScoreEventType;
+}
+
+export interface MatchState {
+    teamA: TeamMatchState;
+    teamB: TeamMatchState;
+    servingTeam: 'A' | 'B' | null;
+    currentSet: number;
+    isDeuce: boolean;
+    gameOver: boolean;
+    winner: 'A' | 'B' | null;
+    scoreHistory: { a: number, b: number }[];
+    eventHistory: ScoreEvent[];
+    scoreLocations: any[];
+    status?: 'in_progress' | 'completed';
+    timeout: { team: 'A' | 'B', timeLeft: number } | null;
+    tournamentId?: string;
+    tournamentMatchId?: string;
+    leagueId?: string;
+    leagueMatchId?: string;
+    time?: number;
+    undoStack?: MatchState[]; // For Undo functionality
+}
+
+export type Action =
+    | { type: 'LOAD_STATE'; state: MatchState }
+    | { type: 'RESET_STATE' }
+    | { type: 'UNDO' } // New Undo Action
+    | { type: 'SCORE'; team: 'A' | 'B'; amount: number }
+    | { type: 'SERVICE_ACE'; team: 'A' | 'B'; playerId: string }
+    | { type: 'SERVICE_FAULT'; team: 'A' | 'B'; playerId: string }
+    | { type: 'BLOCKING_POINT'; team: 'A' | 'B'; playerId: string }
+    | { type: 'SPIKE_SUCCESS'; team: 'A' | 'B'; playerId: string }
+    | { type: 'SERVE_IN'; team: 'A' | 'B'; playerId: string } // New
+    | { type: 'DIG_SUCCESS'; team: 'A' | 'B'; playerId: string } // New
+    | { type: 'ASSIST_SUCCESS'; team: 'A' | 'B'; playerId: string } // New
+    | { type: 'TAKE_TIMEOUT'; team: 'A' | 'B' }
+    | { type: 'UPDATE_TIMEOUT_TIMER'; timeLeft: number }
+    | { type: 'END_TIMEOUT' }
+    | { type: 'ADJUST_FAIR_PLAY'; team: 'A' | 'B'; amount: number }
+    | { type: 'INCREMENT_3_HIT'; team: 'A' | 'B' }
+    | { type: 'SET_SERVING_TEAM'; team: 'A' | 'B' }
+    | { type: 'SUBSTITUTE_PLAYER'; team: 'A' | 'B'; playerIn: string; playerOut: string };
+
+
+export interface Badge {
+    id: string;
+    nameKey: string;
+    descriptionKey: string;
+    icon: React.FC<{ className?: string }>;
+    isCompetitive?: boolean;
+}
+
+export interface PlayerAchievements {
+    [playerId: string]: {
+        earnedBadgeIds: Set<string>;
+    };
+}
+
+export type PlayerCumulativeStats = {
+    serviceAces: number;
+    serviceFaults: number;
+    spikeSuccesses: number;
+    blockingPoints: number;
+    matchesPlayed: number;
+    wins: number;
+    points: number;
+    badgeCount: number;
+    plusMinus: number;
+    serveIn: number; // New
+    digs: number; // New
+    assists: number; // New
+};
+
+export interface ToastState {
+    message: string;
+    type: 'success' | 'error';
+}
+
+export interface AppSettings {
+    winningScore: number;
+    includeBonusPointsInWinner: boolean;
+    googleSheetUrl?: string;
+}
+export type MvpResult = {
+    player: Player;
+    team: TeamMatchState;
+    stats: PlayerStats;
+    mvpScore: number;
+    scoreBreakdown: Record<string, number>;
+} | null;
+
+export interface Tournament {
+    id: string;
+    name: string;
+    teamKeys: string[];
+    createdAt: string;
+    rounds: TournamentMatch[][];
+}
+export interface TournamentMatch {
+    id: string;
+    teamA: { key: string | null; name: string | null, score?: number };
+    teamB: { key: string | null; name: string | null, score?: number };
+    winnerKey: string | null;
+    nextMatchId: string | null;
+    round: number;
+}
+
+export interface League {
+    id: string;
+    name: string;
+    createdAt: string;
+    teamKeys: string[];
+    schedule: LeagueMatch[];
+}
+
+export interface LeagueMatch {
+    id: string;
+    teamAKey: string;
+    teamBKey: string;
+    teamAName: string;
+    teamBName: string;
+    matchId: string | null; // To link with a MatchState in matchHistory
+    day?: number;
+}
+
+
+export type CoachingLog = {
+    date: string;
+    content: string;
+};
+
+export type PlayerCoachingLogs = {
+    [playerId: string]: CoachingLog[];
+};
+
+export type TeamStats = {
+    teamName: string;
+    className: string;
+    teamCount: number;
+    emblem?: string;
+    slogan?: string;
+    color?: string;
+    gamesPlayed: number;
+    wins: number;
+    losses: number;
+    ties: number;
+    winRate: number;
+    points: number;
+    pointsFor: number;
+    pointsAgainst: number;
+    pointDifference: number;
+    
+    // Detailed stats
+    avgPointsFor: number;
+    avgPointsAgainst: number;
+    serviceAces: number;
+    serviceFaults: number;
+    blockingPoints: number;
+    spikeSuccesses: number;
+    threeHitPlays: number;
+    fairPlay: number;
+    
+    // New stats
+    serveIn?: number;
+    avgServeSuccess?: number;
+};
+
+
+export type EnrichedMatch = MatchState & {
+  id: string;
+  status: 'in_progress' | 'completed';
+  date: string;
+  time?: number;
+};
+
+// PeerJS related types
+export interface PeerJSOption {
+  key?: string;
+  host?: string;
+  port?: number;
+  path?: string;
+  secure?: boolean;
+  config?: any;
+  debug?: number;
+}
+
+export interface DataConnection {
+  on(event: 'data', callback: (data: any) => void): void;
+  on(event: 'open', callback: () => void): void;
+  on(event: 'close', callback: () => void): void;
+  on(event: 'error', callback: (err: any) => void): void;
+  send(data: any): void;
+  close(): void;
+  peer: string;
+}
+
+export interface P2PState {
+    peerId: string | null;
+    isHost: boolean;
+    isConnected: boolean;
+    connections: DataConnection[];
+    status: 'disconnected' | 'connecting' | 'connected' | 'error';
+    error?: string;
+}
+
+export type P2PMessage = {
+    type: 'full_state_sync';
+    payload: MatchState;
+} | {
+    type: 'action';
+    payload: Action;
+} | {
+    type: 'settings_sync';
+    payload: AppSettings;
+} | {
+    type: 'team_sets_sync';
+    payload: TeamSet[];
+} | {
+    type: 'user_emblems_sync';
+    payload: UserEmblem[];
+};
+
+export type Language = 'ko' | 'id';
+
+export interface DataContextType {
+    teamSets: TeamSet[];
+    teamSetsMap: Map<string, { set: TeamSet, team: SavedTeamInfo }>;
+    matchHistory: (MatchState & { date: string, time?: number })[];
+    userEmblems: UserEmblem[];
+    playerAchievements: PlayerAchievements;
+    coachingLogs: PlayerCoachingLogs;
+    playerCumulativeStats: Record<string, Partial<PlayerCumulativeStats>>;
+    teamPerformanceData: TeamStats[];
+    tournaments: Tournament[];
+    leagues: League[];
+    isLoading: boolean;
+    toast: ToastState;
+    saveTeamSets: (newTeamSets: TeamSet[], successMessage?: string) => Promise<void>;
+    saveMatchHistory: (newHistory: (MatchState & { date: string, time?: number })[], successMessage?: string) => Promise<void>;
+    saveUserEmblems: (newUserEmblems: UserEmblem[]) => Promise<void>;
+    saveTournaments: (newTournaments: Tournament[]) => Promise<void>;
+    saveLeagues: (newLeagues: League[]) => Promise<void>;
+    saveCoachingLog: (playerId: string, content: string) => Promise<void>;
+    deleteTeam: (teamKey: string) => Promise<void>;
+    addPlayerToTeam: (teamKey: string, playerName: string) => Promise<void>;
+    removePlayerFromTeam: (teamKey: string, playerId: string) => Promise<void>;
+    reloadData: () => void;
+    exportData: () => void;
+    saveImportedData: (data: any) => void;
+    showToast: (message: string, type?: 'success' | 'error', replacements?: Record<string, string | number>) => void;
+    hideToast: () => void;
+    resetAllData: () => void;
+    matchState: MatchState | null;
+    matchTime: number;
+    timerOn: boolean;
+    dispatch: React.Dispatch<Action>;
+    // FIX: Changed React.SetState to React.SetStateAction
+    setTimerOn: React.Dispatch<React.SetStateAction<boolean>>;
+    clearInProgressMatch: () => void;
+    startMatch: (
+        teams?: { teamA: string; teamB: string; teamAKey?: string; teamBKey?: string; teamAInfo?: SavedTeamInfo | null; teamBInfo?: SavedTeamInfo | null },
+        existingState?: MatchState,
+        attendingPlayers?: { teamA: Record<string, Player>; teamB: Record<string, Player> },
+        tournamentInfo?: { tournamentId: string; tournamentMatchId: string },
+        onCourtIds?: { teamA: Set<string>; teamB: Set<string> },
+        leagueInfo?: { leagueId: string, leagueMatchId: string }
+    ) => void;
+    recoveryData: any | null;
+    handleRestoreFromBackup: () => void;
+    dismissRecovery: () => void;
+    generateAiResponse: (prompt: string) => Promise<string>;
+    isPasswordModalOpen: boolean;
+    handlePasswordSuccess: () => void;
+    handlePasswordCancel: () => void;
+    requestPassword: (onSuccess: () => void) => void;
+    settings: AppSettings;
+    saveSettings: (newSettings: AppSettings) => Promise<void>;
+    p2p: P2PState;
+    startHostSession: (initialState?: MatchState) => void;
+    joinSession: (peerId: string, onSuccess: () => void) => void;
+    closeSession: () => void;
+    language: Language;
+    setLanguage: (lang: Language) => void;
+}

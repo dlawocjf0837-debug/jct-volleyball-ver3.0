@@ -1,0 +1,8 @@
+{
+  "name": "JCT 실시간 연동(국제 교류 수업용+기록 세부화)",
+  "description": "A dynamic, sporty application by JCT for school teachers to build fair and balanced volleyball teams using a drag-and-drop draft system with AI-powered suggestions.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JCT Volleyball Team Builder</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+    body {
+        background-image:
+            linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+        background-size: 30px 30px;
+    }
+    .toggle-checkbox:checked {
+        right: 0;
+        border-color: #00A3FF; /* electric-blue */
+    }
+    .toggle-checkbox:checked + .toggle-label {
+        background-color: #00A3FF; /* electric-blue */
+    }
+    @keyframes fade-in {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+        animation: fade-in 0.5s ease-out forwards;
+    }
+    @keyframes glow {
+        0%, 100% { box-shadow: 0 0 5px #00A3FF, 0 0 10px #00A3FF, 0 0 15px #00A3FF; }
+        50% { box-shadow: 0 0 10px #00A3FF, 0 0 20px #00A3FF, 0 0 30px #00A3FF; }
+    }
+    .glowing-border {
+        animation: glow 2s ease-in-out infinite;
+        border-color: #00A3FF;
+    }
+    @keyframes yellow-glow {
+        0%, 100% { box-shadow: 0 0 5px #facc15, 0 0 10px #facc15, 0 0 15px #facc15; }
+        50% { box-shadow: 0 0 10px #facc15, 0 0 20px #facc15, 0 0 30px #facc15; }
+    }
+    .yellow-glowing-border {
+        animation: yellow-glow 2s ease-in-out infinite;
+        border-color: #facc15; /* yellow-400 */
+    }
+    @keyframes strong-yellow-glow {
+        0%, 100% { 
+            box-shadow: 0 0 10px #fef08a, 0 0 20px #fef08a, 0 0 30px #facc15;
+            border-color: #fef08a;
+        }
+        50% { 
+            box-shadow: 0 0 20px #fef08a, 0 0 40px #facc15, 0 0 60px #facc15;
+            border-color: #fde047;
+        }
+    }
+    .strong-yellow-glowing-border {
+        animation: strong-yellow-glow 1.5s ease-in-out infinite;
+        border-style: solid;
+        border-width: 3px;
+    }
+    @keyframes pink-glow {
+        0%, 100% { box-shadow: 0 0 5px #ec4899, 0 0 10px #ec4899, 0 0 15px #ec4899; }
+        50% { box-shadow: 0 0 10px #ec4899, 0 0 20px #ec4899, 0 0 30px #ec4899; }
+    }
+    .pink-glowing-border {
+        animation: pink-glow 2s ease-in-out infinite;
+        border-color: #ec4899; /* pink-500 */
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+        width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+        background: #1e293b; /* slate-800 */
+        border-radius: 10px;
+    }
+    ::-webkit-scrollbar-thumb {
+        background: #475569; /* slate-600 */
+        border-radius: 10px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background: #64748b; /* slate-500 */
+    }
+</style>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.3.1",
+    "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
+    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+    "recharts": "https://esm.sh/recharts@2.12.7",
+    "@google/genai": "https://esm.sh/@google/genai@0.14.2",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "vite": "https://aistudiocdn.com/vite@^7.2.4",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="bg-[#1A1A2E] text-slate-200">
+<div id="root"></div>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../contexts"
+		},
+		{
+			"path": "../data"
+		},
+		{
+			"path": "../hooks"
+		},
+		{
+			"path": "../screens"
+		},
+		{
+			"path": "../utils"
+		}
+	]
+}

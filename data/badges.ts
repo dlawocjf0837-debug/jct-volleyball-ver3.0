@@ -1,0 +1,133 @@
+import { Badge } from '../types';
+import {
+    TrophyIcon,
+    LinkIcon,
+    TargetIcon,
+    WallIcon,
+    FireIcon,
+    CalendarIcon,
+    HandshakeIcon,
+    StarBurstIcon,
+    MedalIcon,
+    SparklesIcon,
+    StarIcon,
+    ShieldIcon,
+    BookmarkSquareIcon,
+    ArrowTrendingUpIcon,
+    UserGroupIcon,
+    BoltIcon,
+} from '../components/icons';
+
+export const BADGE_DEFINITIONS: Badge[] = [
+    {
+        id: 'first_score',
+        nameKey: 'badge_first_score_name',
+        descriptionKey: 'badge_first_score_desc',
+        icon: StarIcon,
+    },
+    {
+        id: 'three_hit_master',
+        nameKey: 'badge_three_hit_master_name',
+        descriptionKey: 'badge_three_hit_master_desc',
+        icon: LinkIcon,
+    },
+    {
+        id: 'serve_ace_pro',
+        nameKey: 'badge_serve_ace_pro_name',
+        descriptionKey: 'badge_serve_ace_pro_desc',
+        icon: TargetIcon,
+    },
+    {
+        id: 'iron_wall',
+        nameKey: 'badge_iron_wall_name',
+        descriptionKey: 'badge_iron_wall_desc',
+        icon: WallIcon,
+    },
+    {
+        id: 'power_spiker',
+        nameKey: 'badge_power_spiker_name',
+        descriptionKey: 'badge_power_spiker_desc',
+        icon: FireIcon,
+    },
+    {
+        id: 'consistency_symbol',
+        nameKey: 'badge_consistency_symbol_name',
+        descriptionKey: 'badge_consistency_symbol_desc',
+        icon: CalendarIcon,
+    },
+    {
+        id: 'victory_protagonist',
+        nameKey: 'badge_victory_protagonist_name',
+        descriptionKey: 'badge_victory_protagonist_desc',
+        icon: TrophyIcon,
+    },
+    {
+        id: 'fair_play_master',
+        nameKey: 'badge_fair_play_master_name',
+        descriptionKey: 'badge_fair_play_master_desc',
+        icon: HandshakeIcon,
+    },
+    {
+        id: 'clutch_player',
+        nameKey: 'badge_clutch_player_name',
+        descriptionKey: 'badge_clutch_player_desc',
+        icon: StarBurstIcon,
+    },
+    {
+        id: 'rookie_ace',
+        nameKey: 'badge_rookie_ace_name',
+        descriptionKey: 'badge_rookie_ace_desc',
+        icon: MedalIcon,
+    },
+    {
+        id: 'flawless_serve',
+        nameKey: 'badge_flawless_serve_name',
+        descriptionKey: 'badge_flawless_serve_desc',
+        icon: SparklesIcon,
+    },
+    {
+        id: 'perfect_game',
+        nameKey: 'badge_perfect_game_name',
+        descriptionKey: 'badge_perfect_game_desc',
+        icon: ShieldIcon,
+    },
+    {
+        id: 'comeback_kid',
+        nameKey: 'badge_comeback_kid_name',
+        descriptionKey: 'badge_comeback_kid_desc',
+        icon: ArrowTrendingUpIcon,
+    },
+    {
+        id: 'team_player',
+        nameKey: 'badge_team_player_name',
+        descriptionKey: 'badge_team_player_desc',
+        icon: UserGroupIcon,
+    },
+    {
+        id: 'collection_master',
+        nameKey: 'badge_collection_master_name',
+        descriptionKey: 'badge_collection_master_desc',
+        icon: BookmarkSquareIcon,
+    },
+    {
+        id: 'serve_king',
+        nameKey: 'badge_serve_king_name',
+        descriptionKey: 'badge_serve_king_desc',
+        icon: BoltIcon,
+        isCompetitive: true,
+    },
+    {
+        id: 'spike_master',
+        nameKey: 'badge_spike_master_name',
+        descriptionKey: 'badge_spike_master_desc',
+        icon: FireIcon,
+        isCompetitive: true,
+    },
+    {
+        id: 'iron_wall_guardian',
+        nameKey: 'badge_iron_wall_guardian_name',
+        descriptionKey: 'badge_iron_wall_guardian_desc',
+        icon: ShieldIcon,
+        isCompetitive: true,
+    }
+];
