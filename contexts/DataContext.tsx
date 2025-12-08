@@ -1,7 +1,7 @@
-
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useReducer, useRef, PropsWithChildren, useMemo } from 'react';
 import { MatchState, TeamSet, TeamMatchState, Player, PlayerStats, Action, UserEmblem, SavedTeamInfo, ScoreEvent, PlayerAchievements, PlayerCumulativeStats, ToastState, AppSettings, Tournament, League, PlayerCoachingLogs, CoachingLog, TeamStats, DataContextType, Badge, P2PState, DataConnection, P2PMessage, Language, ScoreEventType } from '../types';
 import { BADGE_DEFINITIONS } from '../data/badges';
+import { translations } from '../data/translations';
 
 const TEAM_SETS_KEY = 'jct_volleyball_team_sets';
 const MATCH_HISTORY_KEY = 'jct_volleyball_match_history';
@@ -13,6 +13,8 @@ const LEAGUES_KEY = 'jct_volleyball_leagues';
 const COACHING_LOGS_KEY = 'jct_volleyball_coaching_logs';
 const BACKUP_KEY = 'jct_volleyball_backup_autosave';
 const LANGUAGE_KEY = 'jct_volleyball_language';
+const TEAM_COLORS_PALETTE = ['#3b82f6', '#ef4444', '#22c55e', '#eab308', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#64748b', '#f472b6', '#06b6d4', '#f59e0b'];
+
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
@@ -88,10 +90,26 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
     const peerRef = useRef<any>(null); // Using 'any' for PeerJS object
     const connRef = useRef<DataConnection[]>([]);
     const isIntentionallyClosing = useRef(false);
+    
+    const t = useCallback((key: string, replacements?: Record<string, string | number>): string => {
+        let translation = translations[key]?.[language] || key;
+        if (replacements) {
+            Object.keys(replacements).forEach(rKey => {
+                translation = translation.replace(`{${rKey}}`, String(replacements[rKey]));
+            });
+        }
+        return translation;
+    }, [language]);
 
-    const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
-        setToast({ message, type });
-    }, []);
+    const showToast = useCallback((message: string, type: 'success' | 'error' = 'success', replacements?: Record<string, string | number>) => {
+        let finalMessage = t(message); // Use translation hook
+        if (replacements) {
+            Object.keys(replacements).forEach(rKey => {
+                finalMessage = finalMessage.replace(`{${rKey}}`, String(replacements[rKey]));
+            });
+        }
+        setToast({ message: finalMessage, type });
+    }, [t]);
 
     const setLanguage = useCallback((lang: Language) => {
         try {
@@ -397,6 +415,7 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
                 newState.isDeuce = newState.teamA.score >= settings.winningScore - 1 && newState.teamA.score === newState.teamB.score;
                 
                 const { teamA, teamB } = newState;
+                // FIX: Corrected typo 'a.score' to 'teamA.score' for game over condition.
                 const isGameOver = (teamA.score >= settings.winningScore && teamA.score >= teamB.score + 2) || (teamB.score >= settings.winningScore && teamB.score >= teamA.score + 2);
     
                 if (isGameOver && !newState.gameOver) {
@@ -1108,6 +1127,128 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
         
         await saveTeamSets(newTeamSets, `'${playerName}' 선수가 '${teamName}' 팀에서 삭제되었습니다.`);
     };
+    
+    const bulkAddPlayersToTeam = async (teamKey: string, playerNames: string[], overwrite: boolean) => {
+        const [setId, teamName] = teamKey.split('___');
+        if (!setId || !teamName) {
+            showToast('잘못된 팀 정보입니다.', 'error');
+            return;
+        }
+
+        const newTeamSets = JSON.parse(JSON.stringify(teamSets));
+        const setIndex = newTeamSets.findIndex((s: TeamSet) => s.id === setId);
+        if (setIndex === -1) {
+            showToast('팀 세트를 찾을 수 없습니다.', 'error');
+            return;
+        }
+        const teamIndex = newTeamSets[setIndex].teams.findIndex((t: SavedTeamInfo) => t.teamName === teamName);
+        if (teamIndex === -1) {
+            showToast('팀을 찾을 수 없습니다.', 'error');
+            return;
+        }
+        
+        const team = newTeamSets[setIndex].teams[teamIndex];
+        const newPlayerIds: string[] = [];
+
+        playerNames.forEach((name, index) => {
+            if (name.trim() === '') return;
+            const newPlayer: Player = {
+                id: `added_${Date.now()}_${index}_${name.replace(/\s/g, '')}`,
+                originalName: name.trim(),
+                anonymousName: name.trim(),
+                class: '??',
+                studentNumber: '??',
+                gender: '기타',
+                stats: { height: 0, shuttleRun: 0, flexibility: 0, fiftyMeterDash: 0, underhand: 0, serve: 0 },
+                isCaptain: false,
+                totalScore: 0,
+            };
+            newTeamSets[setIndex].players[newPlayer.id] = newPlayer;
+            newPlayerIds.push(newPlayer.id);
+        });
+
+        if (overwrite) {
+            const captainId = team.captainId;
+            const oldPlayerIds = [...team.playerIds];
+            
+            oldPlayerIds.forEach((id: string) => {
+                if (id !== captainId) {
+                    delete newTeamSets[setIndex].players[id];
+                }
+            });
+            
+            team.playerIds = [captainId, ...newPlayerIds];
+        } else {
+            team.playerIds.push(...newPlayerIds);
+        }
+        
+        await saveTeamSets(newTeamSets);
+        showToast('bulk_import_success', 'success', { count: newPlayerIds.length });
+    };
+
+    const createTeamSet = async (name: string) => {
+        if (!name.trim()) {
+            showToast('팀 세트 이름을 입력해주세요.', 'error');
+            return;
+        }
+        const newSet: TeamSet = {
+            id: `set_${Date.now()}`,
+            className: name.trim(),
+            savedAt: new Date().toISOString(),
+            teams: [],
+            players: {},
+            teamCount: 0,
+        };
+        await saveTeamSets([newSet, ...teamSets]);
+        showToast('toast_new_set_success', 'success', { name: newSet.className });
+    };
+
+    const addTeamToSet = async (setId: string, teamName: string) => {
+        if (!teamName.trim()) {
+            showToast('팀 이름을 입력해주세요.', 'error');
+            return;
+        }
+
+        const newTeamSets = JSON.parse(JSON.stringify(teamSets));
+        const setIndex = newTeamSets.findIndex((s: TeamSet) => s.id === setId);
+        if (setIndex === -1) {
+            showToast('팀 세트를 찾을 수 없습니다.', 'error');
+            return;
+        }
+
+        const set = newTeamSets[setIndex];
+        const finalTeamName = teamName.trim();
+        if (set.teams.some((t: SavedTeamInfo) => t.teamName === finalTeamName)) {
+            showToast('이미 존재하는 팀 이름입니다.', 'error');
+            return;
+        }
+
+        const captainName = t('referee_captain_label');
+        const newCaptain: Player = {
+            id: `player_${Date.now()}`,
+            originalName: captainName,
+            anonymousName: captainName,
+            class: '??', studentNumber: '01', gender: '기타',
+            stats: { height: 0, shuttleRun: 0, flexibility: 0, fiftyMeterDash: 0, underhand: 0, serve: 0 },
+            isCaptain: true,
+            totalScore: 0,
+        };
+
+        const newTeam: SavedTeamInfo = {
+            teamName: finalTeamName,
+            captainId: newCaptain.id,
+            playerIds: [newCaptain.id],
+            color: TEAM_COLORS_PALETTE[set.teams.length % TEAM_COLORS_PALETTE.length],
+        };
+
+        set.players[newCaptain.id] = newCaptain;
+        set.teams.push(newTeam);
+        set.teamCount = set.teams.length;
+
+        await saveTeamSets(newTeamSets);
+        showToast('toast_new_team_success', 'success', { teamName: finalTeamName, setName: set.className });
+    };
+
 
     const loadAllData = useCallback(async () => {
         setIsLoading(true);
@@ -1562,6 +1703,9 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
         deleteTeam,
         addPlayerToTeam,
         removePlayerFromTeam,
+        bulkAddPlayersToTeam,
+        createTeamSet,
+        addTeamToSet,
         reloadData: loadAllData,
         exportData,
         saveImportedData,

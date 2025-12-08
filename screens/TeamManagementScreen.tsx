@@ -1,7 +1,6 @@
-
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useData } from '../contexts/DataContext';
-import { SavedTeamInfo, Player } from '../types';
+import { SavedTeamInfo, Player, TeamSet } from '../types';
 import EmblemModal from '../components/EmblemModal';
 import TeamEmblem from '../components/TeamEmblem';
 import { TeamProfileCardModal } from '../components/TeamProfileCardModal';
@@ -58,10 +57,8 @@ const convertGithubUrl = (url: string | undefined): string | undefined => {
 };
 
 const TeamManagementScreen: React.FC = () => {
-    const { teamSets, saveTeamSets, deleteTeam } = useData();
+    const { teamSets, saveTeamSets, deleteTeam, createTeamSet, addTeamToSet } = useData();
     const { t } = useTranslation();
-    const [selectedClass, setSelectedClass] = useState<string>('');
-    const [teamCountFilter, setTeamCountFilter] = useState('all');
     const [configs, setConfigs] = useState<Record<string, Config>>({});
     const [isEmblemModalOpen, setIsEmblemModalOpen] = useState(false);
     const [currentTargetTeamKey, setCurrentTargetTeamKey] = useState<string | null>(null);
@@ -72,12 +69,19 @@ const TeamManagementScreen: React.FC = () => {
     const [isRosterModalOpen, setIsRosterModalOpen] = useState(false);
     const [managingRosterTeamKey, setManagingRosterTeamKey] = useState<string | null>(null);
 
-    useEffect(() => {
+    // New states for modals
+    const [isNewSetModalOpen, setIsNewSetModalOpen] = useState(false);
+    const [newSetName, setNewSetName] = useState('');
+    const [isNewTeamModalOpen, setIsNewTeamModalOpen] = useState(false);
+    const [newTeamName, setNewTeamName] = useState('');
+    const [targetSetId, setTargetSetId] = useState<string | null>(null);
+
+
+    React.useEffect(() => {
         const initialConfigs: Record<string, Config> = {};
         teamSets.forEach(set => {
             set.teams.forEach(team => {
                 const key = `${set.id}___${team.teamName}`;
-                // Fallback for old teams without memo
                 const memo = team.memo || new Date(set.savedAt).toLocaleDateString();
                 initialConfigs[key] = { ...team, key, memo };
             });
@@ -85,50 +89,30 @@ const TeamManagementScreen: React.FC = () => {
         setConfigs(initialConfigs);
     }, [teamSets]);
 
-    const availableClasses = useMemo(() => {
-        const classSet = new Set<string>();
-        teamSets.forEach(set => {
-            if (set.className) classSet.add(set.className);
+    const groupedTeams = useMemo(() => {
+        const sortedSets = [...teamSets].sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
+        return sortedSets.map(set => {
+            const teamsInSet = set.teams.map(team => ({
+                ...team,
+                setId: set.id,
+                key: `${set.id}___${team.teamName}`
+            })).sort((a, b) => a.teamName.localeCompare(b.teamName));
+            return { set, teams: teamsInSet };
         });
-        return Array.from(classSet).sort((a, b) => a.localeCompare(b));
     }, [teamSets]);
 
-    const availableTeamCounts = useMemo(() => {
-        if (!selectedClass) return [];
-        const counts = new Set<number>();
-        teamSets.forEach(set => {
-            if (set.className === selectedClass) {
-                counts.add(set.teamCount ?? 4); 
-            }
-        });
-        const validCounts = Array.from(counts).filter(c => c > 0);
-        return validCounts.sort((a,b) => a - b).map(String);
-    }, [teamSets, selectedClass]);
-
-
-    const teamsInClass = useMemo((): TeamWithSetId[] => {
-        if (!selectedClass) return [];
-        const teams: TeamWithSetId[] = [];
-        teamSets.forEach(set => {
-            if (set.className === selectedClass) {
-                const teamCount = set.teamCount ?? 4;
-                if (teamCountFilter === 'all' || String(teamCount) === teamCountFilter) {
-                    set.teams.forEach(team => teams.push({ ...team, setId: set.id, key: `${set.id}___${team.teamName}` }));
-                }
-            }
-        });
-        return teams.sort((a, b) => a.teamName.localeCompare(b.teamName));
-    }, [teamSets, selectedClass, teamCountFilter]);
 
     const colorConflicts = useMemo(() => {
         const conflicts = new Map<string, string[]>();
         const colorMap = new Map<string, string[]>();
-        teamsInClass.forEach(team => {
-            const color = configs[team.key]?.color;
-            if (color) {
-                if (!colorMap.has(color)) colorMap.set(color, []);
-                colorMap.get(color)?.push(team.teamName);
-            }
+        groupedTeams.forEach(({ teams }) => {
+            teams.forEach(team => {
+                const color = configs[team.key]?.color;
+                if (color) {
+                    if (!colorMap.has(color)) colorMap.set(color, []);
+                    colorMap.get(color)?.push(team.teamName);
+                }
+            });
         });
         colorMap.forEach((teams, color) => {
             if (teams.length > 1) {
@@ -136,12 +120,12 @@ const TeamManagementScreen: React.FC = () => {
             }
         });
         return conflicts;
-    }, [configs, teamsInClass]);
+    }, [configs, groupedTeams]);
 
     const handleConfigChange = (key: string, field: keyof SavedTeamInfo, value: any) => {
         setConfigs(prev => ({
             ...prev,
-            [key]: { ...prev[key], [field]: value }
+            [key]: { ...(prev[key] || {} as Config), [field]: value }
         }));
     };
 
@@ -203,6 +187,24 @@ const TeamManagementScreen: React.FC = () => {
         setIsRosterModalOpen(true);
     };
 
+    const handleCreateNewSet = async () => {
+        if (newSetName.trim()) {
+            await createTeamSet(newSetName);
+            setNewSetName('');
+            setIsNewSetModalOpen(false);
+        }
+    };
+    
+    const handleAddNewTeam = async () => {
+        if (newTeamName.trim() && targetSetId) {
+            const finalTeamName = newTeamName.trim() + t('roster_team_suffix');
+            await addTeamToSet(targetSetId, finalTeamName);
+            setNewTeamName('');
+            setTargetSetId(null);
+            setIsNewTeamModalOpen(false);
+        }
+    };
+
     return (
         <>
             <EmblemModal
@@ -237,50 +239,64 @@ const TeamManagementScreen: React.FC = () => {
                     }
                 }}
             />
+            <ConfirmationModal
+                isOpen={isNewSetModalOpen}
+                onClose={() => setIsNewSetModalOpen(false)}
+                onConfirm={handleCreateNewSet}
+                title={t('team_management_new_set_title')}
+                message=""
+                confirmText={t('add')}
+            >
+                <input
+                    type="text"
+                    value={newSetName}
+                    onChange={e => setNewSetName(e.target.value)}
+                    placeholder={t('team_management_new_set_placeholder')}
+                    className="w-full bg-slate-800 border border-slate-600 rounded-md p-3 mt-4 text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    autoFocus
+                />
+            </ConfirmationModal>
+            <ConfirmationModal
+                isOpen={isNewTeamModalOpen}
+                onClose={() => setIsNewTeamModalOpen(false)}
+                onConfirm={handleAddNewTeam}
+                title={t('team_management_new_team_title')}
+                message=""
+                confirmText={t('add')}
+            >
+                <input
+                    type="text"
+                    value={newTeamName}
+                    onChange={e => setNewTeamName(e.target.value)}
+                    placeholder={t('team_management_new_team_placeholder')}
+                    className="w-full bg-slate-800 border border-slate-600 rounded-md p-3 mt-4 text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    autoFocus
+                />
+            </ConfirmationModal>
+
             <div className="max-w-4xl mx-auto bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-6 rounded-lg shadow-2xl space-y-6 animate-fade-in">
                 <div className="flex justify-between items-center flex-wrap gap-4">
-                    <div className="flex-grow">
-                        <label htmlFor="class-select" className="block text-sm font-bold text-slate-300 mb-2">
-                            {t('team_management_select_class_label')}
-                        </label>
-                        <select
-                            id="class-select"
-                            value={selectedClass}
-                            onChange={(e) => {
-                                setSelectedClass(e.target.value);
-                                setTeamCountFilter('all');
-                            }}
-                            className="w-full bg-slate-700 border border-slate-600 rounded-md p-3 focus:outline-none focus:ring-2 focus:ring-sky-500"
-                        >
-                            <option value="">{t('team_management_select_class_prompt')}</option>
-                            {availableClasses.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                    </div>
-                    <div className="self-end">
-                         <button onClick={handleSave} className="bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-6 rounded-lg text-base">{t('team_management_save_all')}</button>
-                    </div>
+                    <button onClick={() => setIsNewSetModalOpen(true)} className="bg-sky-600 hover:bg-sky-500 text-white font-bold py-3 px-6 rounded-lg text-base">
+                        {t('team_management_new_set_button')}
+                    </button>
+                    <button onClick={handleSave} className="bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-6 rounded-lg text-base">{t('team_management_save_all')}</button>
                 </div>
 
-                {selectedClass && (
-                    <div className="flex flex-wrap items-center gap-2 border-t border-slate-700 pt-4">
-                        <span className="text-sm font-semibold text-slate-400 mr-2">{t('record_format_filter')}</span>
-                        <button onClick={() => setTeamCountFilter('all')} className={`px-3 py-1 text-sm rounded-md transition-colors ${teamCountFilter === 'all' ? 'bg-[#00A3FF] text-white font-bold' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}>{t('record_all_formats')}</button>
-                        {availableTeamCounts.map(count => (
-                            <button key={count} onClick={() => setTeamCountFilter(count)} className={`px-3 py-1 text-sm rounded-md transition-colors ${teamCountFilter === count ? 'bg-[#00A3FF] text-white font-bold' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}>
-                                {t('record_team_format', { count })}
-                            </button>
-                        ))}
-                    </div>
-                )}
-
-                {selectedClass ? (
-                    <div className="space-y-4 animate-fade-in">
-                        <h3 className="text-xl font-bold text-slate-300 border-b border-slate-700 pb-2">
-                            {selectedClass} {t('team_management_title_suffix')}
-                        </h3>
-                        {teamsInClass.length > 0 ? (
-                            <div className="space-y-4">
-                                {teamsInClass.map((team) => {
+                {groupedTeams.length > 0 ? (
+                    <div className="space-y-6">
+                        {groupedTeams.map(({ set, teams }) => (
+                            <div key={set.id} className="bg-slate-900 p-4 rounded-lg border border-slate-800">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="text-xl font-bold text-slate-300">{set.className}</h3>
+                                    <button
+                                        onClick={() => { setTargetSetId(set.id); setIsNewTeamModalOpen(true); }}
+                                        className="text-sm bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold py-1 px-3 rounded-md transition-colors"
+                                    >
+                                        {t('team_management_add_team_button')}
+                                    </button>
+                                </div>
+                                <div className="space-y-4">
+                                {teams.map((team) => {
                                     const config = configs[team.key];
                                     if (!config) return null;
                                     const conflict = colorConflicts.get(team.teamName);
@@ -296,10 +312,10 @@ const TeamManagementScreen: React.FC = () => {
                                                     <TeamEmblem emblem={config.emblem} color={config.color} className="w-16 h-16"/>
                                                 </button>
                                                 <div className="flex w-full gap-1">
-                                                    <button onClick={() => handleViewProfile(team.key)} className="flex-1 flex items-center justify-center gap-1 text-xs bg-sky-700 hover:bg-sky-600 text-white font-semibold py-1 px-2 rounded-md">
-                                                         <IdentificationIcon className="w-4 h-4" />
-                                                        {t('team_management_profile_button')}
-                                                    </button>
+                                                     <button onClick={() => handleOpenRosterModal(team.key)} className="flex-1 flex items-center justify-center gap-1 text-xs bg-slate-600 hover:bg-slate-500 text-white font-semibold py-1 px-2 rounded-md">
+                                                         <UsersIcon className="w-4 h-4" />
+                                                         {t('team_management_roster_button')}
+                                                     </button>
                                                     <button onClick={() => handleDeleteClick(team.key)} className="flex-shrink-0 flex items-center justify-center gap-1 text-xs bg-red-800 hover:bg-red-700 text-white font-semibold p-1 rounded-md">
                                                         <TrashIcon className="w-4 h-4" />
                                                     </button>
@@ -307,8 +323,12 @@ const TeamManagementScreen: React.FC = () => {
                                             </div>
                                             <div className="flex-grow space-y-3">
                                                 <div className="flex items-center gap-3">
-                                                    <button onClick={() => handleOpenRosterModal(team.key)} className="text-left p-0 bg-transparent border-none">
-                                                        <h4 className="font-semibold text-xl hover:underline" style={{ color: config.color || '#cbd5e1' }}>{config.teamName}</h4>
+                                                    <button
+                                                        onClick={() => handleOpenRosterModal(team.key)}
+                                                        className="font-semibold text-xl hover:underline hover:opacity-80 text-left transition-all"
+                                                        style={{ color: config.color || '#cbd5e1' }}
+                                                    >
+                                                        {config.teamName}
                                                     </button>
                                                     {conflict && <span className="text-xs text-yellow-400 bg-yellow-900/50 px-2 py-1 rounded-md">{t('team_management_color_conflict', { teams: conflict.join(', ') })}</span>}
                                                 </div>
@@ -335,8 +355,8 @@ const TeamManagementScreen: React.FC = () => {
                                                     <input type="text" placeholder={t('team_management_slogan_placeholder')} value={config.slogan || ''} onChange={(e) => handleConfigChange(team.key, 'slogan', e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded-md p-3 text-base text-white focus:outline-none focus:ring-1 focus:ring-sky-500" />
                                                 </div>
                                                 <div>
-                                                    <label className="block text-base font-semibold text-slate-300 mb-2">팀 메모</label>
-                                                    <input type="text" placeholder="날짜 또는 메모 입력" value={config.memo || ''} onChange={(e) => handleConfigChange(team.key, 'memo', e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded-md p-3 text-base text-white focus:outline-none focus:ring-1 focus:ring-sky-500" />
+                                                    <label className="block text-base font-semibold text-slate-300 mb-2">{t('team_management_memo_label')}</label>
+                                                    <input type="text" placeholder={t('team_management_memo_placeholder')} value={config.memo || ''} onChange={(e) => handleConfigChange(team.key, 'memo', e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded-md p-3 text-base text-white focus:outline-none focus:ring-1 focus:ring-sky-500" />
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-2">
@@ -350,22 +370,14 @@ const TeamManagementScreen: React.FC = () => {
                                         </div>
                                     </div>
                                 )})}
+                                </div>
                             </div>
-                        ) : (
-                            <p className="text-center text-slate-400 p-4 bg-slate-800/50 rounded-lg">
-                                {t('team_management_no_teams_in_class')}
-                            </p>
-                        )}
+                        ))}
                     </div>
                 ) : (
                     <div className="text-center p-6 bg-slate-800/50 border border-slate-700 rounded-lg animate-fade-in">
-                        <h3 className="text-lg font-bold text-sky-400 mb-3">{t('team_management_guide_title')}</h3>
-                        <p className="text-slate-300">
-                            {t('team_management_guide_desc1')}
-                        </p>
-                        <p className="text-slate-400 mt-2 text-sm">
-                            {t('team_management_guide_desc2')}
-                        </p>
+                        <h3 className="text-lg font-bold text-sky-400 mb-3">{t('team_management_no_sets_title')}</h3>
+                        <p className="text-slate-300">{t('team_management_no_sets_desc')}</p>
                     </div>
                 )}
             </div>

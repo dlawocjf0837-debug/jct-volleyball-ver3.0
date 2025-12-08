@@ -1,3 +1,4 @@
+
 import React from 'react';
 import LanguageToggle from './LanguageToggle';
 import { useTranslation } from '../../hooks/useTranslation';
@@ -7,9 +8,11 @@ interface HeaderProps {
     showBackButton: boolean;
     onBack: () => void;
     showLanguageToggle?: boolean;
+    subtitle?: string;
+    brand?: string;
 }
 
-const Header: React.FC<HeaderProps> = ({ title, showBackButton, onBack, showLanguageToggle }) => {
+const Header: React.FC<HeaderProps> = ({ title, showBackButton, onBack, showLanguageToggle, subtitle, brand = "JCT" }) => {
     const { t } = useTranslation();
     return (
         <header className="text-center mb-8 relative flex items-center justify-center no-print">
@@ -22,11 +25,16 @@ const Header: React.FC<HeaderProps> = ({ title, showBackButton, onBack, showLang
                     {t('back_to_main')}
                 </button>
             )}
-            <div className="flex-grow">
+            <div className="flex-grow flex flex-col items-center">
                 <h1 className="text-4xl sm:text-5xl font-extrabold text-[#00A3FF] tracking-wider uppercase transform -skew-x-12">
-                    JCT <span className="text-white">{title}</span>
+                    {brand} <span className="text-white">{title}</span>
                 </h1>
-                <p className="text-slate-400 mt-2 text-sm tracking-widest">By JCT</p>
+                {subtitle && (
+                    <p className="text-slate-300 mt-2 text-sm sm:text-base font-medium tracking-tight animate-fade-in">
+                        {subtitle}
+                    </p>
+                )}
+                <p className="text-slate-500 mt-1 text-xs tracking-[0.3em] font-light opacity-80">By JCT</p>
             </div>
             <div className="absolute right-0 top-0 flex items-center gap-4">
                 {showLanguageToggle && (

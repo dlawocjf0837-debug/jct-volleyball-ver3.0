@@ -1,5 +1,4 @@
 
-
 import { Language } from '../types';
 
 export const translations: Record<string, Record<Language, string>> = {
@@ -33,6 +32,10 @@ export const translations: Record<string, Record<Language, string>> = {
   class: { ko: "반", id: "Kelas" },
   class_format: { ko: "{class}반", id: "Kelas {class}" },
   
+  // App Titles
+  app_title_volleyball: { ko: "배구", id: "VOLI" },
+  app_subtitle: { ko: "AI 기반 스마트 팀 빌딩 & 데이터 분석 시스템", id: "Sistem Analisis Data & Pembentukan Tim Cerdas Berbasis AI" },
+
   // Popup / Modal Titles & Actions
   who_recorded: { ko: "누가 기록했나요?", id: "Siapa yang mencatat?" },
   modal_select_assist: { ko: "어시스트/수비 기여자 선택", id: "Pilih Kontributor Assist/Def" },
@@ -177,7 +180,7 @@ export const translations: Record<string, Record<Language, string>> = {
   // Tournament
   tournament_list: { ko: "토너먼트 목록", id: "Daftar Turnamen" },
   tournament_create_new_button: { ko: "새 토너먼트 생성", id: "Buat Turnamen Baru" },
-  tournament_select_or_create_prompt: { ko: "토너먼트를 선택하거나 새로 만드세요.", id: "Pilih 또는 buat turnamen baru." },
+  tournament_select_or_create_prompt: { ko: "토너먼트를 선택하거나 새로 만드세요.", id: "Pilih atau buat turnamen baru." },
   tournament_create_new_title: { ko: "새 토너먼트 만들기", id: "Buat Turnamen Baru" },
   tournament_4_teams: { ko: "4강", id: "4 Tim" },
   tournament_8_teams: { ko: "8강", id: "8 Tim" },
@@ -377,6 +380,7 @@ export const translations: Record<string, Record<Language, string>> = {
   unassigned_players: { ko: "미배정 선수", id: "Pemain Belum Ditugaskan" },
   team_avg_score_title: { ko: "팀 평균 종합 점수", id: "Skor Rata-rata Tim" },
   team_panel_avg_score: { ko: "AVG {score}", id: "RATA {score}" },
+  team_builder_drag_drop_guide: { ko: "선수를 이곳에 드래그하세요.", id: "Seret pemain ke sini." },
 
   // Alert & Confirm
   alert_min_one_player: { ko: "헤더를 포함하여 최소 한 명 이상의 학생 데이터가 필요합니다.", id: "Diperlukan setidaknya satu data siswa termasuk header." },
@@ -418,6 +422,9 @@ export const translations: Record<string, Record<Language, string>> = {
   toast_max_males_reached: { ko: "{teamName}: 남학생 최대 인원({max}명)을 초과할 수 없습니다.", id: "{teamName}: Maks siswa putra ({max}) tercapai." },
   toast_male_shortage: { ko: "남은 남학생 수({needed}명)가 부족하여, 최소 인원({min}명)을 맞출 수 없게 됩니다.", id: "Kekurangan siswa putra ({needed}) untuk penuhi min ({min})." },
   toast_female_shortage: { ko: "남은 여학생 수({needed}명)가 부족하여, 최소 인원({min}명)을 맞출 수 없게 됩니다.", id: "Kekurangan siswa putri ({needed}) untuk penuhi min ({min})." },
+  bulk_import_success: { ko: "{count}명의 선수가 성공적으로 등록되었습니다.", id: "{count} pemain berhasil didaftarkan." },
+  toast_new_set_success: { ko: "'{name}' 팀 세트가 생성되었습니다.", id: "Set tim '{name}' berhasil dibuat." },
+  toast_new_team_success: { ko: "'{teamName}' 팀이 '{setName}'에 추가되었습니다.", id: "Tim '{teamName}' ditambahkan ke '{setName}'." },
 
   // Match Setup
   match_setup_guide_title: { ko: "경기 팀 설정", id: "Pengaturan Tim Laga" },
@@ -480,11 +487,14 @@ export const translations: Record<string, Record<Language, string>> = {
   team_management_title_suffix: { ko: "팀 목록", id: "Daftar Tim" },
   team_management_change_emblem_aria: { ko: "{teamName} 엠블럼 변경", id: "Ubah Emblem {teamName}" },
   team_management_profile_button: { ko: "프로필", id: "Profil" },
+  team_management_roster_button: { ko: "명단", id: "Roster" },
   team_management_color_conflict: { ko: "색상 중복: {teams}", id: "Warna Ganda: {teams}" },
   team_management_color_label: { ko: "팀 색상", id: "Warna Tim" },
   team_management_select_color_aria: { ko: "{color} 색상 선택", id: "Pilih warna {color}" },
   team_management_slogan_label: { ko: "팀 구호 (Slogan)", id: "Slogan Tim" },
   team_management_slogan_placeholder: { ko: "팀의 각오 한마디!", id: "Slogan tim!" },
+  team_management_memo_label: { ko: "메모", id: "Memo" },
+  team_management_memo_placeholder: { ko: "날짜 또는 메모 입력", id: "Masukkan tanggal atau memo" },
   team_management_cheer_name_placeholder: { ko: "{number}번 응원가 이름", id: "Nama Lagu {number}" },
   team_management_cheer_url_placeholder: { ko: "{number}번 응원가 URL", id: "URL Lagu {number}" },
   cheer_song_1: { ko: "응원가 1", id: "Lagu 1" },
@@ -492,6 +502,29 @@ export const translations: Record<string, Record<Language, string>> = {
   team_management_guide_title: { ko: "팀 관리 안내", id: "Panduan Manajemen Tim" },
   team_management_guide_desc1: { ko: "팀 빌더에서 저장된 팀들의 정보를 수정할 수 있습니다.", id: "Edit info tim yang disimpan dari Team Builder." },
   team_management_guide_desc2: { ko: "팀 이름, 엠블럼, 색상, 구호, 응원가 등을 설정해보세요.", id: "Atur nama, emblem, warna, slogan, dan lagu." },
+  team_management_new_set_button: { ko: "+ 새 팀 세트 만들기", id: "+ Buat Set Tim Baru" },
+  team_management_new_set_title: { ko: "새 팀 세트 생성", id: "Buat Set Tim Baru" },
+  team_management_new_set_placeholder: { ko: "리그, 대회, 학년 등 그룹 이름 입력", id: "Masukkan nama grup (mis. Liga, Turnamen)" },
+  team_management_add_team_button: { ko: "+ 팀 추가", id: "+ Tambah Tim" },
+  team_management_new_team_title: { ko: "새 팀 추가", id: "Tambah Tim Baru" },
+  team_management_new_team_placeholder: { ko: "팀 이름 입력 (예: A팀, 청룡)", id: "Masukkan nama tim (mis. Tim A)" },
+  team_management_no_sets_title: { ko: "저장된 팀 세트가 없습니다.", id: "Tidak Ada Set Tim Tersimpan" },
+  team_management_no_sets_desc: { ko: "먼저 '새 팀 세트 만들기'를 통해 팀 그룹을 생성해주세요.", id: "Buat grup tim terlebih dahulu dengan 'Buat Set Tim Baru'." },
+  
+  // Roster Management & Bulk Import
+  roster_title: { ko: "{teamName} 명단 관리", id: "Manajemen Roster {teamName}" },
+  roster_delete_player_aria: { ko: "{playerName} 삭제", id: "Hapus {playerName}" },
+  roster_add_new_player: { ko: "새 선수 추가", id: "Tambah Pemain Baru" },
+  roster_team_suffix: { ko: " 팀", id: " Tim" },
+  roster_bulk_import_button: { ko: "명단 붙여넣기", id: "Tempel Roster" },
+  roster_single_add_button: { ko: "한 명씩 추가", id: "Tambah Satu per Satu" },
+  bulk_import_title: { ko: "명단 일괄 등록", id: "Impor Massal Roster" },
+  bulk_import_desc: { ko: "{teamName} 팀에 추가할 선수 명단을 한 줄에 한 명씩 붙여넣으세요.", id: "Tempel daftar pemain untuk tim {teamName}, satu nama per baris." },
+  bulk_import_placeholder: { ko: "예시:\n홍길동\n이순신\n세종대왕", id: "Contoh:\nBudi\nSiti\nJoko" },
+  bulk_import_overwrite_label: { ko: "기존 명단을 지우고 덮어쓰기", id: "Hapus & Timpa Roster" },
+  bulk_import_overwrite_desc: { ko: "(주의: 주장을 제외한 모든 선수가 삭제됩니다.)", id: "(Perhatian: Semua pemain kecuali kapten akan dihapus.)" },
+  bulk_import_submit_button: { ko: "등록하기", id: "Daftarkan" },
+  bulk_import_submitting: { ko: "등록 중...", id: "Mendaftarkan..." },
   
   // Emblem Modal
   emblem_modal_title: { ko: "팀 엠블럼 선택", id: "Pilih Emblem Tim" },
@@ -507,12 +540,6 @@ export const translations: Record<string, Record<Language, string>> = {
   // Profile Card Modal
   profile_card_title: { ko: "팀 프로필 카드", id: "Kartu Profil Tim" },
   profile_card_roster: { ko: "TEAM ROSTER", id: "DAFTAR PEMAIN" },
-  
-  // Roster Management
-  roster_title: { ko: "{teamName} 명단 관리", id: "Manajemen Roster {teamName}" },
-  roster_delete_player_aria: { ko: "{playerName} 삭제", id: "Hapus {playerName}" },
-  roster_add_new_player: { ko: "새 선수 추가", id: "Tambah Pemain Baru" },
-  roster_team_suffix: { ko: " 팀", id: " Tim" },
 
   // Cheer Song Screen
   cheer_song_etc_class: { ko: "기타", id: "Lainnya" },

@@ -13,11 +13,15 @@ interface RosterManagementModalProps {
 }
 
 const RosterManagementModal: React.FC<RosterManagementModalProps> = ({ isOpen, onClose, teamKey, teamConfig, onTeamNameChange }) => {
-    const { teamSetsMap, addPlayerToTeam, removePlayerFromTeam } = useData();
+    const { teamSetsMap, addPlayerToTeam, removePlayerFromTeam, bulkAddPlayersToTeam } = useData();
     const { t } = useTranslation();
     const [newPlayerName, setNewPlayerName] = useState('');
     const [isEditingName, setIsEditingName] = useState(false);
     const [editableName, setEditableName] = useState('');
+    const [mode, setMode] = useState<'single' | 'bulk'>('single');
+    const [bulkPlayerNames, setBulkPlayerNames] = useState('');
+    const [bulkOverwrite, setBulkOverwrite] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const { players, captainId } = useMemo(() => {
         if (!teamKey || !teamConfig) return { players: [], captainId: null };
@@ -44,6 +48,9 @@ const RosterManagementModal: React.FC<RosterManagementModalProps> = ({ isOpen, o
             setEditableName(teamConfig.teamName.replace(/ 팀$/, '').replace(/ Team$/, ''));
         } else if (!isOpen) {
             setIsEditingName(false);
+            setMode('single'); // Reset mode on close
+            setBulkPlayerNames('');
+            setBulkOverwrite(false);
         }
     }, [isOpen, teamConfig]);
 
@@ -51,6 +58,20 @@ const RosterManagementModal: React.FC<RosterManagementModalProps> = ({ isOpen, o
         if (newPlayerName.trim() && teamKey) {
             addPlayerToTeam(teamKey, newPlayerName.trim());
             setNewPlayerName('');
+        }
+    };
+
+    const handleBulkAdd = async () => {
+        if (bulkPlayerNames.trim() && teamKey) {
+            setIsSubmitting(true);
+            const names = bulkPlayerNames.split('\n').map(name => name.trim()).filter(Boolean);
+            if (names.length > 0) {
+                await bulkAddPlayersToTeam(teamKey, names, bulkOverwrite);
+            }
+            setIsSubmitting(false);
+            setBulkPlayerNames('');
+            setBulkOverwrite(false);
+            setMode('single');
         }
     };
 
@@ -123,25 +144,68 @@ const RosterManagementModal: React.FC<RosterManagementModalProps> = ({ isOpen, o
                     </ul>
                 </div>
 
-                <div className="flex-shrink-0 space-y-2 pt-4 border-t border-slate-700">
-                    <label htmlFor="new-player-name" className="text-sm font-semibold text-slate-300">{t('roster_add_new_player')}</label>
-                    <div className="flex gap-2">
-                        <input
-                            id="new-player-name"
-                            type="text"
-                            value={newPlayerName}
-                            onChange={(e) => setNewPlayerName(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === 'Enter') handleAddPlayer(); }}
-                            placeholder={t('player_name')}
-                            className="flex-grow bg-slate-800 border border-slate-600 rounded-md p-2 text-white"
-                        />
-                        <button
-                            onClick={handleAddPlayer}
-                            className="bg-sky-600 hover:bg-sky-500 font-semibold py-2 px-4 rounded-lg"
-                        >
-                            {t('add')}
-                        </button>
-                    </div>
+                <div className="flex-shrink-0 pt-4 border-t border-slate-700">
+                    {mode === 'single' ? (
+                        <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                                <label htmlFor="new-player-name" className="text-sm font-semibold text-slate-300">{t('roster_add_new_player')}</label>
+                                <button onClick={() => setMode('bulk')} className="text-xs bg-slate-600 hover:bg-slate-500 text-slate-200 font-semibold py-1 px-2 rounded-md transition-colors">
+                                    📝 {t('roster_bulk_import_button')}
+                                </button>
+                            </div>
+                            <div className="flex gap-2">
+                                <input
+                                    id="new-player-name"
+                                    type="text"
+                                    value={newPlayerName}
+                                    onChange={(e) => setNewPlayerName(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') handleAddPlayer(); }}
+                                    placeholder={t('player_name')}
+                                    className="flex-grow bg-slate-800 border border-slate-600 rounded-md p-2 text-white"
+                                />
+                                <button
+                                    onClick={handleAddPlayer}
+                                    className="bg-sky-600 hover:bg-sky-500 font-semibold py-2 px-4 rounded-lg"
+                                >
+                                    {t('add')}
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="space-y-3 animate-fade-in">
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-sm font-semibold text-slate-300">{t('bulk_import_title')}</h3>
+                                <button onClick={() => setMode('single')} className="text-xs bg-slate-600 hover:bg-slate-500 text-slate-200 font-semibold py-1 px-2 rounded-md transition-colors">
+                                    {t('roster_single_add_button')}
+                                </button>
+                            </div>
+                            <textarea
+                                value={bulkPlayerNames}
+                                onChange={e => setBulkPlayerNames(e.target.value)}
+                                placeholder={t('bulk_import_placeholder')}
+                                className="w-full h-32 bg-slate-800 border border-slate-600 rounded-md p-3 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                            />
+                            <div className="my-2">
+                                <label className="flex items-center gap-2 cursor-pointer text-slate-300">
+                                    <input
+                                        type="checkbox"
+                                        checked={bulkOverwrite}
+                                        onChange={e => setBulkOverwrite(e.target.checked)}
+                                        className="h-4 w-4 bg-slate-700 border-slate-500 rounded text-sky-500 focus:ring-sky-500"
+                                    />
+                                    {t('bulk_import_overwrite_label')}
+                                </label>
+                                <p className="text-xs text-slate-500 mt-1 ml-6">{t('bulk_import_overwrite_desc')}</p>
+                            </div>
+                            <button
+                                onClick={handleBulkAdd}
+                                disabled={isSubmitting || bulkPlayerNames.trim() === ''}
+                                className="w-full bg-sky-600 hover:bg-sky-500 font-semibold py-2 px-4 rounded-lg disabled:bg-slate-700 disabled:cursor-not-allowed"
+                            >
+                                {isSubmitting ? t('bulk_import_submitting') : t('bulk_import_submit_button')}
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 <div className="text-center mt-6 flex-shrink-0">

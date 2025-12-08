@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 export interface Stats {
@@ -372,6 +371,9 @@ export interface DataContextType {
     deleteTeam: (teamKey: string) => Promise<void>;
     addPlayerToTeam: (teamKey: string, playerName: string) => Promise<void>;
     removePlayerFromTeam: (teamKey: string, playerId: string) => Promise<void>;
+    bulkAddPlayersToTeam: (teamKey: string, playerNames: string[], overwrite: boolean) => Promise<void>;
+    createTeamSet: (name: string) => Promise<void>;
+    addTeamToSet: (setId: string, teamName: string) => Promise<void>;
     reloadData: () => void;
     exportData: () => void;
     saveImportedData: (data: any) => void;

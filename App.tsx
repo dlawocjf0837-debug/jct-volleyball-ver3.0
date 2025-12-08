@@ -294,16 +294,27 @@ const AppContent = () => {
             case 'league': return 'league_title';
             case 'announcer': return 'announcer_title';
             case 'cameraDirector': return 'camera_director_title';
-            default: return 'main_menu_title';
+            default: return 'app_title_volleyball';
         }
     }
 
     const showLanguageToggle = !['teamBuilder', 'matchSetup', 'scoreboard', 'referee'].includes(view);
 
+    // Special logic for Main Menu branding
+    const headerProps = view === 'menu' 
+        ? {
+            brand: "J-ive",
+            title: t('app_title_volleyball'),
+            subtitle: t('app_subtitle')
+        }
+        : {
+            title: t(getHeaderTitleKey())
+        };
+
     return (
         <div className="min-h-screen font-sans p-4 sm:p-6 lg:p-8 flex flex-col">
             <Header
-                title={t(getHeaderTitleKey())}
+                {...headerProps}
                 showBackButton={view !== 'menu'}
                 onBack={navigateToMenu}
                 showLanguageToggle={showLanguageToggle}
@@ -312,7 +323,7 @@ const AppContent = () => {
                 {renderView()}
             </main>
             <footer className="text-center mt-12 text-xs text-slate-500 no-print">
-                <p>&copy; 2025. <span className="font-semibold text-[#00A3FF]">JCT</span>. All Rights Reserved.</p>
+                <p>&copy; 2025 <span className="font-semibold text-[#00A3FF]">JCT Labs</span>. All Rights Reserved. | Ver 3.0</p>
             </footer>
             {toast.message && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
             <ConfirmationModal
