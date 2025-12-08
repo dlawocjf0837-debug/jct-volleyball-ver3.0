@@ -430,13 +430,13 @@ const TeamBuilderScreen: React.FC<TeamBuilderScreenProps> = ({ initialPlayers, o
 
 
     const sortingControls = (
-        <div className="flex items-center gap-2 text-sm">
-            <label htmlFor="sort-select" className="text-slate-400 font-semibold">{t('team_builder_sort_by')}</label>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 text-xs sm:text-sm">
+            <label htmlFor="sort-select" className="text-slate-400 font-semibold whitespace-nowrap">{t('team_builder_sort_by')}</label>
             <select 
                 id="sort-select" 
                 value={sortKey} 
                 onChange={(e) => setSortKey(e.target.value as keyof Stats | 'totalScore')} 
-                className="bg-slate-700 border border-slate-600 rounded-md py-1 px-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#00A3FF] text-white"
+                className="w-full sm:w-auto bg-slate-700 border border-slate-600 rounded-md py-2 sm:py-1 px-2 text-xs focus:outline-none focus:ring-1 focus:ring-[#00A3FF] text-white min-h-[44px] sm:min-h-0"
             >
                 <option value="totalScore">{t('team_builder_total_score')}</option>
                 {STAT_KEYS.map(key => (
@@ -447,28 +447,28 @@ const TeamBuilderScreen: React.FC<TeamBuilderScreenProps> = ({ initialPlayers, o
     );
 
     const controlPanel = (
-         <div className="flex items-center gap-2 flex-wrap">
+         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-wrap">
             {phase === 'drafting' && (
                 <>
-                    <button onClick={() => setShowRealNames(!showRealNames)} className="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg transition duration-200">
-                        {showRealNames ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+                    <button onClick={() => setShowRealNames(!showRealNames)} className="flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 sm:py-2 px-3 sm:px-4 rounded-lg transition duration-200 min-h-[44px] text-sm sm:text-base">
+                        {showRealNames ? <EyeSlashIcon className="w-4 h-4 sm:w-5 sm:h-5" /> : <EyeIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
                         {showRealNames ? t('hide_names') : t('show_names')}
                     </button>
-                    <button onClick={handleUndo} disabled={draftHistory.length === 0} className="flex items-center gap-2 bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-2 px-4 rounded-lg transition duration-200 disabled:bg-slate-600 disabled:cursor-not-allowed">
-                        <UndoIcon className="w-5 h-5" />
+                    <button onClick={handleUndo} disabled={draftHistory.length === 0} className="flex items-center justify-center gap-2 bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-2 sm:py-2 px-3 sm:px-4 rounded-lg transition duration-200 disabled:bg-slate-600 disabled:cursor-not-allowed min-h-[44px] text-sm sm:text-base">
+                        <UndoIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                         {t('undo')}
                     </button>
                 </>
             )}
-             <button onClick={() => setIsComparisonModalOpen(true)} disabled={comparisonPlayerIds.size !== 2} className="flex items-center gap-2 bg-sky-600 hover:bg-sky-500 text-white font-bold py-2 px-4 rounded-lg transition duration-200 disabled:bg-slate-600 disabled:cursor-not-allowed">
-                <ScaleIcon className="w-5 h-5" />
+             <button onClick={() => setIsComparisonModalOpen(true)} disabled={comparisonPlayerIds.size !== 2} className="flex items-center justify-center gap-2 bg-sky-600 hover:bg-sky-500 text-white font-bold py-2 sm:py-2 px-3 sm:px-4 rounded-lg transition duration-200 disabled:bg-slate-600 disabled:cursor-not-allowed min-h-[44px] text-sm sm:text-base">
+                <ScaleIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                 {t('compare_two_players', { count: comparisonPlayerIds.size })}
             </button>
              {phase === 'drafting' && (
                 <>
-                    <label htmlFor="gender-balance-toggle" className="flex items-center cursor-pointer p-2 rounded-lg hover:bg-slate-700">
-                        <UsersIcon className="w-5 h-5 mr-2 text-pink-400"/>
-                        <span className="font-semibold text-slate-300">{t('gender_balance')}</span>
+                    <label htmlFor="gender-balance-toggle" className="flex items-center cursor-pointer p-2 rounded-lg hover:bg-slate-700 min-h-[44px]">
+                        <UsersIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2 text-pink-400"/>
+                        <span className="font-semibold text-slate-300 text-sm sm:text-base">{t('gender_balance')}</span>
                         <div className="relative inline-block w-10 ml-2 align-middle select-none">
                             <input type="checkbox" id="gender-balance-toggle" checked={balanceGender} onChange={() => setBalanceGender(!balanceGender)} className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300"/>
                             <label htmlFor="gender-balance-toggle" className="toggle-label block overflow-hidden h-6 rounded-full bg-slate-600 cursor-pointer"></label>
@@ -486,28 +486,28 @@ const TeamBuilderScreen: React.FC<TeamBuilderScreenProps> = ({ initialPlayers, o
     if (phase === 'captain-selection') {
         const isButtonDisabled = selectedCaptainIds.size < 2 || selectedCaptainIds.size > 4;
         return (
-             <div className="space-y-6">
-                <div className="bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-4 rounded-lg shadow-lg">
-                    <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
-                         <div className="text-center md:text-left">
-                            <h2 className="text-2xl font-bold text-[#00A3FF]">{t('captain_selection_title')}</h2>
-                            <p className="text-slate-400">{t('captain_selection_desc', { count: selectedCaptainIds.size })}</p>
+             <div className="space-y-4 sm:space-y-6 px-4">
+                <div className="bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-3 sm:p-4 rounded-lg shadow-lg">
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
+                         <div className="text-center md:text-left w-full md:w-auto">
+                            <h2 className="text-xl sm:text-2xl font-bold text-[#00A3FF]">{t('captain_selection_title')}</h2>
+                            <p className="text-sm sm:text-base text-slate-400">{t('captain_selection_desc', { count: selectedCaptainIds.size })}</p>
                          </div>
-                         <button onClick={handleStartDraft} disabled={isButtonDisabled} className="bg-[#00A3FF] hover:bg-[#0082cc] text-white font-bold py-2 px-6 rounded-lg transition duration-200 disabled:bg-slate-600 disabled:text-slate-400 disabled:cursor-not-allowed">
+                         <button onClick={handleStartDraft} disabled={isButtonDisabled} className="w-full md:w-auto bg-[#00A3FF] hover:bg-[#0082cc] text-white font-bold py-2 sm:py-2 px-4 sm:px-6 rounded-lg transition duration-200 disabled:bg-slate-600 disabled:text-slate-400 disabled:cursor-not-allowed min-h-[44px] text-sm sm:text-base">
                             {isButtonDisabled ? t('start_draft') : t('create_teams_and_start_draft', { count: selectedCaptainIds.size })}
                         </button>
                     </div>
-                    <div className="border-t border-slate-700 pt-4">
+                    <div className="border-t border-slate-700 pt-3 sm:pt-4">
                         {controlPanel}
                     </div>
                 </div>
-                 <div className="bg-slate-900/50 p-4 rounded-xl shadow-lg border-2 border-dashed border-slate-700">
+                 <div className="bg-slate-900/50 p-3 sm:p-4 rounded-xl shadow-lg border-2 border-dashed border-slate-700">
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                         {unassignedPlayerIds.map(id => players[id]).filter(Boolean).map(p => (
                             <PlayerCard 
                                 key={p.id} 
                                 player={p} 
-                                onClick={handleToggleCaptainSelection}
+                                onClick={handleToggleCaptainSelection} 
                                 onViewStats={handleViewStats}
                                 isDraggable={false} 
                                 showRealNames={showRealNames} 
@@ -534,76 +534,78 @@ const TeamBuilderScreen: React.FC<TeamBuilderScreenProps> = ({ initialPlayers, o
 
 
     return (
-        <div className="space-y-6">
-            <div className="bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-4 rounded-lg shadow-lg flex flex-col gap-4">
-                 <div className="flex flex-wrap gap-4 justify-between items-center">
-                    {controlPanel}
+        <div className="space-y-4 sm:space-y-6 px-4">
+            <div className="bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-3 sm:p-4 rounded-lg shadow-lg flex flex-col gap-4 sm:gap-4">
+                 <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 justify-between items-stretch sm:items-center">
+                    <div className="flex-1">{controlPanel}</div>
                     <div className="flex items-center gap-2">
-                         <button onClick={onReset} className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-lg transition duration-200">{t('reset')}</button>
+                         <button onClick={onReset} className="w-full sm:w-auto bg-red-600 hover:bg-red-500 text-white font-bold py-2 sm:py-2 px-3 sm:px-4 rounded-lg transition duration-200 min-h-[44px] text-sm sm:text-base">{t('reset')}</button>
                     </div>
                 </div>
                 {unassignedPlayerIds.length > 0 && currentPickingTeam && (
-                    <div className="text-center bg-slate-900 p-3 rounded-lg">
-                        <h3 className="text-xl font-bold text-[#00A3FF] animate-pulse">
+                    <div className="text-center bg-slate-900 p-2 sm:p-3 rounded-lg">
+                        <h3 className="text-base sm:text-lg lg:text-xl font-bold text-[#00A3FF] animate-pulse break-words">
                             {t('draft_turn_info', { round: draftRound, teamName: '' })}<span style={{color: currentPickingTeam.color}}>{currentPickingTeam.name}</span>
                         </h3>
                     </div>
                 )}
                 {phase === 'drafting' && balanceGender && (
-                    <div className={`text-center p-3 rounded-lg border transition-all ${genderBalanceWarning ? 'bg-yellow-900/50 border-yellow-500/80' : 'bg-green-900/50 border-green-500/80'}`}>
-                        <p className="font-bold text-base text-slate-300">{t('gender_balance_guide_title')}</p>
-                        <div className="flex justify-center items-center gap-4 mt-1">
-                            <p className="text-sm text-slate-400">
+                    <div className={`text-center p-2 sm:p-3 rounded-lg border transition-all ${genderBalanceWarning ? 'bg-yellow-900/50 border-yellow-500/80' : 'bg-green-900/50 border-green-500/80'}`}>
+                        <p className="font-bold text-sm sm:text-base text-slate-300">{t('gender_balance_guide_title')}</p>
+                        <div className="flex justify-center items-center gap-2 sm:gap-4 mt-1">
+                            <p className="text-xs sm:text-sm text-slate-400">
                                 {t('gender_balance_guide_desc', { maleMin: genderQuotas.maleMin, maleMax: genderQuotas.maleMax, femaleMin: genderQuotas.femaleMin, femaleMax: genderQuotas.femaleMax })}
                             </p>
                         </div>
                         {genderBalanceWarning &&
-                            <div className="mt-2 text-sm font-semibold text-yellow-300">
+                            <div className="mt-2 text-xs sm:text-sm font-semibold text-yellow-300">
                                 <p className="mt-1 font-bold animate-pulse">{genderBalanceWarning}</p>
                             </div>
                         }
                     </div>
                 )}
-                <div className="w-full bg-slate-900 p-3 rounded-lg overflow-x-auto">
-                    <h3 className="text-center font-bold text-lg mb-2 text-[#00A3FF]">{t('team_builder_comparison_title')}</h3>
-                    <table className="min-w-full text-sm text-center">
-                        <thead>
-                            <tr className="text-slate-400">
-                                <th className="p-2">{t('team_builder_stats_header')}</th>
-                                {teams.map(team => 
-                                    <th key={team.id} className="p-2" style={{color: team.color}}>
-                                        {t('team_builder_team_header_format', { name: team.name, count: teamAverages[team.id]?.count || 0 })}
-                                        <span className="block text-sm font-normal text-sky-400">
-                                            {t('team_builder_avg_score', { score: (teamAverages[team.id]?.total || 0).toFixed(1) })}
-                                        </span>
-                                    </th>
-                                )}
-                            </tr>
-                        </thead>
-                        <tbody className="text-slate-300">
-                            {['total', ...STAT_KEYS].map(key => {
-                                const leaders = getStatLeaders(key as keyof Stats | 'total');
-                                return (
-                                    <tr key={key} className="border-t border-slate-700">
-                                        <td className="p-2 font-semibold text-slate-400">{key === 'total' ? t('team_builder_total_score') : t(STAT_NAME_KEYS[key as keyof Stats])}</td>
-                                        {teams.map(team => (
-                                            <td key={team.id} className={`p-2 font-bold ${leaders.includes(team.id) ? 'text-[#00A3FF]' : ''}`}>
-                                                {(key === 'total' ? teamAverages[team.id]?.total : teamAverages[team.id]?.stats[key as keyof Stats])?.toFixed(1) || '0.0'}
-                                            </td>
-                                        ))}
-                                    </tr>
-                                )
-                            })}
-                            <tr className="border-t border-slate-700">
-                                <td className="p-2 font-semibold text-slate-400">{t('team_builder_gender_ratio')}</td>
-                                {teams.map(team => (<td key={team.id} className="p-2 font-semibold">{teamAverages[team.id]?.gender.male || 0} / {teamAverages[team.id]?.gender.female || 0}</td>))}
-                            </tr>
-                        </tbody>
-                    </table>
+                <div className="w-full bg-slate-900 p-2 sm:p-3 rounded-lg overflow-x-auto">
+                    <h3 className="text-center font-bold text-base sm:text-lg mb-2 text-[#00A3FF]">{t('team_builder_comparison_title')}</h3>
+                    <div className="overflow-x-auto -mx-2 sm:mx-0">
+                        <table className="min-w-full text-xs sm:text-sm text-center">
+                            <thead>
+                                <tr className="text-slate-400">
+                                    <th className="p-1 sm:p-2 whitespace-nowrap">{t('team_builder_stats_header')}</th>
+                                    {teams.map(team => 
+                                        <th key={team.id} className="p-1 sm:p-2 whitespace-nowrap" style={{color: team.color}}>
+                                            {t('team_builder_team_header_format', { name: team.name, count: teamAverages[team.id]?.count || 0 })}
+                                            <span className="block text-xs sm:text-sm font-normal text-sky-400">
+                                                {t('team_builder_avg_score', { score: (teamAverages[team.id]?.total || 0).toFixed(1) })}
+                                            </span>
+                                        </th>
+                                    )}
+                                </tr>
+                            </thead>
+                            <tbody className="text-slate-300">
+                                {['total', ...STAT_KEYS].map(key => {
+                                    const leaders = getStatLeaders(key as keyof Stats | 'total');
+                                    return (
+                                        <tr key={key} className="border-t border-slate-700">
+                                            <td className="p-1 sm:p-2 font-semibold text-slate-400 whitespace-nowrap">{key === 'total' ? t('team_builder_total_score') : t(STAT_NAME_KEYS[key as keyof Stats])}</td>
+                                            {teams.map(team => (
+                                                <td key={team.id} className={`p-1 sm:p-2 font-bold whitespace-nowrap ${leaders.includes(team.id) ? 'text-[#00A3FF]' : ''}`}>
+                                                    {(key === 'total' ? teamAverages[team.id]?.total : teamAverages[team.id]?.stats[key as keyof Stats])?.toFixed(1) || '0.0'}
+                                                </td>
+                                            ))}
+                                        </tr>
+                                    )
+                                })}
+                                <tr className="border-t border-slate-700">
+                                    <td className="p-1 sm:p-2 font-semibold text-slate-400 whitespace-nowrap">{t('team_builder_gender_ratio')}</td>
+                                    {teams.map(team => (<td key={team.id} className="p-1 sm:p-2 font-semibold whitespace-nowrap">{teamAverages[team.id]?.gender.male || 0} / {teamAverages[team.id]?.gender.female || 0}</td>))}
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-4 sm:gap-6">
                  <TeamPanel 
                     teamId="unassigned" 
                     name={t('unassigned_players')}

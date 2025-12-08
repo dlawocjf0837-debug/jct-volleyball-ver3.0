@@ -194,71 +194,74 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
         const servingClasses = isServing && !matchState.gameOver ? 'glowing-border' : 'border-solid border-slate-700';
 
         return (
-            <div className={`p-4 flex flex-col items-center justify-between gap-4 bg-slate-900/50 rounded-lg border-2 transition-all duration-300 ${servingClasses} flex-grow`} style={{ borderColor: isServing && !matchState.gameOver ? color : '#334155' }}>
-                <div className="flex items-center gap-3">
-                    <TeamEmblem emblem={team.emblem} color={color} className="w-16 h-16"/>
+            <div className={`p-3 sm:p-4 flex flex-col items-center justify-between gap-4 sm:gap-4 bg-slate-900/50 rounded-lg border-2 transition-all duration-300 ${servingClasses} flex-grow`} style={{ borderColor: isServing && !matchState.gameOver ? color : '#334155' }}>
+                <div className="flex items-center gap-3 sm:gap-3">
+                    <TeamEmblem emblem={team.emblem} color={color} className="w-12 h-12 sm:w-16 sm:h-16"/>
                     <div className="text-center">
-                        <h2 className="text-3xl font-bold truncate text-white">{team.name}</h2>
+                        <h2 className="text-lg sm:text-xl lg:text-2xl xl:text-3xl font-bold truncate text-white">{team.name}</h2>
                         {team.slogan && <p className="text-xs italic mt-1" style={{ color: color }}>"{team.slogan}"</p>}
                     </div>
                 </div>
 
                 <div className="flex flex-col items-center justify-center w-full">
-                    <div className="text-[20vw] md:text-[15vw] lg:text-[16rem] font-extrabold leading-none" style={{ color: color }}>{team.score}</div>
-                    <div className="flex gap-6 mt-6">
-                        <button onClick={() => dispatch({type: 'SCORE', team: teamKey, amount: -1})} disabled={matchState.gameOver || !!matchState.timeout} className="bg-red-600 hover:bg-red-500 text-white font-bold py-4 px-8 rounded-xl text-2xl disabled:bg-slate-600 disabled:cursor-not-allowed">-</button>
-                        <button onClick={() => dispatch({type: 'SCORE', team: teamKey, amount: 1})} disabled={matchState.gameOver || !!matchState.timeout} className="bg-green-600 hover:bg-green-500 text-white font-bold py-4 px-8 rounded-xl text-2xl disabled:bg-slate-600 disabled:cursor-not-allowed">+</button>
+                    <div className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl font-extrabold leading-none" style={{ color: color }}>{team.score}</div>
+                    <div className="flex gap-4 sm:gap-6 mt-4 sm:mt-6 w-full max-w-xs">
+                        <button onClick={() => dispatch({type: 'SCORE', team: teamKey, amount: -1})} disabled={matchState.gameOver || !!matchState.timeout} className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-3 sm:py-4 px-4 sm:px-8 rounded-xl text-xl sm:text-2xl disabled:bg-slate-600 disabled:cursor-not-allowed min-h-[44px]">-</button>
+                        <button onClick={() => dispatch({type: 'SCORE', team: teamKey, amount: 1})} disabled={matchState.gameOver || !!matchState.timeout} className="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold py-3 sm:py-4 px-4 sm:px-8 rounded-xl text-xl sm:text-2xl disabled:bg-slate-600 disabled:cursor-not-allowed min-h-[44px]">+</button>
                     </div>
                 </div>
                 
                 <div className="h-10 flex items-center justify-center w-full gap-2">
-                    { !matchState.servingTeam && !matchState.gameOver && <button onClick={() => dispatch({type: 'SET_SERVING_TEAM', team: teamKey})} className="flex items-center gap-2 bg-[#00A3FF] hover:bg-[#0082cc] py-2 px-4 rounded-lg font-semibold"><VolleyballIcon className="w-5 h-5"/> {t('start_serve')}</button> }
+                    { !matchState.servingTeam && !matchState.gameOver && <button onClick={() => dispatch({type: 'SET_SERVING_TEAM', team: teamKey})} className="flex items-center gap-2 bg-[#00A3FF] hover:bg-[#0082cc] py-2 px-3 sm:px-4 rounded-lg font-semibold text-sm sm:text-base min-h-[44px]"><VolleyballIcon className="w-4 h-4 sm:w-5 sm:h-5"/> {t('start_serve')}</button> }
                     { isServing && !matchState.gameOver && (
-                        <div className="flex items-center gap-2 font-bold text-lg" style={{ color: color }}><VolleyballIcon className="w-6 h-6"/> {t('serving').toUpperCase()}</div>
+                        <div className="flex items-center gap-2 font-bold text-base sm:text-lg" style={{ color: color }}><VolleyballIcon className="w-5 h-5 sm:w-6 sm:h-6"/> {t('serving').toUpperCase()}</div>
                     )}
                 </div>
 
-                <div className="w-full space-y-3 border-t border-slate-700 pt-4">
-                    <div className="grid grid-cols-2 gap-3">
-                        <button onClick={() => setPendingAction({ actionType: 'SERVICE_ACE', team: teamKey })} disabled={!isServing || matchState.gameOver || !!matchState.timeout} className="bg-slate-700 hover:bg-slate-600 font-semibold py-3 px-4 rounded-lg text-lg disabled:opacity-50">{t('serve_ace')}</button>
-                        <button onClick={() => setPendingAction({ actionType: 'SERVICE_FAULT', team: teamKey })} disabled={!isServing || matchState.gameOver || !!matchState.timeout} className="w-full bg-slate-700 hover:bg-slate-600 font-semibold py-3 px-4 rounded-lg text-lg disabled:opacity-50">{t('serve_fault')}</button>
+                <div className="w-full space-y-3 sm:space-y-3 border-t border-slate-700 pt-4 sm:pt-4">
+                    <div className="grid grid-cols-2 gap-3 sm:gap-3">
+                        <button onClick={() => setPendingAction({ actionType: 'SERVICE_ACE', team: teamKey })} disabled={!isServing || matchState.gameOver || !!matchState.timeout} className="bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-2 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 min-h-[44px]">{t('serve_ace')}</button>
+                        <button onClick={() => setPendingAction({ actionType: 'SERVICE_FAULT', team: teamKey })} disabled={!isServing || matchState.gameOver || !!matchState.timeout} className="w-full bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-2 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 min-h-[44px]">{t('serve_fault')}</button>
                         
                         <button 
                             onClick={() => setPendingAction({ actionType: 'SERVE_IN', team: teamKey })} 
                             disabled={!isServing || matchState.gameOver || !!matchState.timeout}
-                            className="bg-slate-700 hover:bg-slate-600 font-semibold py-3 px-4 rounded-lg text-lg disabled:opacity-50 flex items-center justify-center gap-2"
+                            className="bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-2 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 flex items-center justify-center gap-1 sm:gap-2 min-h-[44px]"
                         >
-                            <BoltIcon className="w-5 h-5 text-yellow-400" />
-                            {t('btn_serve_in')}
+                            <BoltIcon className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" />
+                            <span className="hidden sm:inline">{t('btn_serve_in')}</span>
+                            <span className="sm:hidden text-xs">서브</span>
                         </button>
-                        <button onClick={() => setPendingAction({ actionType: 'SPIKE_SUCCESS', team: teamKey })} disabled={matchState.gameOver || !!matchState.timeout} className="w-full bg-slate-700 hover:bg-slate-600 font-semibold py-3 px-4 rounded-lg text-lg disabled:opacity-50">{t('spike_success')}</button>
+                        <button onClick={() => setPendingAction({ actionType: 'SPIKE_SUCCESS', team: teamKey })} disabled={matchState.gameOver || !!matchState.timeout} className="w-full bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-2 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 min-h-[44px]">{t('spike_success')}</button>
                         
-                        <button onClick={() => setPendingAction({ actionType: 'BLOCKING_POINT', team: teamKey })} disabled={matchState.gameOver || !!matchState.timeout} className="w-full bg-slate-700 hover:bg-slate-600 font-semibold py-3 px-4 rounded-lg text-lg disabled:opacity-50">{t('blocking_point')}</button>
+                        <button onClick={() => setPendingAction({ actionType: 'BLOCKING_POINT', team: teamKey })} disabled={matchState.gameOver || !!matchState.timeout} className="w-full bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-2 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 min-h-[44px]">{t('blocking_point')}</button>
                         <button 
                             onClick={() => setPendingAction({ actionType: 'DIG_SUCCESS', team: teamKey })} 
                             disabled={matchState.gameOver || !!matchState.timeout} 
-                            className="w-full bg-slate-700 hover:bg-slate-600 font-semibold py-3 px-4 rounded-lg text-lg disabled:opacity-50 flex justify-center items-center gap-2"
+                            className="w-full bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-2 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 flex justify-center items-center gap-1 sm:gap-2 min-h-[44px]"
                         >
-                            <ShieldIcon className="w-5 h-5 text-green-400" /> {t('btn_nice_defense')}
+                            <ShieldIcon className="w-4 h-4 sm:w-5 sm:h-5 text-green-400" /> 
+                            <span className="hidden sm:inline">{t('btn_nice_defense')}</span>
+                            <span className="sm:hidden text-xs">디그</span>
                         </button>
                     </div>
                     
-                     <button onClick={() => handleTimeout(teamKey)} disabled={team.timeouts === 0 || matchState.gameOver || !!matchState.timeout} className="w-full flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 font-semibold py-3 px-4 rounded-lg text-lg disabled:opacity-50 disabled:cursor-not-allowed"><StopwatchIcon className="w-6 h-6" /> {t('timeout')} ({team.timeouts})</button>
+                     <button onClick={() => handleTimeout(teamKey)} disabled={team.timeouts === 0 || matchState.gameOver || !!matchState.timeout} className="w-full flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-3 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"><StopwatchIcon className="w-5 h-5 sm:w-6 sm:h-6" /> {t('timeout')} ({team.timeouts})</button>
                      {settings.includeBonusPointsInWinner && (
                         <>
-                            <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg">
-                                <span className="font-bold text-lg">{t('fair_play')}</span>
-                                <div className="flex items-center gap-3">
-                                    <button onClick={() => dispatch({type: 'ADJUST_FAIR_PLAY', team: teamKey, amount: -1})} disabled={matchState.gameOver || !!matchState.timeout} className="w-10 h-10 rounded-full bg-slate-600 text-xl disabled:opacity-50">-</button>
-                                    <span className="font-mono text-xl w-10 text-center">{team.fairPlay}</span>
-                                    <button onClick={() => dispatch({type: 'ADJUST_FAIR_PLAY', team: teamKey, amount: 1})} disabled={matchState.gameOver || !!matchState.timeout} className="w-10 h-10 rounded-full bg-slate-600 text-xl disabled:opacity-50">+</button>
+                            <div className="flex justify-between items-center bg-slate-800 p-2 sm:p-3 rounded-lg">
+                                <span className="font-bold text-sm sm:text-base lg:text-lg">{t('fair_play')}</span>
+                                <div className="flex items-center gap-2 sm:gap-3">
+                                    <button onClick={() => dispatch({type: 'ADJUST_FAIR_PLAY', team: teamKey, amount: -1})} disabled={matchState.gameOver || !!matchState.timeout} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-slate-600 text-lg sm:text-xl disabled:opacity-50 min-h-[44px] min-w-[44px]">-</button>
+                                    <span className="font-mono text-lg sm:text-xl w-8 sm:w-10 text-center">{team.fairPlay}</span>
+                                    <button onClick={() => dispatch({type: 'ADJUST_FAIR_PLAY', team: teamKey, amount: 1})} disabled={matchState.gameOver || !!matchState.timeout} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-slate-600 text-lg sm:text-xl disabled:opacity-50 min-h-[44px] min-w-[44px]">+</button>
                                 </div>
                             </div>
-                             <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg">
-                                <span className="font-bold text-lg">{t('three_hit_play')}</span>
-                                <div className="flex items-center gap-3">
-                                     <span className="font-mono text-xl w-10 text-center">{team.threeHitPlays}</span>
-                                    <button onClick={() => dispatch({type: 'INCREMENT_3_HIT', team: teamKey})} disabled={matchState.gameOver || !!matchState.timeout} className="w-10 h-10 rounded-full bg-slate-600 text-xl disabled:opacity-50">+</button>
+                             <div className="flex justify-between items-center bg-slate-800 p-2 sm:p-3 rounded-lg">
+                                <span className="font-bold text-sm sm:text-base lg:text-lg">{t('three_hit_play')}</span>
+                                <div className="flex items-center gap-2 sm:gap-3">
+                                     <span className="font-mono text-lg sm:text-xl w-8 sm:w-10 text-center">{team.threeHitPlays}</span>
+                                    <button onClick={() => dispatch({type: 'INCREMENT_3_HIT', team: teamKey})} disabled={matchState.gameOver || !!matchState.timeout} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-slate-600 text-lg sm:text-xl disabled:opacity-50 min-h-[44px] min-w-[44px]">+</button>
                                 </div>
                             </div>
                         </>
@@ -282,19 +285,19 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
         }
 
         return (
-            <div className="bg-[#00A3FF]/10 border border-[#00A3FF] p-6 rounded-lg space-y-4 animate-fade-in no-print">
+            <div className="bg-[#00A3FF]/10 border border-[#00A3FF] p-4 sm:p-6 rounded-lg space-y-3 sm:space-y-4 animate-fade-in no-print">
                 <div className="text-center">
-                    <h3 className="text-3xl font-bold text-[#00A3FF]">{winnerMessage}</h3>
-                    <div className="text-xl mt-1 flex flex-col gap-1">
+                    <h3 className="text-xl sm:text-2xl lg:text-3xl font-bold text-[#00A3FF] break-words">{winnerMessage}</h3>
+                    <div className="text-sm sm:text-base lg:text-xl mt-1 flex flex-col gap-1">
                          <p>
-                            <span className="font-bold">{t('record_score_breakdown_format', { 
+                            <span className="font-bold break-words">{t('record_score_breakdown_format', { 
                                 teamName: teamA.name, 
                                 totalScore: finalScoreA, 
                                 breakdown: `${t('record_score_part_match')} ${teamA.score} + ${t('record_score_part_fairplay')} ${teamA.fairPlay} + ${t('record_score_part_3hit')} ${teamA.threeHitPlays}` 
                             })}</span>
                         </p>
                         <p>
-                            <span className="font-bold">{t('record_score_breakdown_format', { 
+                            <span className="font-bold break-words">{t('record_score_breakdown_format', { 
                                 teamName: teamB.name, 
                                 totalScore: finalScoreB, 
                                 breakdown: `${t('record_score_part_match')} ${teamB.score} + ${t('record_score_part_fairplay')} ${teamB.fairPlay} + ${t('record_score_part_3hit')} ${teamB.threeHitPlays}` 
@@ -302,10 +305,10 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                         </p>
                     </div>
                     {settings.includeBonusPointsInWinner && (
-                        <p className="text-sm text-slate-400 mt-1">{t('record_score_breakdown_guide')}</p>
+                        <p className="text-xs sm:text-sm text-slate-400 mt-1">{t('record_score_breakdown_guide')}</p>
                     )}
                 </div>
-                <button onClick={handleSaveFinalResult} className="w-full bg-[#00A3FF] hover:bg-[#0082cc] text-white font-bold py-3 px-6 rounded-lg text-xl transition-all duration-200 shadow-lg shadow-blue-500/30 animate-pulse">
+                <button onClick={handleSaveFinalResult} className="w-full bg-[#00A3FF] hover:bg-[#0082cc] text-white font-bold py-3 px-4 sm:px-6 rounded-lg text-base sm:text-lg lg:text-xl transition-all duration-200 shadow-lg shadow-blue-500/30 animate-pulse min-h-[44px]">
                     {t('save_final_result')}
                 </button>
             </div>
@@ -313,9 +316,9 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
     };
 
     return (
-        <div className="flex flex-col h-full max-w-7xl mx-auto w-full">
-            <div className="flex justify-between items-center mb-4 relative">
-                <button onClick={onBackToMenu} className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg">
+        <div className="flex flex-col h-full max-w-7xl mx-auto w-full px-4">
+            <div className="flex justify-between items-center mb-3 sm:mb-4 relative flex-wrap gap-2">
+                <button onClick={onBackToMenu} className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-3 sm:px-4 rounded-lg text-sm sm:text-base min-h-[44px]">
                     {t('back_to_main')}
                 </button>
                 
@@ -323,13 +326,13 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                 <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
                     <button
                         onClick={() => setTimerOn(!timerOn)}
-                        className={`text-4xl font-mono font-black tracking-widest cursor-pointer hover:scale-105 transition-transform ${timerOn ? 'text-green-400' : 'text-red-400'}`}
+                        className={`text-2xl sm:text-3xl lg:text-4xl font-mono font-black tracking-widest cursor-pointer hover:scale-105 transition-transform ${timerOn ? 'text-green-400' : 'text-red-400'}`}
                     >
                         {formatTime(matchTime)}
                     </button>
                 </div>
 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 sm:gap-4">
                     {matchState.status === 'in_progress' && (
                         <div className="flex items-center gap-4">
                             {/* Join Code Display */}
@@ -351,18 +354,18 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                         </div>
                     )}
 
-                    {mode === 'referee' && <span className="bg-yellow-600 text-white text-xs px-2 py-1 rounded font-bold">REFEREE MODE</span>}
-                    <button onClick={() => setIsSubModalOpen(true)} className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg" title={t('substitute_player')}>
-                        <SwitchHorizontalIcon className="w-6 h-6 text-white" />
+                    {mode === 'referee' && <span className="bg-yellow-600 text-white text-xs px-2 py-1 rounded font-bold whitespace-nowrap">REFEREE MODE</span>}
+                    <button onClick={() => setIsSubModalOpen(true)} className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center" title={t('substitute_player')}>
+                        <SwitchHorizontalIcon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                     </button>
-                    <button onClick={() => setShowRulesModal(true)} className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg" title="규칙 보기">
-                        <QuestionMarkCircleIcon className="w-6 h-6 text-white" />
+                    <button onClick={() => setShowRulesModal(true)} className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center" title="규칙 보기">
+                        <QuestionMarkCircleIcon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                     </button>
                 </div>
             </div>
 
             {/* Game Timeline (Moved to middle) */}
-            <div className="mb-4">
+            <div className="mb-3 sm:mb-4">
                 <GameLog 
                     events={matchState.eventHistory} 
                     onUndo={handleUndo} 
@@ -371,12 +374,12 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
             </div>
 
             {/* Main Scoreboard Content */}
-            <div className="flex-grow flex flex-col md:flex-row gap-4 items-stretch justify-center relative">
+            <div className="flex-grow flex flex-col lg:flex-row gap-4 sm:gap-4 items-stretch justify-center relative">
                 <TeamColumn teamKey="A" />
                 
                 {/* Center / Game Over Panel */}
                 {(matchState.gameOver) && (
-                    <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-20 rounded-xl p-4">
+                    <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-20 rounded-xl p-3 sm:p-4">
                         <div className="w-full max-w-lg">
                             <GameSummaryPanel />
                         </div>

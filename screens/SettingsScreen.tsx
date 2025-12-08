@@ -29,10 +29,14 @@ const SettingsScreen: React.FC = () => {
     const presetScores = [11, 15, 21, 25];
 
     return (
-        <div className="max-w-2xl mx-auto bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-6 rounded-lg shadow-2xl space-y-6 animate-fade-in">
-            <div className="p-4 bg-slate-800/50 rounded-lg text-center border border-slate-700">
-                <h2 className="text-2xl font-bold text-sky-400 mb-2">환경설정</h2>
-                <p className="text-slate-300">
+        <div className="max-w-2xl mx-auto bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-4 sm:p-6 rounded-lg shadow-2xl space-y-6 animate-fade-in px-4">
+            <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                <div className="flex flex-col lg:flex-row items-center lg:justify-between mb-6 gap-4">
+                    <h1 className="text-3xl lg:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 text-center lg:text-right">
+                        환경설정
+                    </h1>
+                </div>
+                <p className="text-sm sm:text-base text-slate-300 text-center">
                     앱의 다양한 설정을 변경할 수 있습니다.
                 </p>
             </div>

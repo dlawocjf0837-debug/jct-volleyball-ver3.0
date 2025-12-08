@@ -142,10 +142,14 @@ const StandaloneSoundPanel: React.FC = () => {
              {allSongs.map(song => (
                 <audio key={song.key} ref={el => {audioRefs.current[song.key] = el}} src={convertGithubUrl(song.url)} preload="metadata"></audio>
             ))}
-            <div className="text-center">
-                <h2 className="text-3xl font-bold text-[#00A3FF]">{t('cheer_song_title')}</h2>
-                <p className="text-sm text-slate-400 mt-2">{t('cheer_song_subtitle')}</p>
+            <div className="flex flex-col lg:flex-row items-center lg:justify-between mb-6 gap-4">
+                <h1 className="text-3xl lg:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 text-center lg:text-right">
+                    {t('cheer_song_title')}
+                </h1>
             </div>
+            <p className="text-sm text-slate-400 mt-2 text-center">
+                {t('cheer_song_subtitle')}
+            </p>
             
             {availableTeamCounts.length > 1 && (
                 <div className="flex flex-wrap items-center justify-center gap-2 border-y border-slate-700 py-4">

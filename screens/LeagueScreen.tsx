@@ -144,7 +144,11 @@ const LeagueScreen: React.FC<LeagueScreenProps> = ({ onStartMatch }) => {
     if (isSetupMode) {
         return (
             <div className="flex flex-col gap-4">
-                <h2 className="text-2xl font-bold text-sky-400">{t('league_create_new_title')}</h2>
+                <div className="flex flex-col lg:flex-row items-center lg:justify-between mb-6 gap-4">
+                    <h1 className="text-3xl lg:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 text-center lg:text-right">
+                        {t('league_create_new_title')}
+                    </h1>
+                </div>
                 <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
                     <p className="text-slate-300 text-sm mb-2">{t('league_round_robin_info')}</p>
                     <div className="flex items-center gap-2">
@@ -178,9 +182,11 @@ const LeagueScreen: React.FC<LeagueScreenProps> = ({ onStartMatch }) => {
     
     return (
         <div className="flex flex-col gap-4">
-            <div className="flex justify-between items-center no-print">
-                <h2 className="text-2xl font-bold text-sky-400">{t('league_title')}</h2>
-                <button onClick={() => { setIsSetupMode(true); setSelectedLeague(null); }} className="bg-sky-600 hover:bg-sky-500 text-white font-bold py-2 px-4 rounded">{t('league_create_new_button')}</button>
+            <div className="flex flex-col lg:flex-row items-center lg:justify-between mb-6 gap-4 no-print">
+                <h1 className="text-3xl lg:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 text-center lg:text-right">
+                    {t('league_title')}
+                </h1>
+                <button onClick={() => { setIsSetupMode(true); setSelectedLeague(null); }} className="bg-sky-600 hover:bg-sky-500 text-white font-bold py-2 px-4 rounded min-h-[44px] w-full lg:w-auto">{t('league_create_new_button')}</button>
             </div>
             <div className="flex gap-2 no-print">
                 {leagues.map(l => (

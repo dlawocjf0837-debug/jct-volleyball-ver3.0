@@ -129,10 +129,12 @@ const RefereeScreen: React.FC<RefereeScreenProps> = ({ onStartMatch }) => {
         <div className="w-full max-w-5xl mx-auto flex flex-col gap-6 flex-grow animate-fade-in">
             {showRulesModal && <RulesModal onClose={() => setShowRulesModal(false)} />}
             
-            <div className="bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-6 rounded-lg shadow-2xl space-y-4">
-                <div className="flex justify-between items-center">
-                    <h2 className="text-2xl font-bold text-slate-300">{t('referee_select_team_title')}</h2>
-                    <div className="flex items-center gap-2">
+            <div className="bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-4 sm:p-6 rounded-lg shadow-2xl space-y-4">
+                <div className="flex flex-col lg:flex-row items-center lg:justify-between mb-6 gap-4">
+                    <h1 className="text-3xl lg:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 text-center lg:text-right">
+                        {t('referee_select_team_title')}
+                    </h1>
+                    <div className="flex items-center gap-2 self-start lg:self-auto">
                         <button onClick={reloadData} className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-3 rounded-lg transition duration-200 text-xl" aria-label="새로고침">
                             ⟳
                         </button>

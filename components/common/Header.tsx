@@ -26,11 +26,11 @@ const Header: React.FC<HeaderProps> = ({ title, showBackButton, onBack, showLang
                 </button>
             )}
             <div className="flex-grow flex flex-col items-center">
-                <h1 className="text-4xl sm:text-5xl font-extrabold text-[#00A3FF] tracking-wider uppercase transform -skew-x-12">
+                <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-[#00A3FF] tracking-wider uppercase transform -skew-x-12">
                     {brand} <span className="text-white">{title}</span>
                 </h1>
                 {subtitle && (
-                    <p className="text-slate-300 mt-2 text-sm sm:text-base font-medium tracking-tight animate-fade-in">
+                    <p className="text-slate-300 mt-2 text-xs sm:text-sm lg:text-base font-medium tracking-tight animate-fade-in">
                         {subtitle}
                     </p>
                 )}

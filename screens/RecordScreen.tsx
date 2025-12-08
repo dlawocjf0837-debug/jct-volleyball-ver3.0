@@ -109,16 +109,16 @@ const PlayerStatsTable: React.FC<{
             </div>
 
             {/* Table Section */}
-            <div className="overflow-x-auto">
-                <table className="w-full text-center">
+            <div className="overflow-x-auto -mx-2 sm:mx-0 px-2 sm:px-0">
+                <table className="w-full text-center min-w-[600px]">
                     <thead>
                         <tr className="bg-slate-950/80 text-slate-400 text-xs font-bold uppercase tracking-wider border-b border-slate-700/50 print-text-black">
                             {/* Adjusted padding and width to reduce spacing */}
-                            <th className="px-3 py-3 text-left whitespace-nowrap sticky left-0 z-10 bg-slate-950/90 backdrop-blur-sm shadow-[1px_0_0_0_rgba(51,65,85,0.5)]">
+                            <th className="px-2 sm:px-3 py-2 sm:py-3 text-left whitespace-nowrap sticky left-0 z-10 bg-slate-950/90 backdrop-blur-sm shadow-[1px_0_0_0_rgba(51,65,85,0.5)]">
                                 {t('record_player_stats_header_player')}
                             </th>
                             {statOrder.map(key => (
-                                <th key={key} className="px-2 py-3 whitespace-nowrap hover:text-white transition-colors cursor-default">
+                                <th key={key} className="px-1 sm:px-2 py-2 sm:py-3 whitespace-nowrap hover:text-white transition-colors cursor-default text-xs sm:text-xs">
                                     {statHeaderNames[key]}
                                 </th>
                             ))}
@@ -135,17 +135,17 @@ const PlayerStatsTable: React.FC<{
                                 key={player.id} 
                                 className={`group transition-all duration-200 hover:bg-white/5 ${isEven ? 'bg-slate-800/10' : 'bg-transparent'}`}
                              >
-                                <td className="px-3 py-3 text-left sticky left-0 z-10 bg-slate-900/90 backdrop-blur-sm group-hover:bg-slate-800/90 transition-colors shadow-[1px_0_0_0_rgba(51,65,85,0.5)]">
+                                <td className="px-2 sm:px-3 py-2 sm:py-3 text-left sticky left-0 z-10 bg-slate-900/90 backdrop-blur-sm group-hover:bg-slate-800/90 transition-colors shadow-[1px_0_0_0_rgba(51,65,85,0.5)]">
                                     <div className="flex items-center gap-2">
                                         {/* Hover Indicator */}
                                         <div className="w-1 h-0 group-hover:h-6 rounded-full transition-all duration-300 opacity-0 group-hover:opacity-100 absolute left-0 top-1/2 -translate-y-1/2" style={{ backgroundColor: teamMatchState.color }}></div>
                                         
                                         <button 
                                             onClick={() => onPlayerClick(player)} 
-                                            className="text-left group/btn"
+                                            className="text-left group/btn min-h-[44px] flex items-center"
                                             aria-label={`${player.originalName} 상세 기록 보기`}
                                         >
-                                            <span className="block text-lg font-bold text-slate-200 group-hover/btn:text-white group-hover/btn:underline decoration-2 underline-offset-4 transition-all print-text-black truncate max-w-[100px] sm:max-w-none">
+                                            <span className="block text-sm sm:text-base lg:text-lg font-bold text-slate-200 group-hover/btn:text-white group-hover/btn:underline decoration-2 underline-offset-4 transition-all print-text-black truncate max-w-[120px] sm:max-w-[150px] lg:max-w-none">
                                                 {player.originalName || '알 수 없음'}
                                             </span>
                                         </button>
@@ -157,13 +157,13 @@ const PlayerStatsTable: React.FC<{
                                         const val = stats[key] || 0;
                                         const isZero = val === 0;
                                         return (
-                                            <td key={key} className={`px-2 py-3 text-lg font-mono ${isZero ? 'text-slate-600 font-normal' : 'text-white font-bold'} print-text-black`}>
+                                            <td key={key} className={`px-1 sm:px-2 py-2 sm:py-3 text-sm sm:text-base lg:text-lg font-mono ${isZero ? 'text-slate-600 font-normal' : 'text-white font-bold'} print-text-black`}>
                                                 {val}
                                             </td>
                                         );
                                     })
                                 ) : (
-                                    <td colSpan={statOrder.length} className="px-2 py-3 text-center text-slate-600 font-medium italic print-text-black">
+                                    <td colSpan={statOrder.length} className="px-2 py-2 sm:py-3 text-center text-xs sm:text-sm text-slate-600 font-medium italic print-text-black">
                                         {t('record_player_did_not_participate')}
                                     </td>
                                 )}
@@ -955,9 +955,11 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ onContinueGame, preselected
             )}
             <div className="max-w-7xl mx-auto bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-6 rounded-lg shadow-2xl space-y-6 animate-fade-in w-full">
                 {/* ... Header and filter controls ... */}
-                <div className="flex justify-between items-center flex-wrap gap-4 no-print">
-                    <h2 className="text-3xl font-bold text-[#00A3FF]">{t('record_list_title')}</h2>
-                    <div className="flex gap-4 items-center">
+                <div className="flex flex-col lg:flex-row items-center lg:justify-between mb-6 gap-4 no-print">
+                    <h1 className="text-3xl lg:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 text-center lg:text-right">
+                        {t('record_list_title')}
+                    </h1>
+                    <div className="flex gap-4 items-center self-start lg:self-auto">
                         <div>
                             <label htmlFor="class-select-history" className="sr-only">{t('record_filter_class_label')}</label>
                             <select
@@ -1071,9 +1073,11 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ onContinueGame, preselected
                                     <p className="printable-subtitle">{new Date(enrichedSelectedMatch.date).toLocaleString('ko-KR')}</p>
                                 </div>
                             </div>
-                            <div className="flex justify-between items-center flex-wrap gap-2 no-print">
-                                <h2 className="text-3xl font-bold text-[#00A3FF]">{t('record_detailed_analysis')}</h2>
-                                 <div className='flex items-center gap-2'>
+                            <div className="flex flex-col lg:flex-row items-center lg:justify-between mb-6 gap-4 no-print">
+                                <h1 className="text-3xl lg:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 text-center lg:text-right">
+                                    {t('record_detailed_analysis')}
+                                </h1>
+                                 <div className='flex items-center gap-2 self-start lg:self-auto'>
                                     {enrichedSelectedMatch.status === 'completed' && (
                                         <>
                                             <button 

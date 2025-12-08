@@ -362,9 +362,11 @@ const TeamAnalysisScreen: React.FC = () => {
             <div className="w-full max-w-[1400px] mx-auto p-4 space-y-6 animate-fade-in">
                 
                 {/* Header Controls */}
-                <div className="flex-shrink-0 flex justify-between items-center flex-wrap gap-4 bg-slate-900/50 p-4 rounded-lg border border-slate-700">
-                    <h2 className="text-2xl font-bold text-[#00A3FF]">{t('team_analysis_title')}</h2>
-                    <div className="flex gap-4 items-center">
+                <div className="flex-shrink-0 flex flex-col lg:flex-row items-center lg:justify-between mb-6 gap-4 bg-slate-900/50 p-4 rounded-lg border border-slate-700">
+                    <h1 className="text-3xl lg:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 text-center lg:text-right">
+                        {t('team_analysis_title')}
+                    </h1>
+                    <div className="flex gap-4 items-center self-start lg:self-auto">
                         <select
                             id="class-select-analysis"
                             value={selectedClass}

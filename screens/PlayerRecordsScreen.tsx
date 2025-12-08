@@ -202,10 +202,12 @@ const PlayerRecordsScreen: React.FC = () => {
                     teamSets={teamSets}
                 />
             )}
-            <div className="max-w-4xl mx-auto bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-6 rounded-lg shadow-2xl space-y-6 animate-fade-in w-full">
-                <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-                    <h2 className="text-3xl font-bold text-[#00A3FF]">{t('player_records_title')}</h2>
-                    <div className="flex-grow sm:flex-grow-0">
+            <div className="max-w-4xl mx-auto bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-4 sm:p-6 rounded-lg shadow-2xl space-y-6 animate-fade-in w-full px-4">
+                <div className="flex flex-col lg:flex-row items-center lg:justify-between mb-6 gap-4">
+                    <h1 className="text-3xl lg:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 text-center lg:text-right">
+                        {t('player_records_title')}
+                    </h1>
+                    <div className="flex-grow sm:flex-grow-0 self-start lg:self-auto">
                         <label htmlFor="class-select-records" className="sr-only">{t('record_filter_class_label')}</label>
                         <select
                             id="class-select-records"

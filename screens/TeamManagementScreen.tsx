@@ -274,12 +274,12 @@ const TeamManagementScreen: React.FC = () => {
                 />
             </ConfirmationModal>
 
-            <div className="max-w-4xl mx-auto bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-6 rounded-lg shadow-2xl space-y-6 animate-fade-in">
-                <div className="flex justify-between items-center flex-wrap gap-4">
-                    <button onClick={() => setIsNewSetModalOpen(true)} className="bg-sky-600 hover:bg-sky-500 text-white font-bold py-3 px-6 rounded-lg text-base">
+            <div className="max-w-4xl mx-auto bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-4 sm:p-6 rounded-lg shadow-2xl space-y-6 animate-fade-in px-4">
+                <div className="flex flex-col lg:flex-row items-stretch lg:items-center lg:justify-between gap-4">
+                    <button onClick={() => setIsNewSetModalOpen(true)} className="bg-sky-600 hover:bg-sky-500 text-white font-bold py-3 px-6 rounded-lg text-base min-h-[44px] w-full lg:w-auto">
                         {t('team_management_new_set_button')}
                     </button>
-                    <button onClick={handleSave} className="bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-6 rounded-lg text-base">{t('team_management_save_all')}</button>
+                    <button onClick={handleSave} className="bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-6 rounded-lg text-base min-h-[44px] w-full lg:w-auto">{t('team_management_save_all')}</button>
                 </div>
 
                 {groupedTeams.length > 0 ? (

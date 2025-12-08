@@ -123,11 +123,15 @@ const AchievementsScreen: React.FC = () => {
     return (
         <>
             {selectedBadge && <EarnersModal badge={selectedBadge} earners={badgeEarners.get(selectedBadge.id) || []} onClose={() => setSelectedBadge(null)} cumulativeStats={playerCumulativeStats} />}
-            <div className="max-w-4xl mx-auto bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-6 rounded-lg shadow-2xl space-y-6 animate-fade-in w-full">
-                <div className="text-center">
-                    <h2 className="text-3xl font-bold text-[#00A3FF]">{t('achievements_title')}</h2>
-                    <p className="text-slate-400 mt-1">{t('achievements_subtitle')}</p>
+            <div className="max-w-4xl mx-auto bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-4 sm:p-6 rounded-lg shadow-2xl space-y-6 animate-fade-in w-full px-4">
+                <div className="flex flex-col lg:flex-row items-center lg:justify-between mb-6 gap-4">
+                    <h1 className="text-3xl lg:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 text-center lg:text-right">
+                        {t('achievements_title')}
+                    </h1>
                 </div>
+                <p className="text-slate-400 mt-1 text-sm sm:text-base text-center">
+                    {t('achievements_subtitle')}
+                </p>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                     {BADGE_DEFINITIONS.map(badge => {

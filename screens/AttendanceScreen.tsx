@@ -122,10 +122,14 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ teamSelection, onSt
 
     return (
         <div className="max-w-4xl mx-auto bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-6 rounded-lg shadow-2xl space-y-6 animate-fade-in">
-            <div className="text-center">
-                <h2 className="text-3xl font-bold text-[#00A3FF]">{t('attendance_select_players_title')}</h2>
-                <p className="text-slate-400 mt-1">{t('attendance_desc')}</p>
+            <div className="flex flex-col lg:flex-row items-center lg:justify-between mb-6 gap-4">
+                <h1 className="text-3xl lg:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 text-center lg:text-right">
+                    {t('attendance_select_players_title')}
+                </h1>
             </div>
+            <p className="text-slate-400 mt-1 text-center">
+                {t('attendance_desc')}
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-slate-900/50 p-4 rounded-lg border-2 border-slate-700">
                     <div className="flex flex-col items-center text-center gap-2 mb-4">

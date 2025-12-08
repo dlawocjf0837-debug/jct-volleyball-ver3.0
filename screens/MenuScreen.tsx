@@ -52,15 +52,15 @@ const MenuCard: React.FC<{
     <button
         onClick={onClick}
         disabled={disabled}
-        className="group relative flex flex-col h-full text-left p-6 bg-slate-800/30 backdrop-blur-lg border border-slate-700/50 rounded-2xl transition-all duration-300 hover:border-sky-500/80 hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-50 disabled:transform-none disabled:cursor-not-allowed overflow-hidden"
+        className="group relative flex flex-col h-full text-left p-4 sm:p-6 bg-slate-800/30 backdrop-blur-lg border border-slate-700/50 rounded-2xl transition-all duration-300 hover:border-sky-500/80 hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-50 disabled:transform-none disabled:cursor-not-allowed overflow-hidden min-h-[120px] sm:min-h-[140px]"
     >
         <div className="absolute inset-0 bg-sky-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
         <div className="relative">
-            <div className="mb-4 text-sky-400">
+            <div className="mb-3 sm:mb-4 text-sky-400">
                 {icon}
             </div>
-            <h3 className="text-lg font-bold text-slate-100">{title}</h3>
-            <p className="mt-1 text-sm text-slate-400">{description}</p>
+            <h3 className="text-base sm:text-lg font-bold text-slate-100">{title}</h3>
+            <p className="mt-1 text-xs sm:text-sm text-slate-400">{description}</p>
         </div>
     </button>
 );
@@ -209,84 +209,84 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
     
     return (
         <>
-            <div className="max-w-6xl mx-auto flex flex-col items-center gap-10 animate-fade-in py-10 w-full">
+            <div className="max-w-6xl mx-auto flex flex-col items-center gap-6 sm:gap-10 animate-fade-in py-4 sm:py-10 w-full px-4">
                 
-                <div className="w-full max-w-4xl grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="w-full max-w-4xl grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-4">
                     <button
                         onClick={onStartMatch}
-                        className="w-full group relative flex items-center justify-center gap-3 px-8 py-5 overflow-hidden font-bold text-white transition-all duration-300 bg-green-600 rounded-2xl shadow-lg shadow-green-900/50 hover:bg-green-700 hover:shadow-xl hover:shadow-green-700/50 transform hover:-translate-y-1"
+                        className="w-full group relative flex items-center justify-center gap-3 sm:gap-3 px-4 sm:px-8 py-4 sm:py-5 overflow-hidden font-bold text-white transition-all duration-300 bg-green-600 rounded-2xl shadow-lg shadow-green-900/50 hover:bg-green-700 hover:shadow-xl hover:shadow-green-700/50 transform hover:-translate-y-1 min-h-[44px]"
                     >
-                        <PlayIcon className="w-8 h-8"/>
-                        <span className="relative text-2xl">{t('menu_start_game')}</span>
+                        <PlayIcon className="w-6 h-6 sm:w-8 sm:h-8"/>
+                        <span className="relative text-base sm:text-xl lg:text-2xl">{t('menu_start_game')}</span>
                     </button>
                     <button
                         onClick={() => setIsJoinModalOpen(true)}
-                        className="w-full group relative flex items-center justify-center gap-3 px-8 py-5 overflow-hidden font-bold text-white transition-all duration-300 bg-green-600 rounded-2xl shadow-lg shadow-green-900/50 hover:bg-green-700 hover:shadow-xl hover:shadow-green-700/50 transform hover:-translate-y-1"
+                        className="w-full group relative flex items-center justify-center gap-3 sm:gap-3 px-4 sm:px-8 py-4 sm:py-5 overflow-hidden font-bold text-white transition-all duration-300 bg-green-600 rounded-2xl shadow-lg shadow-green-900/50 hover:bg-green-700 hover:shadow-xl hover:shadow-green-700/50 transform hover:-translate-y-1 min-h-[44px]"
                     >
-                        <LinkIcon className="w-8 h-8"/>
-                        <span className="relative text-2xl">{t('menu_join_session_realtime')}</span>
+                        <LinkIcon className="w-6 h-6 sm:w-8 sm:h-8"/>
+                        <span className="relative text-base sm:text-xl lg:text-2xl">{t('menu_join_session_realtime')}</span>
                     </button>
                 </div>
                 
-                <div className="w-full max-w-4xl bg-slate-800/30 backdrop-blur-lg border border-slate-700/50 rounded-2xl p-6">
-                    <h2 className="text-xl font-bold text-slate-300 mb-4">{t('menu_main_info')}</h2>
+                <div className="w-full max-w-4xl bg-slate-800/30 backdrop-blur-lg border border-slate-700/50 rounded-2xl p-4 sm:p-6">
+                    <h2 className="text-lg sm:text-xl font-bold text-slate-300 mb-3 sm:mb-4">{t('menu_main_info')}</h2>
                     {latestMatchInfo ? (
                         <button
                             onClick={() => onShowHistory(latestMatchInfo.id)}
-                            className="w-full text-left p-4 bg-slate-800 rounded-lg transition-all duration-200 hover:bg-slate-700 hover:ring-2 ring-sky-500"
+                            className="w-full text-left p-3 sm:p-4 bg-slate-800 rounded-lg transition-all duration-200 hover:bg-slate-700 hover:ring-2 ring-sky-500"
                         >
-                            <p className="text-sm text-sky-400 font-semibold mb-1">{t('menu_latest_match')}</p>
-                            <p className="text-lg text-slate-300">
+                            <p className="text-xs sm:text-sm text-sky-400 font-semibold mb-1">{t('menu_latest_match')}</p>
+                            <p className="text-sm sm:text-base lg:text-lg text-slate-300 break-words">
                                 {latestMatchInfo.teamAName} vs {latestMatchInfo.teamBName}
-                                <span className="font-bold text-sky-400 mx-2">
+                                <span className="font-bold text-sky-400 mx-1 sm:mx-2">
                                     ({latestMatchInfo.teamAScore}:{latestMatchInfo.teamBScore} {latestMatchInfo.winnerName} {t('menu_winner')})
                                 </span>
                             </p>
                         </button>
                     ) : (
-                        <div className="w-full text-left p-4 bg-slate-800 rounded-lg">
-                            <p className="text-sm text-sky-400 font-semibold mb-1">{t('menu_latest_match')}</p>
-                            <p className="text-slate-400">{t('menu_no_matches')}</p>
+                        <div className="w-full text-left p-3 sm:p-4 bg-slate-800 rounded-lg">
+                            <p className="text-xs sm:text-sm text-sky-400 font-semibold mb-1">{t('menu_latest_match')}</p>
+                            <p className="text-sm sm:text-base text-slate-400">{t('menu_no_matches')}</p>
                         </div>
                     )}
                 </div>
                 
-                <div className="w-full max-w-6xl space-y-12">
+                <div className="w-full max-w-6xl space-y-8 sm:space-y-12">
                     <div className="w-full">
-                        <h2 className="text-2xl font-bold text-slate-300 mb-5 px-1">{t('menu_category_prep')}</h2>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                            <MenuCard icon={<UserGroupIcon className="w-8 h-8" />} title={t('menu_team_builder_title')} description={t('menu_team_builder_desc')} onClick={onStartTeamBuilder} />
-                            <MenuCard icon={<RectangleGroupIcon className="w-8 h-8" />} title={t('competition_title')} description={t('menu_competition_desc')} onClick={onStartCompetition} />
-                            <MenuCard icon={<UsersIcon className="w-8 h-8" />} title={t('menu_team_management_title')} description={t('menu_team_management_desc')} onClick={onStartTeamManagement} />
-                            <MenuCard icon={<FireIcon className="w-8 h-8" />} title={t('menu_skill_drill_title')} description={t('menu_skill_drill_desc')} onClick={onStartSkillDrill} />
+                        <h2 className="text-xl sm:text-2xl font-bold text-slate-300 mb-4 sm:mb-5 px-1">{t('menu_category_prep')}</h2>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
+                            <MenuCard icon={<UserGroupIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_team_builder_title')} description={t('menu_team_builder_desc')} onClick={onStartTeamBuilder} />
+                            <MenuCard icon={<RectangleGroupIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('competition_title')} description={t('menu_competition_desc')} onClick={onStartCompetition} />
+                            <MenuCard icon={<UsersIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_team_management_title')} description={t('menu_team_management_desc')} onClick={onStartTeamManagement} />
+                            <MenuCard icon={<FireIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_skill_drill_title')} description={t('menu_skill_drill_desc')} onClick={onStartSkillDrill} />
                         </div>
                     </div>
                     <div className="w-full">
-                        <h2 className="text-2xl font-bold text-slate-300 mb-5 px-1">{t('menu_category_analysis')}</h2>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                            <MenuCard icon={<BookmarkSquareIcon className="w-8 h-8" />} title={t('menu_match_records_title')} description={t('menu_match_records_desc')} onClick={() => onShowHistory()} />
-                            <MenuCard icon={<ChartBarIcon className="w-8 h-8" />} title={t('menu_team_analysis_title')} description={t('menu_team_analysis_desc')} onClick={onStartTeamAnalysis} />
-                            <MenuCard icon={<IdentificationIcon className="w-8 h-8" />} title={t('menu_player_records_title')} description={t('menu_player_records_desc')} onClick={onShowPlayerRecords} />
-                            <MenuCard icon={<TrophyIcon className="w-8 h-8" />} title={t('menu_achievements_title')} description={t('menu_achievements_desc')} onClick={onShowAchievements} />
+                        <h2 className="text-xl sm:text-2xl font-bold text-slate-300 mb-4 sm:mb-5 px-1">{t('menu_category_analysis')}</h2>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
+                            <MenuCard icon={<BookmarkSquareIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_match_records_title')} description={t('menu_match_records_desc')} onClick={() => onShowHistory()} />
+                            <MenuCard icon={<ChartBarIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_team_analysis_title')} description={t('menu_team_analysis_desc')} onClick={onStartTeamAnalysis} />
+                            <MenuCard icon={<IdentificationIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_player_records_title')} description={t('menu_player_records_desc')} onClick={onShowPlayerRecords} />
+                            <MenuCard icon={<TrophyIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_achievements_title')} description={t('menu_achievements_desc')} onClick={onShowAchievements} />
                         </div>
                     </div>
                      <div className="w-full">
-                        <h2 className="text-2xl font-bold text-slate-300 mb-5 px-1">{t('menu_category_app_management')}</h2>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                            <MenuCard icon={<SparklesIcon className="w-8 h-8" />} title={t('menu_cheer_song_title')} description={t('menu_cheer_song_desc')} onClick={onStartCheerSongManagement} />
-                            <MenuCard icon={<Cog6ToothIcon className="w-8 h-8" />} title={t('menu_settings_title')} description={t('menu_settings_desc')} onClick={onStartSettings} />
-                            <MenuCard icon={<ArrowUpIcon className="w-8 h-8" />} title={t('menu_import_data_title')} description={t('menu_import_data_desc')} onClick={handleImportDataClick} />
-                            <MenuCard icon={<ArrowDownIcon className="w-8 h-8" />} title={t('menu_export_data_title')} description={t('menu_export_data_desc')} onClick={onExportData} />
+                        <h2 className="text-xl sm:text-2xl font-bold text-slate-300 mb-4 sm:mb-5 px-1">{t('menu_category_app_management')}</h2>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
+                            <MenuCard icon={<SparklesIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_cheer_song_title')} description={t('menu_cheer_song_desc')} onClick={onStartCheerSongManagement} />
+                            <MenuCard icon={<Cog6ToothIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_settings_title')} description={t('menu_settings_desc')} onClick={onStartSettings} />
+                            <MenuCard icon={<ArrowUpIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_import_data_title')} description={t('menu_import_data_desc')} onClick={handleImportDataClick} />
+                            <MenuCard icon={<ArrowDownIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_export_data_title')} description={t('menu_export_data_desc')} onClick={onExportData} />
                         </div>
                     </div>
                 </div>
 
-                <div className="w-full max-w-4xl pt-8 mt-4 border-t border-slate-700 text-center">
+                <div className="w-full max-w-4xl pt-6 sm:pt-8 mt-4 border-t border-slate-700 text-center px-4">
                     <button
                         onClick={handleOpenResetModal}
-                        className="inline-flex items-center gap-2 px-6 py-3 bg-red-800/50 text-red-300 border border-red-600/50 rounded-lg hover:bg-red-700/50 hover:text-red-200 transition-colors"
+                        className="inline-flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-3 bg-red-800/50 text-red-300 border border-red-600/50 rounded-lg hover:bg-red-700/50 hover:text-red-200 transition-colors min-h-[44px] text-sm sm:text-base"
                     >
-                        <TrashIcon className="w-5 h-5" />
+                        <TrashIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                         {t('menu_reset_data_title')}
                     </button>
                 </div>

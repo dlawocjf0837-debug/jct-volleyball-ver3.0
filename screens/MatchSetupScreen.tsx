@@ -104,16 +104,16 @@ export default function MatchSetupScreen({ onStartMatch }: MatchSetupScreenProps
     };
 
     const TeamDisplayCard: React.FC<{ team: FlattenedTeam, onSelect: () => void, colorClass: string }> = ({ team, onSelect, colorClass }) => (
-        <div onClick={onSelect} className={`bg-slate-800/50 p-6 rounded-lg border-2 ${colorClass} h-full flex flex-col items-center justify-center text-center cursor-pointer hover:bg-slate-700/50 transition-colors`}>
-            <TeamEmblem emblem={team.emblem} color={team.color} className="w-40 h-40 mb-4" />
-            <h3 className="text-2xl font-bold text-white truncate">{team.teamName}</h3>
-            <p className="text-slate-400">{team.className}</p>
+        <div onClick={onSelect} className={`bg-slate-800/50 p-4 sm:p-6 rounded-lg border-2 ${colorClass} h-full flex flex-col items-center justify-center text-center cursor-pointer hover:bg-slate-700/50 transition-colors min-h-[200px]`}>
+            <TeamEmblem emblem={team.emblem} color={team.color} className="w-24 h-24 sm:w-32 sm:h-32 lg:w-40 lg:h-40 mb-3 sm:mb-4" />
+            <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white truncate w-full px-2">{team.teamName}</h3>
+            <p className="text-sm sm:text-base text-slate-400">{team.className}</p>
         </div>
     );
 
     const PlaceholderCard: React.FC<{ text: string, onSelect: () => void, colorClass: string }> = ({ text, onSelect, colorClass }) => (
-        <div onClick={onSelect} className={`bg-slate-800/50 p-6 rounded-lg border-2 border-dashed ${colorClass} h-full flex items-center justify-center text-center cursor-pointer hover:bg-slate-700/50 transition-colors min-h-[200px]`}>
-            <span className="text-2xl font-bold text-slate-400">{text}</span>
+        <div onClick={onSelect} className={`bg-slate-800/50 p-4 sm:p-6 rounded-lg border-2 border-dashed ${colorClass} h-full flex items-center justify-center text-center cursor-pointer hover:bg-slate-700/50 transition-colors min-h-[200px]`}>
+            <span className="text-lg sm:text-xl lg:text-2xl font-bold text-slate-400">{text}</span>
         </div>
     );
 
@@ -126,15 +126,15 @@ export default function MatchSetupScreen({ onStartMatch }: MatchSetupScreenProps
                 excludeKey={modalState.target === 'A' ? selectedTeamBKey : selectedTeamAKey}
                 baseTeamKey={modalState.target === 'B' ? selectedTeamAKey : undefined}
             />
-            <div className="max-w-4xl mx-auto bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-6 rounded-lg shadow-2xl space-y-6 animate-fade-in">
-                 <div className="text-center p-4 bg-slate-800/50 rounded-lg border border-slate-700">
-                    <h3 className="text-lg font-bold text-sky-400 mb-2">{t('match_setup_guide_title')}</h3>
-                    <p className="text-slate-300">
+            <div className="max-w-4xl mx-auto bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-4 sm:p-6 rounded-lg shadow-2xl space-y-4 sm:space-y-6 animate-fade-in px-4">
+                 <div className="text-center p-3 sm:p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                    <h3 className="text-base sm:text-lg font-bold text-sky-400 mb-2">{t('match_setup_guide_title')}</h3>
+                    <p className="text-sm sm:text-base text-slate-300">
                         {t('match_setup_guide_desc')}
                     </p>
                 </div>
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                         {teamA ? (
                             <TeamDisplayCard team={teamA} onSelect={() => setModalState({ isOpen: true, target: 'A' })} colorClass="border-sky-500" />
                         ) : (
@@ -148,30 +148,30 @@ export default function MatchSetupScreen({ onStartMatch }: MatchSetupScreenProps
                     </div>
 
                     {teamA && teamB && (
-                        <div className="text-center p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                        <div className="text-center p-3 sm:p-4 bg-slate-800/50 rounded-lg border border-slate-700">
                             {!showPrediction ? (
                                 <button
                                     type="button"
                                     onClick={() => setShowPrediction(true)}
-                                    className="bg-sky-600 hover:bg-sky-500 text-white font-bold py-2 px-6 rounded-lg transition"
+                                    className="bg-sky-600 hover:bg-sky-500 text-white font-bold py-2 sm:py-2 px-4 sm:px-6 rounded-lg transition min-h-[44px] text-sm sm:text-base"
                                 >
                                     {t('show_ai_prediction')}
                                 </button>
                             ) : prediction && (
                                 <div className="animate-fade-in text-center">
-                                    <h3 className="text-lg font-bold text-sky-400 mb-2">{t('ai_prediction_title')}</h3>
-                                    <p className="text-xl text-slate-300">
+                                    <h3 className="text-base sm:text-lg font-bold text-sky-400 mb-2">{t('ai_prediction_title')}</h3>
+                                    <p className="text-base sm:text-lg lg:text-xl text-slate-300 break-words">
                                         <span style={{ color: teamA?.color || '#38bdf8' }}>{teamA?.teamName}</span>
-                                        <span className="font-bold text-2xl mx-2">{prediction.a}%</span>
+                                        <span className="font-bold text-xl sm:text-2xl mx-1 sm:mx-2">{prediction.a}%</span>
                                         <span className="text-slate-400">vs</span>
-                                        <span className="font-bold text-2xl mx-2">{prediction.b}%</span>
+                                        <span className="font-bold text-xl sm:text-2xl mx-1 sm:mx-2">{prediction.b}%</span>
                                         <span style={{ color: teamB?.color || '#f87171' }}>{teamB?.teamName}</span>
                                     </p>
                                     <p className="text-xs text-slate-500 mt-2">{t('ai_prediction_note')}</p>
                                     <button
                                         type="button"
                                         onClick={() => setShowPrediction(false)}
-                                        className="mt-3 bg-slate-600 hover:bg-slate-500 text-white font-bold py-1 px-4 rounded-lg text-sm transition"
+                                        className="mt-3 bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg text-sm transition min-h-[44px]"
                                     >
                                         {t('close')}
                                     </button>
@@ -180,8 +180,8 @@ export default function MatchSetupScreen({ onStartMatch }: MatchSetupScreenProps
                         </div>
                     )}
                     
-                    <div className="flex justify-end items-center pt-4">
-                        <button type="submit" className="bg-[#00A3FF] hover:bg-[#0082cc] text-white font-bold py-3 px-8 rounded-lg transition duration-200 text-lg" disabled={!teamA || !teamB}>
+                    <div className="flex justify-end items-center pt-3 sm:pt-4">
+                        <button type="submit" className="w-full sm:w-auto bg-[#00A3FF] hover:bg-[#0082cc] text-white font-bold py-3 px-6 sm:px-8 rounded-lg transition duration-200 text-base sm:text-lg disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]" disabled={!teamA || !teamB}>
                             {t('go_to_attendance_selection')}
                         </button>
                     </div>

@@ -171,33 +171,33 @@ const PlayerInputScreen: React.FC<PlayerInputScreenProps> = ({ onStart }) => {
     
     if (phase === 'input') {
         return (
-            <div className="max-w-4xl mx-auto bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-6 rounded-lg shadow-2xl space-y-6 animate-fade-in">
-                <div className="p-4 bg-slate-800/50 rounded-lg text-center border border-slate-700 mb-6">
-                    <h2 className="text-xl font-bold text-sky-400 mb-2">{t('player_input_helper_title')}</h2>
-                    <p className="text-slate-300">
+            <div className="max-w-4xl mx-auto bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-4 sm:p-6 rounded-lg shadow-2xl space-y-4 sm:space-y-6 animate-fade-in px-4">
+                <div className="p-3 sm:p-4 bg-slate-800/50 rounded-lg text-center border border-slate-700 mb-4 sm:mb-6">
+                    <h2 className="text-lg sm:text-xl font-bold text-sky-400 mb-2">{t('player_input_helper_title')}</h2>
+                    <p className="text-sm sm:text-base text-slate-300">
                         {t('player_input_helper_desc1')}
                     </p>
-                    <p className="text-slate-400 mt-2 text-sm">
+                    <p className="text-slate-400 mt-2 text-xs sm:text-sm">
                         {t('player_input_helper_desc2')}
                     </p>
                 </div>
-                <div className="space-y-4">
-                    <h2 className="block font-bold text-slate-300">
+                <div className="space-y-3 sm:space-y-4">
+                    <h2 className="block font-bold text-sm sm:text-base text-slate-300">
                         {t('player_input_step1_title')}
                     </h2>
-                    <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
-                         <div className="flex flex-col sm:flex-row gap-2 items-center bg-slate-900 p-2 rounded-md">
+                    <div className="bg-slate-800 p-3 sm:p-4 rounded-lg border border-slate-700">
+                         <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center bg-slate-900 p-2 rounded-md">
                             <input
                                 type="text"
                                 value={sheetUrl}
                                 onChange={(e) => setSheetUrl(e.target.value)}
                                 placeholder={t('settings_google_sheet_url_placeholder')}
-                                className="flex-grow bg-slate-800 border border-slate-600 rounded-md p-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#00A3FF]"
+                                className="flex-grow bg-slate-800 border border-slate-600 rounded-md p-2 sm:p-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#00A3FF] min-h-[44px]"
                             />
                             <button
                                 onClick={handleFetchDataFromUrl}
                                 disabled={isLoadingData}
-                                className="w-full sm:w-auto flex-shrink-0 bg-[#00A3FF] hover:bg-[#0082cc] text-white font-bold py-2 px-4 rounded-lg transition duration-200 disabled:bg-slate-600 disabled:text-slate-400 disabled:cursor-not-allowed"
+                                className="w-full sm:w-auto flex-shrink-0 bg-[#00A3FF] hover:bg-[#0082cc] text-white font-bold py-2 px-3 sm:px-4 rounded-lg transition duration-200 disabled:bg-slate-600 disabled:text-slate-400 disabled:cursor-not-allowed min-h-[44px] text-sm sm:text-base"
                             >
                                 {isLoadingData ? t('player_input_loading_button') : t('player_input_fetch_button')}
                             </button>
@@ -206,31 +206,31 @@ const PlayerInputScreen: React.FC<PlayerInputScreenProps> = ({ onStart }) => {
                      <p className="text-xs text-slate-500 mt-1">
                         {t('player_input_sheet_note')}
                      </p>
-                     <p className="text-sm text-slate-400 mt-2 h-5">
+                     <p className="text-xs sm:text-sm text-slate-400 mt-2 h-5">
                         {statusMessage}
                      </p>
                 </div>
                 
                 <form onSubmit={handleParseAndProceed}>
-                     <label htmlFor="csv-input" className="block mb-2 font-bold text-slate-300">
+                     <label htmlFor="csv-input" className="block mb-2 font-bold text-sm sm:text-base text-slate-300">
                         {t('player_input_step2_title')}
                     </label>
                     <textarea
                         id="csv-input"
                         value={csvData}
                         onChange={(e) => setCsvData(e.target.value)}
-                        className="w-full h-48 bg-slate-900 border border-slate-700 rounded-md p-3 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[#00A3FF]"
+                        className="w-full h-40 sm:h-48 bg-slate-900 border border-slate-700 rounded-md p-2 sm:p-3 font-mono text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#00A3FF]"
                         placeholder={t('player_input_csv_placeholder', { defaultCsv: defaultCsv })}
                         aria-label="Student data in CSV format"
                     />
-                     <div className="flex justify-between items-center mt-4">
-                        <div>
-                            <label htmlFor="class-select" className="mr-2 font-semibold text-slate-300">{t('player_input_class_select_label')}</label>
+                     <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 sm:gap-0 mt-4">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                            <label htmlFor="class-select" className="font-semibold text-sm sm:text-base text-slate-300 whitespace-nowrap">{t('player_input_class_select_label')}</label>
                             <select 
                                 id="class-select"
                                 value={selectedClass}
                                 onChange={(e) => setSelectedClass(e.target.value)}
-                                className="bg-slate-800 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-[#00A3FF]"
+                                className="w-full sm:w-auto bg-slate-800 border border-slate-600 rounded-md py-2 px-3 text-white text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-[#00A3FF] min-h-[44px]"
                             >
                                 <option value="all">{t('player_input_class_all')}</option>
                                 <option value="1">{t('class_format', { class: '1' })}</option>
@@ -240,7 +240,7 @@ const PlayerInputScreen: React.FC<PlayerInputScreenProps> = ({ onStart }) => {
                                 <option value="5">{t('class_format', { class: '5' })}</option>
                             </select>
                         </div>
-                        <button type="submit" className="bg-[#00A3FF] hover:bg-[#0082cc] text-white font-bold py-3 px-8 rounded-lg transition duration-200 text-lg">
+                        <button type="submit" className="w-full sm:w-auto bg-[#00A3FF] hover:bg-[#0082cc] text-white font-bold py-3 px-6 sm:px-8 rounded-lg transition duration-200 text-base sm:text-lg min-h-[44px]">
                             {t('player_input_start_button')}
                         </button>
                     </div>
@@ -250,30 +250,30 @@ const PlayerInputScreen: React.FC<PlayerInputScreenProps> = ({ onStart }) => {
     }
     
     return (
-        <div className="max-w-4xl mx-auto bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-6 rounded-lg shadow-2xl space-y-6 animate-fade-in">
-            <div className="p-4 bg-slate-800/50 rounded-lg text-center border border-slate-700 mb-6">
-                <h2 className="text-xl font-bold text-sky-400 mb-2">{t('exclude_absent_title')}</h2>
-                <p className="text-slate-300">{t('exclude_absent_desc')}</p>
+        <div className="max-w-4xl mx-auto bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-4 sm:p-6 rounded-lg shadow-2xl space-y-4 sm:space-y-6 animate-fade-in px-4">
+            <div className="p-3 sm:p-4 bg-slate-800/50 rounded-lg text-center border border-slate-700 mb-4 sm:mb-6">
+                <h2 className="text-lg sm:text-xl font-bold text-sky-400 mb-2">{t('exclude_absent_title')}</h2>
+                <p className="text-sm sm:text-base text-slate-300">{t('exclude_absent_desc')}</p>
             </div>
             <div className="max-h-96 overflow-y-auto space-y-2 pr-2">
                 {allPlayers.map((player) => (
-                    <label key={player.originalName} className={`flex items-center gap-3 p-3 rounded-lg transition-colors cursor-pointer ${excludedPlayerNames.has(player.originalName) ? 'bg-red-900/50 hover:bg-red-800/50' : 'bg-slate-800 hover:bg-slate-700'}`}>
+                    <label key={player.originalName} className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg transition-colors cursor-pointer min-h-[44px] ${excludedPlayerNames.has(player.originalName) ? 'bg-red-900/50 hover:bg-red-800/50' : 'bg-slate-800 hover:bg-slate-700'}`}>
                         <input
                             type="checkbox"
                             checked={excludedPlayerNames.has(player.originalName)}
                             onChange={() => handleToggleExclude(player.originalName)}
-                            className="h-5 w-5 bg-slate-700 border-slate-500 rounded text-red-500 focus:ring-red-500"
+                            className="h-5 w-5 bg-slate-700 border-slate-500 rounded text-red-500 focus:ring-red-500 flex-shrink-0"
                         />
-                        <span className="font-semibold text-slate-200">{player.originalName}</span>
-                        <span className="text-xs text-slate-400 ml-auto">{player.class}{t('player_records_class_suffix')} {player.studentNumber}{t('achievements_student_number_suffix')}</span>
+                        <span className="font-semibold text-sm sm:text-base text-slate-200 flex-1">{player.originalName}</span>
+                        <span className="text-xs text-slate-400 ml-auto whitespace-nowrap">{player.class}{t('player_records_class_suffix')} {player.studentNumber}{t('achievements_student_number_suffix')}</span>
                     </label>
                 ))}
             </div>
-            <div className="flex justify-between items-center mt-4">
-                <button onClick={() => setPhase('input')} className="bg-slate-600 hover:bg-slate-500 text-white font-bold py-3 px-8 rounded-lg transition duration-200 text-lg">
+            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 sm:gap-0 mt-4">
+                <button onClick={() => setPhase('input')} className="w-full sm:w-auto bg-slate-600 hover:bg-slate-500 text-white font-bold py-3 px-6 sm:px-8 rounded-lg transition duration-200 text-base sm:text-lg min-h-[44px]">
                     {t('back')}
                 </button>
-                <button onClick={handleConfirmExclusionAndStart} className="bg-[#00A3FF] hover:bg-[#0082cc] text-white font-bold py-3 px-8 rounded-lg transition duration-200 text-lg">
+                <button onClick={handleConfirmExclusionAndStart} className="w-full sm:w-auto bg-[#00A3FF] hover:bg-[#0082cc] text-white font-bold py-3 px-6 sm:px-8 rounded-lg transition duration-200 text-base sm:text-lg min-h-[44px]">
                     {t('confirm_and_start_building')}
                 </button>
             </div>

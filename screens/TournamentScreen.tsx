@@ -256,7 +256,11 @@ const TournamentScreen: React.FC<TournamentScreenProps> = ({ onStartMatch }) => 
     if (isSetupMode) {
         return (
             <div className="flex flex-col gap-4 h-full">
-                <h2 className="text-2xl font-bold text-sky-400">{t('tournament_create_new_title')}</h2>
+                <div className="flex flex-col lg:flex-row items-center lg:justify-between mb-6 gap-4">
+                    <h1 className="text-3xl lg:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 text-center lg:text-right">
+                        {t('tournament_create_new_title')}
+                    </h1>
+                </div>
                 <div className="flex flex-wrap gap-4">
                     <button onClick={() => setBracketSize(4)} className={`px-4 py-2 rounded ${bracketSize === 4 ? 'bg-sky-500' : 'bg-slate-700'}`}>{t('tournament_4_teams')}</button>
                     <button onClick={() => setBracketSize(8)} className={`px-4 py-2 rounded ${bracketSize === 8 ? 'bg-sky-500' : 'bg-slate-700'}`}>{t('tournament_8_teams')}</button>
@@ -282,9 +286,11 @@ const TournamentScreen: React.FC<TournamentScreenProps> = ({ onStartMatch }) => 
     
     return (
         <div className="flex flex-col gap-4 h-full">
-            <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-sky-400">{t('tournament_list')}</h2>
-                <button onClick={() => { setIsSetupMode(true); setSelectedTournament(null); }} className="bg-sky-600 hover:bg-sky-500 text-white font-bold py-2 px-4 rounded">{t('tournament_create_new_button')}</button>
+            <div className="flex flex-col lg:flex-row items-center lg:justify-between mb-6 gap-4">
+                <h1 className="text-3xl lg:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 text-center lg:text-right">
+                    {t('tournament_list')}
+                </h1>
+                <button onClick={() => { setIsSetupMode(true); setSelectedTournament(null); }} className="bg-sky-600 hover:bg-sky-500 text-white font-bold py-2 px-4 rounded min-h-[44px] w-full lg:w-auto">{t('tournament_create_new_button')}</button>
             </div>
             <div className="flex gap-2 overflow-x-auto pb-2">
                 {tournaments.map(t => (
