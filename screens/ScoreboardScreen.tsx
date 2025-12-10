@@ -6,9 +6,11 @@ import TimeoutModal from '../components/TimeoutModal';
 import PlayerSelectionModal from '../components/PlayerSelectionModal';
 import SubstitutionModal from '../components/SubstitutionModal';
 import GameLog from '../components/GameLog';
+import AutoSaveToast from '../components/AutoSaveToast';
 import { Action, Player, ScoreEvent, ScoreEventType } from '../types';
 import TeamEmblem from '../components/TeamEmblem';
 import { useTranslation } from '../hooks/useTranslation';
+import confetti from 'canvas-confetti';
 
 interface ScoreboardProps {
     onBackToMenu: () => void;
@@ -35,6 +37,137 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
     // Logic for Assist selection modal chain
     const [assistModalOpen, setAssistModalOpen] = useState(false);
     const [pendingAssistTeam, setPendingAssistTeam] = useState<'A' | 'B' | null>(null);
+
+    // UX 디테일: 소리 및 자동 저장 알림
+    const [soundEnabled, setSoundEnabled] = useState(true);
+    const [showAutoSaveToast, setShowAutoSaveToast] = useState(false);
+    const clickSoundRef = useRef<HTMLAudioElement | null>(null);
+    const confettiFiredRef = useRef(false);
+
+    // 클릭 사운드 초기화
+    useEffect(() => {
+        try {
+            clickSoundRef.current = new Audio('/sounds/click.mp3');
+            clickSoundRef.current.volume = 0.3; // 볼륨 조절
+            clickSoundRef.current.preload = 'auto';
+            // 에러 핸들링 (파일이 없어도 앱이 작동하도록)
+            clickSoundRef.current.addEventListener('error', () => {
+                console.warn('Click sound file not found. Sound effects will be disabled.');
+                clickSoundRef.current = null;
+            });
+        } catch (error) {
+            console.warn('Failed to initialize click sound:', error);
+            clickSoundRef.current = null;
+        }
+    }, []);
+
+    // 클릭 사운드 재생 함수
+    const playClickSound = () => {
+        if (soundEnabled && clickSoundRef.current) {
+            clickSoundRef.current.currentTime = 0;
+            clickSoundRef.current.play().catch(() => {
+                // 사운드 재생 실패 시 무시 (사용자 상호작용 필요 등)
+            });
+        }
+    };
+
+    // 승리 폭죽 효과 및 휘슬 소리
+    useEffect(() => {
+        if (matchState?.gameOver && !confettiFiredRef.current) {
+            confettiFiredRef.current = true;
+            
+            // 휘슬 소리 재생
+            if (soundEnabled) {
+                try {
+                    const whistle = new Audio('/sounds/whistle.mp3');
+                    whistle.volume = 0.5;
+                    whistle.play().catch((e) => {
+                        console.log("Whistle audio play error:", e);
+                    });
+                } catch (error) {
+                    console.log("Failed to play whistle sound:", error);
+                }
+            }
+            
+            // 화려한 폭죽 효과
+            const duration = 3000;
+            const animationEnd = Date.now() + duration;
+            const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+
+            function randomInRange(min: number, max: number) {
+                return Math.random() * (max - min) + min;
+            }
+
+            const interval: any = setInterval(function() {
+                const timeLeft = animationEnd - Date.now();
+
+                if (timeLeft <= 0) {
+                    return clearInterval(interval);
+                }
+
+                const particleCount = 50 * (timeLeft / duration);
+                
+                confetti({
+                    ...defaults,
+                    particleCount,
+                    origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 }
+                });
+                confetti({
+                    ...defaults,
+                    particleCount,
+                    origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 }
+                });
+            }, 250);
+        } else if (!matchState?.gameOver) {
+            confettiFiredRef.current = false;
+        }
+    }, [matchState?.gameOver, soundEnabled]);
+
+    // 자동 저장 알림 (점수 변경 또는 선수 교체 시)
+    const prevStateRef = useRef<{ 
+        scoreA: number; 
+        scoreB: number; 
+        onCourtA: string[]; 
+        onCourtB: string[];
+    } | null>(null);
+    
+    useEffect(() => {
+        if (matchState && prevStateRef.current) {
+            const currentState = {
+                scoreA: matchState.teamA.score,
+                scoreB: matchState.teamB.score,
+                onCourtA: matchState.teamA.onCourtPlayerIds || [],
+                onCourtB: matchState.teamB.onCourtPlayerIds || []
+            };
+            
+            // 점수 변경 또는 선수 교체 감지
+            const scoreChanged = 
+                currentState.scoreA !== prevStateRef.current.scoreA ||
+                currentState.scoreB !== prevStateRef.current.scoreB;
+            
+            const substitutionOccurred = 
+                JSON.stringify(currentState.onCourtA) !== JSON.stringify(prevStateRef.current.onCourtA) ||
+                JSON.stringify(currentState.onCourtB) !== JSON.stringify(prevStateRef.current.onCourtB);
+            
+            if (scoreChanged || substitutionOccurred) {
+                setShowAutoSaveToast(true);
+            }
+        }
+        
+        if (matchState) {
+            prevStateRef.current = {
+                scoreA: matchState.teamA.score,
+                scoreB: matchState.teamB.score,
+                onCourtA: matchState.teamA.onCourtPlayerIds || [],
+                onCourtB: matchState.teamB.onCourtPlayerIds || []
+            };
+        }
+    }, [
+        matchState?.teamA.score, 
+        matchState?.teamB.score,
+        matchState?.teamA.onCourtPlayerIds,
+        matchState?.teamB.onCourtPlayerIds
+    ]);
 
     const playersForModal = useMemo(() => {
         if (!pendingAction || !matchState) return {};
@@ -206,8 +339,26 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                 <div className="flex flex-col items-center justify-center w-full">
                     <div className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl font-extrabold leading-none" style={{ color: color }}>{team.score}</div>
                     <div className="flex gap-4 sm:gap-6 mt-4 sm:mt-6 w-full max-w-xs">
-                        <button onClick={() => dispatch({type: 'SCORE', team: teamKey, amount: -1})} disabled={matchState.gameOver || !!matchState.timeout} className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-3 sm:py-4 px-4 sm:px-8 rounded-xl text-xl sm:text-2xl disabled:bg-slate-600 disabled:cursor-not-allowed min-h-[44px]">-</button>
-                        <button onClick={() => dispatch({type: 'SCORE', team: teamKey, amount: 1})} disabled={matchState.gameOver || !!matchState.timeout} className="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold py-3 sm:py-4 px-4 sm:px-8 rounded-xl text-xl sm:text-2xl disabled:bg-slate-600 disabled:cursor-not-allowed min-h-[44px]">+</button>
+                        <button 
+                            onClick={() => {
+                                playClickSound();
+                                dispatch({type: 'SCORE', team: teamKey, amount: -1});
+                            }} 
+                            disabled={matchState.gameOver || !!matchState.timeout} 
+                            className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-3 sm:py-4 px-4 sm:px-8 rounded-xl text-xl sm:text-2xl disabled:bg-slate-600 disabled:cursor-not-allowed min-h-[44px] active:scale-95 transition-transform"
+                        >
+                            -
+                        </button>
+                        <button 
+                            onClick={() => {
+                                playClickSound();
+                                dispatch({type: 'SCORE', team: teamKey, amount: 1});
+                            }} 
+                            disabled={matchState.gameOver || !!matchState.timeout} 
+                            className="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold py-3 sm:py-4 px-4 sm:px-8 rounded-xl text-xl sm:text-2xl disabled:bg-slate-600 disabled:cursor-not-allowed min-h-[44px] active:scale-95 transition-transform"
+                        >
+                            +
+                        </button>
                     </div>
                 </div>
                 
@@ -220,25 +371,67 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
 
                 <div className="w-full space-y-3 sm:space-y-3 border-t border-slate-700 pt-4 sm:pt-4">
                     <div className="grid grid-cols-2 gap-3 sm:gap-3">
-                        <button onClick={() => setPendingAction({ actionType: 'SERVICE_ACE', team: teamKey })} disabled={!isServing || matchState.gameOver || !!matchState.timeout} className="bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-2 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 min-h-[44px]">{t('serve_ace')}</button>
-                        <button onClick={() => setPendingAction({ actionType: 'SERVICE_FAULT', team: teamKey })} disabled={!isServing || matchState.gameOver || !!matchState.timeout} className="w-full bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-2 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 min-h-[44px]">{t('serve_fault')}</button>
+                        <button 
+                            onClick={() => {
+                                playClickSound();
+                                setPendingAction({ actionType: 'SERVICE_ACE', team: teamKey });
+                            }} 
+                            disabled={!isServing || matchState.gameOver || !!matchState.timeout} 
+                            className="bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-2 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 min-h-[44px] active:scale-95 transition-transform"
+                        >
+                            {t('serve_ace')}
+                        </button>
+                        <button 
+                            onClick={() => {
+                                playClickSound();
+                                setPendingAction({ actionType: 'SERVICE_FAULT', team: teamKey });
+                            }} 
+                            disabled={!isServing || matchState.gameOver || !!matchState.timeout} 
+                            className="w-full bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-2 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 min-h-[44px] active:scale-95 transition-transform"
+                        >
+                            {t('serve_fault')}
+                        </button>
                         
                         <button 
-                            onClick={() => setPendingAction({ actionType: 'SERVE_IN', team: teamKey })} 
+                            onClick={() => {
+                                playClickSound();
+                                setPendingAction({ actionType: 'SERVE_IN', team: teamKey });
+                            }} 
                             disabled={!isServing || matchState.gameOver || !!matchState.timeout}
-                            className="bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-2 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 flex items-center justify-center gap-1 sm:gap-2 min-h-[44px]"
+                            className="bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-2 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 flex items-center justify-center gap-1 sm:gap-2 min-h-[44px] active:scale-95 transition-transform"
                         >
                             <BoltIcon className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" />
                             <span className="hidden sm:inline">{t('btn_serve_in')}</span>
                             <span className="sm:hidden text-xs">서브</span>
                         </button>
-                        <button onClick={() => setPendingAction({ actionType: 'SPIKE_SUCCESS', team: teamKey })} disabled={matchState.gameOver || !!matchState.timeout} className="w-full bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-2 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 min-h-[44px]">{t('spike_success')}</button>
-                        
-                        <button onClick={() => setPendingAction({ actionType: 'BLOCKING_POINT', team: teamKey })} disabled={matchState.gameOver || !!matchState.timeout} className="w-full bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-2 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 min-h-[44px]">{t('blocking_point')}</button>
                         <button 
-                            onClick={() => setPendingAction({ actionType: 'DIG_SUCCESS', team: teamKey })} 
+                            onClick={() => {
+                                playClickSound();
+                                setPendingAction({ actionType: 'SPIKE_SUCCESS', team: teamKey });
+                            }} 
                             disabled={matchState.gameOver || !!matchState.timeout} 
-                            className="w-full bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-2 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 flex justify-center items-center gap-1 sm:gap-2 min-h-[44px]"
+                            className="w-full bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-2 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 min-h-[44px] active:scale-95 transition-transform"
+                        >
+                            {t('spike_success')}
+                        </button>
+                        
+                        <button 
+                            onClick={() => {
+                                playClickSound();
+                                setPendingAction({ actionType: 'BLOCKING_POINT', team: teamKey });
+                            }} 
+                            disabled={matchState.gameOver || !!matchState.timeout} 
+                            className="w-full bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-2 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 min-h-[44px] active:scale-95 transition-transform"
+                        >
+                            {t('blocking_point')}
+                        </button>
+                        <button 
+                            onClick={() => {
+                                playClickSound();
+                                setPendingAction({ actionType: 'DIG_SUCCESS', team: teamKey });
+                            }} 
+                            disabled={matchState.gameOver || !!matchState.timeout} 
+                            className="w-full bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-2 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 flex justify-center items-center gap-1 sm:gap-2 min-h-[44px] active:scale-95 transition-transform"
                         >
                             <ShieldIcon className="w-4 h-4 sm:w-5 sm:h-5 text-green-400" /> 
                             <span className="hidden sm:inline">{t('btn_nice_defense')}</span>
@@ -317,13 +510,16 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
 
     return (
         <div className="flex flex-col h-full max-w-7xl mx-auto w-full px-4">
-            <div className="flex justify-between items-center mb-3 sm:mb-4 relative flex-wrap gap-2">
-                <button onClick={onBackToMenu} className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-3 sm:px-4 rounded-lg text-sm sm:text-base min-h-[44px]">
-                    {t('back_to_main')}
-                </button>
-                
-                {/* Timer Display - Clickable */}
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+            <div className="w-full flex justify-between items-center mb-3 sm:mb-4 gap-2">
+                {/* 좌측 영역 */}
+                <div className="flex-1">
+                    <button onClick={onBackToMenu} className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-3 sm:px-4 rounded-lg text-sm sm:text-base min-h-[44px]">
+                        {t('back_to_main')}
+                    </button>
+                </div>
+
+                {/* 중앙 영역 - 타이머 */}
+                <div className="flex-1 flex justify-center">
                     <button
                         onClick={() => setTimerOn(!timerOn)}
                         className={`text-2xl sm:text-3xl lg:text-4xl font-mono font-black tracking-widest cursor-pointer hover:scale-105 transition-transform ${timerOn ? 'text-green-400' : 'text-red-400'}`}
@@ -332,33 +528,70 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                     </button>
                 </div>
 
-                <div className="flex items-center gap-2 sm:gap-4">
-                    {matchState.status === 'in_progress' && (
-                        <div className="flex items-center gap-4">
-                            {/* Join Code Display */}
-                            {p2p.isHost && p2p.peerId && (
-                                <button
-                                    onClick={() => {
-                                        navigator.clipboard.writeText(p2p.peerId!);
-                                        showToast(t('toast_code_copied'));
-                                    }}
-                                    className="flex flex-col items-center justify-center bg-slate-800 border-2 border-yellow-500/50 rounded-lg px-3 py-1 cursor-pointer hover:bg-slate-700 transition-all hover:scale-105"
-                                    title={t('join_code_label')}
-                                >
-                                    <span className="text-[10px] text-slate-400 uppercase tracking-widest">{t('join_code_label')}</span>
-                                    <span className="text-xl font-mono font-black text-yellow-400 tracking-wider leading-none">
-                                        {p2p.peerId}
-                                    </span>
-                                </button>
-                            )}
-                        </div>
+                {/* 우측 영역 */}
+                <div className="flex-1 flex justify-end items-center gap-2 sm:gap-4">
+                    {matchState.status === 'in_progress' && p2p.isHost && p2p.peerId && (
+                        <>
+                            {/* 참여 코드 - 데스크톱에서만 표시 */}
+                            <button
+                                onClick={() => {
+                                    navigator.clipboard.writeText(p2p.peerId!);
+                                    showToast(t('toast_code_copied'));
+                                }}
+                                className="hidden md:flex flex-col items-center justify-center bg-slate-800 border-2 border-yellow-500/50 rounded-lg px-3 py-1 cursor-pointer hover:bg-slate-700 transition-all hover:scale-105"
+                                title={t('join_code_label')}
+                            >
+                                <span className="text-[10px] text-slate-400 uppercase tracking-widest">{t('join_code_label')}</span>
+                                <span className="text-xl font-mono font-black text-yellow-400 tracking-wider leading-none">
+                                    {p2p.peerId}
+                                </span>
+                            </button>
+                            {/* 모바일: 참여 코드 아이콘 버튼 */}
+                            <button
+                                onClick={() => {
+                                    navigator.clipboard.writeText(p2p.peerId!);
+                                    showToast(t('toast_code_copied'));
+                                }}
+                                className="md:hidden bg-slate-800 border-2 border-yellow-500/50 rounded-lg p-2 cursor-pointer hover:bg-slate-700 transition-all min-h-[44px] min-w-[44px] flex items-center justify-center"
+                                title={`${t('join_code_label')}: ${p2p.peerId}`}
+                            >
+                                <span className="text-yellow-400 font-mono text-xs font-bold">CODE</span>
+                            </button>
+                        </>
                     )}
 
-                    {mode === 'referee' && <span className="bg-yellow-600 text-white text-xs px-2 py-1 rounded font-bold whitespace-nowrap">REFEREE MODE</span>}
-                    <button onClick={() => setIsSubModalOpen(true)} className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center" title={t('substitute_player')}>
+                    {mode === 'referee' && (
+                        <span className="bg-yellow-600 text-white text-xs px-2 py-1 rounded font-bold whitespace-nowrap">
+                            REFEREE MODE
+                        </span>
+                    )}
+                    
+                    {/* 소리 켜기/끄기 토글 */}
+                    <button
+                        onClick={() => setSoundEnabled(!soundEnabled)}
+                        className={`bg-slate-700 hover:bg-slate-600 p-2 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors ${
+                            soundEnabled 
+                                ? 'text-yellow-400' 
+                                : 'text-slate-500'
+                        }`}
+                        title={soundEnabled ? '소리 끄기' : '소리 켜기'}
+                    >
+                        <span className="text-xl">{soundEnabled ? '🔊' : '🔇'}</span>
+                    </button>
+                    
+                    <button 
+                        onClick={() => setIsSubModalOpen(true)} 
+                        className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center" 
+                        title={t('substitute_player')}
+                    >
                         <SwitchHorizontalIcon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                     </button>
-                    <button onClick={() => setShowRulesModal(true)} className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center" title="규칙 보기">
+                    
+                    <button 
+                        onClick={() => setShowRulesModal(true)} 
+                        className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center" 
+                        title="규칙 보기"
+                    >
                         <QuestionMarkCircleIcon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                     </button>
                 </div>
@@ -400,6 +633,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                 teamName={pendingAction ? matchState[pendingAction.team === 'A' ? 'teamA' : 'teamB'].name : ''}
                 teamColor={pendingAction ? (matchState[pendingAction.team === 'A' ? 'teamA' : 'teamB'].color || '#00A3FF') : '#00A3FF'}
                 title={pendingAction ? getActionTitle(pendingAction.actionType) : ''}
+                variant="grid"
             />
             {/* Assist Selection Modal */}
             <PlayerSelectionModal
@@ -410,6 +644,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                 teamName={pendingAssistTeam ? matchState[pendingAssistTeam === 'A' ? 'teamA' : 'teamB'].name : ''}
                 teamColor={pendingAssistTeam ? (matchState[pendingAssistTeam === 'A' ? 'teamA' : 'teamB'].color || '#00A3FF') : '#00A3FF'}
                 title={t('modal_select_assist')}
+                variant="grid"
             />
             <SubstitutionModal
                 isOpen={isSubModalOpen}
@@ -417,6 +652,10 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                 teamA={matchState.teamA}
                 teamB={matchState.teamB}
                 dispatch={dispatch}
+            />
+            <AutoSaveToast 
+                show={showAutoSaveToast} 
+                onHide={() => setShowAutoSaveToast(false)} 
             />
         </div>
     );

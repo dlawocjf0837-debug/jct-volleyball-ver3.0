@@ -113,28 +113,35 @@ const TeamManagementScreen: React.FC = () => {
         return Array.from(classSet).sort();
     }, [teamSets]);
 
-    // 사용 가능한 포맷 목록 추출
+    // 선택된 반에 해당하는 팀 세트만 필터링
+    const filteredTeamSets = useMemo(() => {
+        if (selectedClassFilter === 'all') {
+            return teamSets;
+        }
+        return teamSets.filter(set => set.className === selectedClassFilter);
+    }, [teamSets, selectedClassFilter]);
+
+    // 선택된 반의 사용 가능한 포맷 목록 추출
     const availableFormats = useMemo(() => {
         const formatSet = new Set<number>();
-        teamSets.forEach(set => {
+        filteredTeamSets.forEach(set => {
             if (set.teamCount) {
                 formatSet.add(set.teamCount);
             }
         });
         return Array.from(formatSet).sort((a, b) => a - b);
-    }, [teamSets]);
+    }, [filteredTeamSets]);
 
     const groupedTeams = useMemo(() => {
-        let filteredSets = [...teamSets];
+        // AND 조건 필터링: 선택된 반 && 선택된 팀 수
+        let filteredSets = [...filteredTeamSets];
         
-        // 반 필터 적용
-        if (selectedClassFilter !== 'all') {
-            filteredSets = filteredSets.filter(set => set.className === selectedClassFilter);
-        }
-        
-        // 포맷 필터 적용
+        // 포맷 필터 적용 (AND 조건)
         if (selectedFormatFilter !== 'all') {
-            filteredSets = filteredSets.filter(set => String(set.teamCount) === selectedFormatFilter);
+            filteredSets = filteredSets.filter(set => {
+                const teamCount = set.teamCount ?? 4; // Legacy sets are 4 teams
+                return String(teamCount) === selectedFormatFilter;
+            });
         }
         
         const sortedSets = filteredSets.sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
@@ -146,7 +153,7 @@ const TeamManagementScreen: React.FC = () => {
             })).sort((a, b) => a.teamName.localeCompare(b.teamName));
             return { set, teams: teamsInSet };
         });
-    }, [teamSets, selectedClassFilter, selectedFormatFilter]);
+    }, [filteredTeamSets, selectedFormatFilter]);
 
 
     const colorConflicts = useMemo(() => {
@@ -490,41 +497,71 @@ const TeamManagementScreen: React.FC = () => {
                     </div>
                 )}
 
-                {/* 필터 섹션 */}
-                <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-                    <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 flex-1">
-                            <label className="font-semibold text-sm text-slate-300 whitespace-nowrap">{t('player_input_class_select_label')}</label>
-                            <select 
-                                value={selectedClassFilter}
-                                onChange={(e) => setSelectedClassFilter(e.target.value)}
-                                className="w-full sm:w-auto bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 min-h-[44px]"
+                {/* 필터 섹션 - 반 탭 UI */}
+                <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 space-y-4">
+                    {/* 반 선택 탭 */}
+                    <div>
+                        <label className="block font-semibold text-sm text-slate-300 mb-2">{t('player_input_class_select_label')}</label>
+                        <div className="flex gap-2 flex-wrap">
+                            <button 
+                                onClick={() => {
+                                    setSelectedClassFilter('all');
+                                    setSelectedFormatFilter('all');
+                                }}
+                                className={`px-4 py-2 text-sm rounded-md transition-colors min-h-[44px] font-semibold ${
+                                    selectedClassFilter === 'all' 
+                                        ? 'bg-[#00A3FF] text-white' 
+                                        : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                                }`}
                             >
-                                <option value="all">{t('player_input_class_all')}</option>
-                                {availableClasses.map(className => (
-                                    <option key={className} value={className}>{className}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
-                            <label className="font-semibold text-sm text-slate-300 whitespace-nowrap">{t('record_all_formats')}</label>
-                            <div className="flex gap-1 flex-wrap">
+                                {t('player_input_class_all')}
+                            </button>
+                            {availableClasses.map(className => (
                                 <button 
-                                    onClick={() => setSelectedFormatFilter('all')} 
-                                    className={`px-3 py-2 text-xs rounded transition-colors min-h-[44px] ${selectedFormatFilter === 'all' ? 'bg-[#00A3FF] text-white font-bold' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}
+                                    key={className}
+                                    onClick={() => {
+                                        setSelectedClassFilter(className);
+                                        setSelectedFormatFilter('all'); // 반 변경 시 포맷 필터 초기화
+                                    }}
+                                    className={`px-4 py-2 text-sm rounded-md transition-colors min-h-[44px] font-semibold ${
+                                        selectedClassFilter === className 
+                                            ? 'bg-[#00A3FF] text-white' 
+                                            : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                                    }`}
                                 >
-                                    {t('record_all_formats')}
+                                    {className}
                                 </button>
-                                {availableFormats.map(format => (
-                                    <button 
-                                        key={format}
-                                        onClick={() => setSelectedFormatFilter(String(format))} 
-                                        className={`px-3 py-2 text-xs rounded transition-colors min-h-[44px] ${selectedFormatFilter === String(format) ? 'bg-[#00A3FF] text-white font-bold' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}
-                                    >
-                                        {t('record_team_format', { count: format })}
-                                    </button>
-                                ))}
-                            </div>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    {/* 포맷 필터 (항상 표시, 선택된 반 내에서 필터링) */}
+                    <div>
+                        <label className="block font-semibold text-sm text-slate-300 mb-2">{t('record_all_formats')}</label>
+                        <div className="flex gap-2 flex-wrap">
+                            <button 
+                                onClick={() => setSelectedFormatFilter('all')} 
+                                className={`px-3 py-2 text-xs rounded transition-colors min-h-[44px] ${
+                                    selectedFormatFilter === 'all' 
+                                        ? 'bg-[#00A3FF] text-white font-bold' 
+                                        : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                                }`}
+                            >
+                                {t('record_all_formats')}
+                            </button>
+                            {availableFormats.map(format => (
+                                <button 
+                                    key={format}
+                                    onClick={() => setSelectedFormatFilter(String(format))} 
+                                    className={`px-3 py-2 text-xs rounded transition-colors min-h-[44px] ${
+                                        selectedFormatFilter === String(format) 
+                                            ? 'bg-[#00A3FF] text-white font-bold' 
+                                            : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                                    }`}
+                                >
+                                    {t('record_team_format', { count: format })}
+                                </button>
+                            ))}
                         </div>
                     </div>
                 </div>
@@ -534,7 +571,12 @@ const TeamManagementScreen: React.FC = () => {
                         {groupedTeams.map(({ set, teams }) => (
                             <div key={set.id} className="bg-slate-900 p-4 rounded-lg border border-slate-800">
                                 <div className="flex justify-between items-center mb-4">
-                                    <h3 className="text-xl font-bold text-slate-300">{set.className}</h3>
+                                    <h3 className="text-xl font-bold text-slate-300">
+                                        {set.className}
+                                        {set.teamCount && (
+                                            <span className="text-sm text-slate-400 ml-2">({t('record_team_format', { count: set.teamCount })})</span>
+                                        )}
+                                    </h3>
                                     <button
                                         onClick={() => { setTargetSetId(set.id); setIsNewTeamModalOpen(true); }}
                                         className="text-sm bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold py-1 px-3 rounded-md transition-colors"
@@ -629,8 +671,27 @@ const TeamManagementScreen: React.FC = () => {
                     </div>
                 ) : (
                     <div className="text-center p-6 bg-slate-800/50 border border-slate-700 rounded-lg animate-fade-in">
-                        <h3 className="text-lg font-bold text-sky-400 mb-3">{t('team_management_no_sets_title')}</h3>
-                        <p className="text-slate-300">{t('team_management_no_sets_desc')}</p>
+                        {selectedClassFilter === 'all' && selectedFormatFilter === 'all' ? (
+                            <>
+                                <h3 className="text-lg font-bold text-sky-400 mb-3">{t('team_management_no_sets_title')}</h3>
+                                <p className="text-slate-300">{t('team_management_no_sets_desc')}</p>
+                            </>
+                        ) : (
+                            <>
+                                <h3 className="text-lg font-bold text-sky-400 mb-3">
+                                    {selectedFormatFilter !== 'all' 
+                                        ? `${selectedClassFilter === 'all' ? '전체' : selectedClassFilter}의 ${t('record_team_format', { count: parseInt(selectedFormatFilter) })} 정보가 없습니다.`
+                                        : `${selectedClassFilter === 'all' ? '전체' : selectedClassFilter}의 팀 정보가 없습니다.`}
+                                </h3>
+                                <p className="text-slate-300">
+                                    {selectedFormatFilter !== 'all'
+                                        ? '다른 포맷을 선택하거나 반을 변경해보세요.'
+                                        : selectedClassFilter === 'all'
+                                            ? '팀을 생성해보세요.'
+                                            : '다른 반을 선택하거나 팀을 생성해보세요.'}
+                                </p>
+                            </>
+                        )}
                     </div>
                 )}
             </div>
