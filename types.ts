@@ -31,6 +31,8 @@ export interface Player {
     stats: Stats;
     isCaptain: boolean;
     totalScore: number;
+    customLabel1?: string; // 언더핸드 대체 라벨
+    customLabel2?: string; // 서브 대체 라벨
 }
 
 export enum Screen {

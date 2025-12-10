@@ -2,6 +2,7 @@ import React, { createContext, useState, useEffect, useContext, ReactNode, useCa
 import { MatchState, TeamSet, TeamMatchState, Player, PlayerStats, Action, UserEmblem, SavedTeamInfo, ScoreEvent, PlayerAchievements, PlayerCumulativeStats, ToastState, AppSettings, Tournament, League, PlayerCoachingLogs, CoachingLog, TeamStats, DataContextType, Badge, P2PState, DataConnection, P2PMessage, Language, ScoreEventType } from '../types';
 import { BADGE_DEFINITIONS } from '../data/badges';
 import { translations } from '../data/translations';
+import localforage from 'localforage';
 
 const TEAM_SETS_KEY = 'jct_volleyball_team_sets';
 const MATCH_HISTORY_KEY = 'jct_volleyball_match_history';
@@ -84,7 +85,20 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
     const [matchTime, setMatchTime] = useState(0);
     const [timerOn, setTimerOn] = useState(false);
     
-    const [language, setLanguageState] = useState<Language>(getInitialLanguage);
+    const [language, setLanguageState] = useState<Language>('ko');
+    
+    // 언어 초기화
+    useEffect(() => {
+        const initLanguage = async () => {
+            try {
+                const lang = await localforage.getItem(LANGUAGE_KEY) as Language | null;
+                if (lang) setLanguageState(lang);
+            } catch (error) {
+                console.error("Failed to load language:", error);
+            }
+        };
+        initLanguage();
+    }, []);
     
     const [p2p, setP2p] = useState<P2PState>({ peerId: null, isHost: false, isConnected: false, connections: [], status: 'disconnected' });
     const peerRef = useRef<any>(null); // Using 'any' for PeerJS object
@@ -111,9 +125,9 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
         setToast({ message: finalMessage, type });
     }, [t]);
 
-    const setLanguage = useCallback((lang: Language) => {
+    const setLanguage = useCallback(async (lang: Language) => {
         try {
-            localStorage.setItem(LANGUAGE_KEY, lang);
+            await localforage.setItem(LANGUAGE_KEY, lang);
             setLanguageState(lang);
         } catch (error) {
             console.error("Failed to save language preference:", error);
@@ -126,7 +140,7 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
 
     const saveSettings = async (newSettings: AppSettings) => {
         try {
-            localStorage.setItem(SETTINGS_KEY, JSON.stringify(newSettings));
+            await localforage.setItem(SETTINGS_KEY, newSettings);
             setSettings(newSettings);
             if (p2p.isHost) {
                 broadcast({ type: 'settings_sync', payload: newSettings });
@@ -644,12 +658,12 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
 
     const hideToast = () => setToast({ message: '', type: 'success' });
 
-    const createBackup = useCallback(() => {
+    const createBackup = useCallback(async () => {
         try {
             const backupData = {
                 teamSets, matchHistory, userEmblems, tournaments, leagues, coachingLogs
             };
-            localStorage.setItem(BACKUP_KEY, JSON.stringify(backupData));
+            await localforage.setItem(BACKUP_KEY, backupData);
         } catch (error) {
             console.error("Auto backup failed:", error);
         }
@@ -662,7 +676,7 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
             const serializable = Object.fromEntries(
                 Object.entries(newAchievements).map(([playerId, data]) => [playerId, { ...data, earnedBadgeIds: Array.from(data.earnedBadgeIds) }])
             );
-            localStorage.setItem(ACHIEVEMENTS_KEY, JSON.stringify(serializable));
+            await localforage.setItem(ACHIEVEMENTS_KEY, serializable);
             setPlayerAchievements(newAchievements);
         } catch (error) {
             console.error("Error saving player achievements:", error);
@@ -948,12 +962,12 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
 
     const saveTeamSets = async (newTeamSets: TeamSet[], successMessage?: string) => {
         try {
-            localStorage.setItem(TEAM_SETS_KEY, JSON.stringify(newTeamSets));
+            await localforage.setItem(TEAM_SETS_KEY, newTeamSets);
             setTeamSets(newTeamSets);
             if (successMessage) {
                 showToast(successMessage, 'success');
             }
-            createBackup();
+            await createBackup();
         } catch (error) {
             console.error("Error saving team sets:", error);
             showToast("데이터 저장 중 오류가 발생했습니다.", 'error');
@@ -963,12 +977,12 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
 
     const saveMatchHistory = async (newHistory: (MatchState & { date: string; time?: number })[], successMessage?: string) => {
         try {
-            localStorage.setItem(MATCH_HISTORY_KEY, JSON.stringify(newHistory));
+            await localforage.setItem(MATCH_HISTORY_KEY, newHistory);
             setMatchHistory(newHistory);
              if (successMessage) {
                 showToast(successMessage, 'success');
             }
-            createBackup();
+            await createBackup();
 
             const lastMatch = newHistory.find(m => m.status === 'completed');
             if (lastMatch) {
@@ -985,9 +999,9 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
     
     const saveUserEmblems = async (newUserEmblems: UserEmblem[]) => {
         try {
-            localStorage.setItem(USER_EMBLEMS_KEY, JSON.stringify(newUserEmblems));
+            await localforage.setItem(USER_EMBLEMS_KEY, newUserEmblems);
             setUserEmblems(newUserEmblems);
-            createBackup();
+            await createBackup();
         } catch (error) {
             console.error("Error saving user emblems:", error);
             showToast("앰블럼 저장 중 오류가 발생했습니다.", 'error');
@@ -996,9 +1010,9 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
     
     const saveTournaments = async (newTournaments: Tournament[]) => {
         try {
-            localStorage.setItem(TOURNAMENTS_KEY, JSON.stringify(newTournaments));
+            await localforage.setItem(TOURNAMENTS_KEY, newTournaments);
             setTournaments(newTournaments);
-            createBackup();
+            await createBackup();
         } catch (error) {
             console.error("Error saving tournaments:", error);
             showToast("토너먼트 저장 중 오류가 발생했습니다.", 'error');
@@ -1007,9 +1021,9 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
 
     const saveLeagues = async (newLeagues: League[]) => {
         try {
-            localStorage.setItem(LEAGUES_KEY, JSON.stringify(newLeagues));
+            await localforage.setItem(LEAGUES_KEY, newLeagues);
             setLeagues(newLeagues);
-            createBackup();
+            await createBackup();
         } catch (error) {
             console.error("Error saving leagues:", error);
             showToast("리그 저장 중 오류가 발생했습니다.", 'error');
@@ -1025,7 +1039,7 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
         updatedLogs[playerId].push(newLog);
         
         try {
-            localStorage.setItem(COACHING_LOGS_KEY, JSON.stringify(updatedLogs));
+            await localforage.setItem(COACHING_LOGS_KEY, updatedLogs);
             setCoachingLogs(updatedLogs);
             showToast('코칭 로그가 저장되었습니다.', 'success');
         } catch (error) {
@@ -1253,69 +1267,76 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
     const loadAllData = useCallback(async () => {
         setIsLoading(true);
         try {
-            const teamSetsData = localStorage.getItem(TEAM_SETS_KEY);
-            const matchHistoryData = localStorage.getItem(MATCH_HISTORY_KEY);
-            const userEmblemsData = localStorage.getItem(USER_EMBLEMS_KEY);
-            const achievementsData = localStorage.getItem(ACHIEVEMENTS_KEY);
-            const settingsData = localStorage.getItem(SETTINGS_KEY);
-            const tournamentsData = localStorage.getItem(TOURNAMENTS_KEY);
-            const leaguesData = localStorage.getItem(LEAGUES_KEY);
-            const coachingLogsData = localStorage.getItem(COACHING_LOGS_KEY);
+            // localforage에서 데이터 로드 (비동기)
+            const [
+                parsedTeamSets,
+                parsedMatchHistory,
+                parsedUserEmblems,
+                parsedAchievements,
+                parsedSettings,
+                parsedTournaments,
+                parsedLeagues,
+                parsedCoachingLogs,
+                backupData
+            ] = await Promise.all([
+                localforage.getItem(TEAM_SETS_KEY) as Promise<TeamSet[] | null>,
+                localforage.getItem(MATCH_HISTORY_KEY) as Promise<(MatchState & { date: string; time?: number })[] | null>,
+                localforage.getItem(USER_EMBLEMS_KEY) as Promise<UserEmblem[] | null>,
+                localforage.getItem(ACHIEVEMENTS_KEY) as Promise<any>,
+                localforage.getItem(SETTINGS_KEY) as Promise<AppSettings | null>,
+                localforage.getItem(TOURNAMENTS_KEY) as Promise<Tournament[] | null>,
+                localforage.getItem(LEAGUES_KEY) as Promise<League[] | null>,
+                localforage.getItem(COACHING_LOGS_KEY) as Promise<PlayerCoachingLogs | null>,
+                localforage.getItem(BACKUP_KEY) as Promise<any>
+            ]);
 
-            const parsedTeamSets = teamSetsData ? JSON.parse(teamSetsData) : [];
-            const parsedMatchHistory = matchHistoryData ? JSON.parse(matchHistoryData) : [];
-            const parsedUserEmblems = userEmblemsData ? JSON.parse(userEmblemsData) : [];
-            const parsedAchievements = achievementsData ? JSON.parse(achievementsData) : {};
-            const parsedTournaments = tournamentsData ? JSON.parse(tournamentsData) : [];
-            const parsedLeagues = leaguesData ? JSON.parse(leaguesData) : [];
-            const parsedCoachingLogs = coachingLogsData ? JSON.parse(coachingLogsData) : {};
+            const teamSets = parsedTeamSets || [];
+            const matchHistory = parsedMatchHistory || [];
+            const userEmblems = parsedUserEmblems || [];
+            const achievements = parsedAchievements || {};
+            const tournaments = parsedTournaments || [];
+            const leagues = parsedLeagues || [];
+            const coachingLogs = parsedCoachingLogs || {};
             
-            if (settingsData) {
-                try {
-                    const parsedSettings = JSON.parse(settingsData);
-                    setSettings(prev => ({
-                        ...prev,
-                        winningScore: typeof parsedSettings.winningScore === 'number' ? parsedSettings.winningScore : 11,
-                        includeBonusPointsInWinner: typeof parsedSettings.includeBonusPointsInWinner === 'boolean' ? parsedSettings.includeBonusPointsInWinner : true,
-                        googleSheetUrl: typeof parsedSettings.googleSheetUrl === 'string' ? parsedSettings.googleSheetUrl : '',
-                    }));
-                } catch (e) { console.error("Failed to parse settings", e); }
+            if (parsedSettings) {
+                setSettings(prev => ({
+                    ...prev,
+                    winningScore: typeof parsedSettings.winningScore === 'number' ? parsedSettings.winningScore : 11,
+                    includeBonusPointsInWinner: typeof parsedSettings.includeBonusPointsInWinner === 'boolean' ? parsedSettings.includeBonusPointsInWinner : true,
+                    googleSheetUrl: typeof parsedSettings.googleSheetUrl === 'string' ? parsedSettings.googleSheetUrl : '',
+                }));
             }
             
             const deserializedAchievements: PlayerAchievements = {};
-            for (const playerId in parsedAchievements) {
+            for (const playerId in achievements) {
                 deserializedAchievements[playerId] = {
-                    ...parsedAchievements[playerId],
-                    earnedBadgeIds: new Set(parsedAchievements[playerId].earnedBadgeIds)
+                    ...achievements[playerId],
+                    earnedBadgeIds: new Set(achievements[playerId].earnedBadgeIds || [])
                 };
             }
             setPlayerAchievements(deserializedAchievements);
 
-            const isMainDataEmpty = (!parsedTeamSets || parsedTeamSets.length === 0) && (!parsedMatchHistory || parsedMatchHistory.length === 0);
+            const isMainDataEmpty = (!teamSets || teamSets.length === 0) && (!matchHistory || matchHistory.length === 0);
 
-            if (isMainDataEmpty) {
-                const backupData = localStorage.getItem(BACKUP_KEY);
-                if (backupData) {
-                    try {
-                        const parsedBackup = JSON.parse(backupData);
-                        const teamSetsAreValid = parsedBackup.teamSets && Array.isArray(parsedBackup.teamSets) && parsedBackup.teamSets.every(isValidTeamSet);
-                        const historyIsValid = parsedBackup.matchHistory && Array.isArray(parsedBackup.matchHistory) && parsedBackup.matchHistory.every((m: any) => m && typeof m.date === 'string' && isValidMatchState(m));
-                        
-                        if (teamSetsAreValid || historyIsValid) {
-                             setRecoveryData(parsedBackup);
-                        }
-                    } catch (e) {
-                        console.error("Failed to parse or validate backup data:", e);
+            if (isMainDataEmpty && backupData) {
+                try {
+                    const teamSetsAreValid = backupData.teamSets && Array.isArray(backupData.teamSets) && backupData.teamSets.every(isValidTeamSet);
+                    const historyIsValid = backupData.matchHistory && Array.isArray(backupData.matchHistory) && backupData.matchHistory.every((m: any) => m && typeof m.date === 'string' && isValidMatchState(m));
+                    
+                    if (teamSetsAreValid || historyIsValid) {
+                         setRecoveryData(backupData);
                     }
+                } catch (e) {
+                    console.error("Failed to parse or validate backup data:", e);
                 }
             }
             
-            if (Array.isArray(parsedTeamSets) && parsedTeamSets.every(isValidTeamSet)) setTeamSets(parsedTeamSets);
-            if (Array.isArray(parsedMatchHistory) && parsedMatchHistory.every(m => m && typeof m.date === 'string' && isValidMatchState(m))) setMatchHistory(parsedMatchHistory);
-            if (isValidUserEmblems(parsedUserEmblems)) setUserEmblems(parsedUserEmblems);
-            if (isValidTournaments(parsedTournaments)) setTournaments(parsedTournaments);
-            if (isValidLeagues(parsedLeagues)) setLeagues(parsedLeagues);
-            if (isValidCoachingLogs(parsedCoachingLogs)) setCoachingLogs(parsedCoachingLogs);
+            if (Array.isArray(teamSets) && teamSets.every(isValidTeamSet)) setTeamSets(teamSets);
+            if (Array.isArray(matchHistory) && matchHistory.every(m => m && typeof m.date === 'string' && isValidMatchState(m))) setMatchHistory(matchHistory);
+            if (isValidUserEmblems(userEmblems)) setUserEmblems(userEmblems);
+            if (isValidTournaments(tournaments)) setTournaments(tournaments);
+            if (isValidLeagues(leagues)) setLeagues(leagues);
+            if (isValidCoachingLogs(coachingLogs)) setCoachingLogs(coachingLogs);
             
         } catch (error: any) {
             showToast(`데이터 로딩 중 오류 발생: ${error.message}`, 'error');
@@ -1328,18 +1349,20 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
         loadAllData();
     }, [loadAllData]);
     
-    const handleRestoreFromBackup = useCallback(() => {
+    const handleRestoreFromBackup = useCallback(async () => {
         if (!recoveryData) return;
         try {
             const { teamSets = [], matchHistory = [], userEmblems = [], tournaments = [], leagues = [], coachingLogs = {} } = recoveryData;
-            localStorage.setItem(TEAM_SETS_KEY, JSON.stringify(teamSets));
-            localStorage.setItem(MATCH_HISTORY_KEY, JSON.stringify(matchHistory));
-            localStorage.setItem(USER_EMBLEMS_KEY, JSON.stringify(userEmblems));
-            localStorage.setItem(TOURNAMENTS_KEY, JSON.stringify(tournaments));
-            localStorage.setItem(LEAGUES_KEY, JSON.stringify(leagues));
-            localStorage.setItem(COACHING_LOGS_KEY, JSON.stringify(coachingLogs));
+            await Promise.all([
+                localforage.setItem(TEAM_SETS_KEY, teamSets),
+                localforage.setItem(MATCH_HISTORY_KEY, matchHistory),
+                localforage.setItem(USER_EMBLEMS_KEY, userEmblems),
+                localforage.setItem(TOURNAMENTS_KEY, tournaments),
+                localforage.setItem(LEAGUES_KEY, leagues),
+                localforage.setItem(COACHING_LOGS_KEY, coachingLogs)
+            ]);
             
-            loadAllData();
+            await loadAllData();
             
             showToast('데이터가 성공적으로 복구되었습니다.', 'success');
             setRecoveryData(null);
@@ -1600,10 +1623,24 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
         return () => { if (interval) clearInterval(interval); };
     }, [timerOn, matchState]);
 
-    const exportData = () => {
+    const exportData = async () => {
         try {
+            // 진행 중인 경기 상태도 포함
+            const ongoingMatch = matchState && matchState.status === 'in_progress' ? {
+                matchState,
+                matchTime,
+                timerOn
+            } : null;
+            
             const dataToExport = {
-                teamSets, matchHistory, userEmblems, tournaments, leagues, coachingLogs, settings
+                teamSets, 
+                matchHistory, 
+                userEmblems, 
+                tournaments, 
+                leagues, 
+                coachingLogs, 
+                settings,
+                ongoing_match: ongoingMatch // 진행 중인 경기 상태 포함
             };
             const dataStr = JSON.stringify(dataToExport, null, 2);
             const blob = new Blob([dataStr], { type: 'application/json' });
@@ -1620,50 +1657,62 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
         }
     };
     
-    const saveImportedData = (data: { teamSets: TeamSet[], matchHistory: (MatchState & { date: string; time?: number })[], userEmblems?: UserEmblem[], tournaments?: Tournament[], leagues?: League[], coachingLogs?: PlayerCoachingLogs, settings?: AppSettings }) => {
-        Promise.all([
-            saveTeamSets(data.teamSets || []),
-            saveMatchHistory(data.matchHistory || []),
-            saveUserEmblems(data.userEmblems || []),
-            saveTournaments(data.tournaments || []),
-            saveLeagues(data.leagues || []),
-            Promise.resolve().then(() => {
-                const logs = data.coachingLogs || {};
-                localStorage.setItem(COACHING_LOGS_KEY, JSON.stringify(logs));
-                setCoachingLogs(logs);
-            }),
-            Promise.resolve().then(() => {
-                if (data.settings) {
-                    localStorage.setItem(SETTINGS_KEY, JSON.stringify(data.settings));
-                    setSettings(data.settings);
-                }
-            })
-        ]).then(async () => {
+    const saveImportedData = async (data: { teamSets: TeamSet[], matchHistory: (MatchState & { date: string; time?: number })[], userEmblems?: UserEmblem[], tournaments?: Tournament[], leagues?: League[], coachingLogs?: PlayerCoachingLogs, settings?: AppSettings, ongoing_match?: { matchState: MatchState, matchTime: number, timerOn: boolean } }) => {
+        try {
+            await Promise.all([
+                saveTeamSets(data.teamSets || []),
+                saveMatchHistory(data.matchHistory || []),
+                saveUserEmblems(data.userEmblems || []),
+                saveTournaments(data.tournaments || []),
+                saveLeagues(data.leagues || []),
+                (async () => {
+                    const logs = data.coachingLogs || {};
+                    await localforage.setItem(COACHING_LOGS_KEY, logs);
+                    setCoachingLogs(logs);
+                })(),
+                (async () => {
+                    if (data.settings) {
+                        await localforage.setItem(SETTINGS_KEY, data.settings);
+                        setSettings(data.settings);
+                    }
+                })()
+            ]);
+            
+            // 진행 중인 경기 상태 복구
+            if (data.ongoing_match && data.ongoing_match.matchState) {
+                dispatch({ type: 'LOAD_STATE', state: data.ongoing_match.matchState });
+                setMatchTime(data.ongoing_match.matchTime || 0);
+                setTimerOn(data.ongoing_match.timerOn || false);
+                showToast('진행 중이던 경기 상태가 복구되었습니다.', 'success');
+            }
+            
             // Recalculate achievements based on imported match history to ensure consistency
             if (data.matchHistory && data.matchHistory.length > 0) {
                await recalculateAllAchievements(data.matchHistory as (MatchState & { date: string })[]);
             }
             
             showToast('데이터를 성공적으로 가져왔습니다.', 'success');
-            loadAllData();
-        }).catch((error) => {
+            await loadAllData();
+        } catch (error) {
             console.error("Import failed:", error);
             showToast('데이터를 적용하는 중 오류가 발생했습니다.', 'error');
-        });
+        }
     };
 
-    const resetAllData = useCallback(() => {
+    const resetAllData = useCallback(async () => {
         try {
-            localStorage.removeItem(TEAM_SETS_KEY);
-            localStorage.removeItem(MATCH_HISTORY_KEY);
-            localStorage.removeItem(USER_EMBLEMS_KEY);
-            localStorage.removeItem(ACHIEVEMENTS_KEY);
-            localStorage.removeItem(BACKUP_KEY);
-            localStorage.removeItem(SETTINGS_KEY);
-            localStorage.removeItem(TOURNAMENTS_KEY);
-            localStorage.removeItem(LEAGUES_KEY);
-            localStorage.removeItem(COACHING_LOGS_KEY);
-            localStorage.removeItem(LANGUAGE_KEY);
+            await Promise.all([
+                localforage.removeItem(TEAM_SETS_KEY),
+                localforage.removeItem(MATCH_HISTORY_KEY),
+                localforage.removeItem(USER_EMBLEMS_KEY),
+                localforage.removeItem(ACHIEVEMENTS_KEY),
+                localforage.removeItem(BACKUP_KEY),
+                localforage.removeItem(SETTINGS_KEY),
+                localforage.removeItem(TOURNAMENTS_KEY),
+                localforage.removeItem(LEAGUES_KEY),
+                localforage.removeItem(COACHING_LOGS_KEY),
+                localforage.removeItem(LANGUAGE_KEY)
+            ]);
 
             setTeamSets([]);
             setMatchHistory([]);
@@ -1673,7 +1722,7 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
             setLeagues([]);
             setCoachingLogs({});
             setSettings({ winningScore: 11, includeBonusPointsInWinner: true, googleSheetUrl: '' });
-            setLanguage('ko');
+            await setLanguage('ko');
             showToast('모든 데이터가 초기화되었습니다.', 'success');
         } catch (error) {
             console.error("Failed to reset all data:", error);

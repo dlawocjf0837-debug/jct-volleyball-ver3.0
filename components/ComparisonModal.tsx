@@ -1,13 +1,15 @@
 import React, { useMemo } from 'react';
-import { Player, STAT_KEYS, STAT_NAME_KEYS } from '../types';
+import { Player, STAT_KEYS } from '../types';
 import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Tooltip, ResponsiveContainer } from 'recharts';
 import { useTranslation } from '../hooks/useTranslation';
+import { getStatLabel } from '../utils/labelUtils';
 
 interface ComparisonModalProps {
     player1: Player;
     player2: Player;
     onClose: () => void;
     showRealNames: boolean;
+    allPlayers?: Player[]; // 반 전체 데이터 (스마트 축 필터링용)
 }
 
 type ChartDataPoint = {
@@ -19,18 +21,57 @@ type ChartDataPoint = {
 const player1Color = "#00A3FF"; // electric-blue
 const player2Color = "#fb923c"; // orange-400
 
-const ComparisonModal: React.FC<ComparisonModalProps> = ({ player1, player2, onClose, showRealNames }) => {
+const ComparisonModal: React.FC<ComparisonModalProps> = ({ player1, player2, onClose, showRealNames, allPlayers = [] }) => {
     const { t } = useTranslation();
-// Fix: Improved typing for chartData to prevent TypeScript from inferring a broad `string | number` type for stat values, thus removing the need for `as number` casts later.
+    
+    // 데이터 안에 있는 라벨을 꺼내 씀 (없으면 기본값)
+    // 두 선수 중 하나라도 라벨이 있으면 사용 (일반적으로 같은 반이므로 동일한 라벨을 가짐)
+    const skill1Label = player1.customLabel1 || player2.customLabel1 || "언더핸드";
+    const skill2Label = player1.customLabel2 || player2.customLabel2 || "서브";
+    
+    // 필터링 제거: 무조건 6개 축을 하드코딩으로 박아넣음
     const chartData = useMemo((): ChartDataPoint[] => {
         if (!player1 || !player2) return [];
-        return STAT_KEYS.map(key => ({
-            subject: t(STAT_NAME_KEYS[key]),
-            [player1.anonymousName]: player1.stats[key],
-            [player2.anonymousName]: player2.stats[key],
-            fullMark: 100,
-        }));
-    }, [player1, player2, t]);
+        
+        return [
+            { 
+                subject: getStatLabel('height', t), 
+                [player1.anonymousName]: player1.stats.height || 0, 
+                [player2.anonymousName]: player2.stats.height || 0, 
+                fullMark: 100 
+            },
+            { 
+                subject: getStatLabel('shuttleRun', t), 
+                [player1.anonymousName]: player1.stats.shuttleRun || 0, 
+                [player2.anonymousName]: player2.stats.shuttleRun || 0, 
+                fullMark: 100 
+            },
+            { 
+                subject: getStatLabel('flexibility', t), 
+                [player1.anonymousName]: player1.stats.flexibility || 0, 
+                [player2.anonymousName]: player2.stats.flexibility || 0, 
+                fullMark: 100 
+            },
+            { 
+                subject: getStatLabel('fiftyMeterDash', t), 
+                [player1.anonymousName]: player1.stats.fiftyMeterDash || 0, 
+                [player2.anonymousName]: player2.stats.fiftyMeterDash || 0, 
+                fullMark: 100 
+            },
+            { 
+                subject: skill1Label, 
+                [player1.anonymousName]: player1.stats.underhand || 0, 
+                [player2.anonymousName]: player2.stats.underhand || 0, 
+                fullMark: 100 
+            }, // 5번째 축
+            { 
+                subject: skill2Label, 
+                [player1.anonymousName]: player1.stats.serve || 0, 
+                [player2.anonymousName]: player2.stats.serve || 0, 
+                fullMark: 100 
+            }, // 6번째 축 (무조건 포함)
+        ];
+    }, [player1, player2, t, skill1Label, skill2Label]);
 
     if (!player1 || !player2) return null;
 
@@ -56,7 +97,7 @@ const ComparisonModal: React.FC<ComparisonModalProps> = ({ player1, player2, onC
                 )}
                 
                 <div style={{ width: '100%', height: 350 }}>
-                     <ResponsiveContainer>
+                    <ResponsiveContainer>
                         <RadarChart cx="50%" cy="50%" outerRadius="80%" data={chartData}>
                             <PolarGrid stroke="#475569" />
                             <PolarAngleAxis dataKey="subject" tick={{ fill: '#cbd5e1', fontSize: 12 }} />

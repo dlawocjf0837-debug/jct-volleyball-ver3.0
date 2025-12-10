@@ -3,12 +3,13 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { Player, Stats, STAT_KEYS } from '../types';
 import { useTranslation } from '../hooks/useTranslation';
 import { useData } from '../contexts/DataContext';
+import { saveCustomLabels, CustomLabels } from '../utils/labelUtils';
 
 interface PlayerInputScreenProps {
     onStart: (players: Omit<Player, 'id' | 'anonymousName' | 'isCaptain' | 'totalScore'>[], selectedClass: string) => void;
 }
 
-const defaultCsv = `번호,이름,성별,키,셔틀런,유연성,50m달리기,언더핸드,서브
+const defaultCsv = `번호,이름,성별,키,심폐지구력,유연성,순발력,언더핸드,서브
 30101,김민지,여,165,45,15,8.5,8,7
 30102,박서준,남,175,60,12,7.8,9,8
 30103,이하은,여,160,40,20,8.9,7,6
@@ -80,6 +81,17 @@ const PlayerInputScreen: React.FC<PlayerInputScreenProps> = ({ onStart }) => {
     };
 
 
+    // 헤더 매핑: 키워드로 헤더 찾기
+    const findHeaderIndex = (headers: string[], keywords: string[]): number => {
+        for (let i = 0; i < headers.length; i++) {
+            const headerLower = headers[i].toLowerCase();
+            if (keywords.some(keyword => headerLower.includes(keyword.toLowerCase()))) {
+                return i;
+            }
+        }
+        return -1;
+    };
+
     const handleParseAndProceed = useCallback((e: React.FormEvent) => {
         e.preventDefault();
         
@@ -90,12 +102,82 @@ const PlayerInputScreen: React.FC<PlayerInputScreenProps> = ({ onStart }) => {
         }
 
         const headers = lines[0].split(',').map(h => h.trim());
-        const expectedHeaders = ['번호', '이름', '성별', '키', '셔틀런', '유연성', '50m달리기', '언더핸드', '서브'];
         
-        if(JSON.stringify(headers) !== JSON.stringify(expectedHeaders)){
-            alert(t('alert_header_mismatch', { headers: expectedHeaders.join(',') }));
+        // Fuzzy Matching으로 헤더 인덱스 찾기
+        const headerMapping: Record<string, number> = {
+            '번호': findHeaderIndex(headers, ['번호', '학번', 'id']),
+            '이름': findHeaderIndex(headers, ['이름', '성명', 'name']),
+            '성별': findHeaderIndex(headers, ['성별', 'gender']),
+            '키': findHeaderIndex(headers, ['키', '신장', 'height']),
+            '셔틀런': findHeaderIndex(headers, ['셔틀런', '심폐', '지구력', '심폐지구력', '오래달리기', '왕복', 'shuttle']),
+            '유연성': findHeaderIndex(headers, ['유연성', '좌전굴', '스트레칭', 'flexibility']),
+            '50m달리기': findHeaderIndex(headers, ['50m', '달리기', '순발력', '100m', 'dash']),
+            '언더핸드': findHeaderIndex(headers, ['언더', '리시브', '패스', 'underhand']),
+            '서브': findHeaderIndex(headers, ['서브', '공격', '스파이크', 'serve']),
+        };
+
+        // 필수 헤더 확인 (번호, 이름, 성별)
+        if (headerMapping['번호'] === -1 || headerMapping['이름'] === -1 || headerMapping['성별'] === -1) {
+            alert('필수 헤더(번호, 이름, 성별)를 찾을 수 없습니다.');
             return;
         }
+
+        // 통계 헤더는 선택 사항 - 누락되어도 오류 없이 진행
+        const statHeaderKeys = ['키', '셔틀런', '유연성', '50m달리기', '언더핸드', '서브']; // 내부 키는 유지, 표시명만 변경
+        
+        // 순서 기반 Fallback: 키워드 매칭이 실패한 경우 순서로 강제 할당
+        // 마지막에서 두 번째 컬럼 → skill1 (underhand)
+        // 맨 마지막 컬럼 → skill2 (serve)
+        const totalHeaders = headers.length;
+        const expectedStatStartIndex = 3; // 번호(0), 이름(1), 성별(2) 다음부터 통계 데이터
+        
+        // 커스텀 라벨 추출 및 저장 (초기화)
+        const customLabels: CustomLabels = {};
+        
+        // 언더핸드(skill1)가 매칭되지 않았고, 마지막에서 두 번째 컬럼이 있으면 강제 할당
+        if (headerMapping['언더핸드'] === -1 && totalHeaders >= expectedStatStartIndex + STAT_KEYS.length - 1) {
+            const fallbackIndex = totalHeaders - 2; // 마지막에서 두 번째
+            if (fallbackIndex >= expectedStatStartIndex && fallbackIndex < totalHeaders) {
+                headerMapping['언더핸드'] = fallbackIndex;
+                // fallback으로 할당된 경우에도 헤더 이름을 커스텀 라벨로 저장
+                if (headers[fallbackIndex]) {
+                    customLabels['underhand'] = headers[fallbackIndex];
+                }
+            }
+        }
+        
+        // 서브(skill2)가 매칭되지 않았고, 맨 마지막 컬럼이 있으면 강제 할당
+        if (headerMapping['서브'] === -1 && totalHeaders >= expectedStatStartIndex + STAT_KEYS.length) {
+            const fallbackIndex = totalHeaders - 1; // 맨 마지막
+            if (fallbackIndex >= expectedStatStartIndex && fallbackIndex < totalHeaders) {
+                headerMapping['서브'] = fallbackIndex;
+                // fallback으로 할당된 경우에도 헤더 이름을 커스텀 라벨로 저장
+                if (headers[fallbackIndex]) {
+                    customLabels['serve'] = headers[fallbackIndex];
+                }
+            }
+        }
+        
+        // 모든 통계 항목의 헤더 이름을 커스텀 라벨로 저장
+        STAT_KEYS.forEach((key, index) => {
+            const headerKey = statHeaderKeys[index];
+            const headerIndex = headerMapping[headerKey];
+            if (headerIndex !== -1 && headerIndex < headers.length) {
+                // 실제 헤더 텍스트를 커스텀 라벨로 저장 (이미 fallback으로 저장된 경우 덮어쓰지 않음)
+                if (!customLabels[key] && headers[headerIndex]) {
+                    customLabels[key] = headers[headerIndex];
+                }
+            }
+        });
+        saveCustomLabels(customLabels);
+        
+        // 헤더에서 라벨 추출 (데이터 객체에 직접 포함하기 위해)
+        const skill1Label = (headerMapping['언더핸드'] !== -1 && headers[headerMapping['언더핸드']]) 
+            ? headers[headerMapping['언더핸드']] 
+            : "언더핸드";
+        const skill2Label = (headerMapping['서브'] !== -1 && headers[headerMapping['서브']]) 
+            ? headers[headerMapping['서브']] 
+            : "서브";
         
         let players: Omit<Player, 'id' | 'anonymousName' | 'isCaptain' | 'totalScore'>[] = [];
 
@@ -105,37 +187,51 @@ const PlayerInputScreen: React.FC<PlayerInputScreenProps> = ({ onStart }) => {
                 alert(t('alert_data_mismatch', { line: i + 1, values: values.length, headers: headers.length }));
                 return;
             }
-
-            if (values.some(v => v === '')) {
-                alert(t('alert_empty_data', { line: i + 1 }));
-                return;
-            }
             
-            const studentId = values[0];
-            if (studentId.length !== 5 || isNaN(parseInt(studentId, 10))) {
-                alert(t('alert_invalid_student_id', { line: i + 1, studentId }));
+            const studentId = values[headerMapping['번호']];
+            if (!studentId || studentId.length !== 5 || isNaN(parseInt(studentId, 10))) {
+                alert(t('alert_invalid_student_id', { line: i + 1, studentId: studentId || '' }));
                 return;
             }
             const studentClass = parseInt(studentId.substring(1, 3), 10).toString();
             const studentNumber = parseInt(studentId.substring(3, 5), 10).toString();
 
             const stats: Partial<Stats> = {};
-            const statHeaders = headers.slice(3);
             for (const [index, key] of STAT_KEYS.entries()) {
-                const statValue = parseFloat(values[index + 3]);
+                const headerKey = statHeaderKeys[index];
+                const headerIndex = headerMapping[headerKey];
+                
+                // 헤더가 없으면 0으로 설정 (선택 사항)
+                if (headerIndex === -1) {
+                    stats[key] = 0;
+                    continue;
+                }
+                
+                const valueStr = values[headerIndex];
+                
+                // 빈 데이터 처리: null, undefined, 빈칸은 0으로 설정 (점수 계산 단계에서 0점 처리)
+                if (!valueStr || valueStr.trim() === '' || valueStr.toLowerCase() === 'null' || valueStr.toLowerCase() === 'undefined') {
+                    stats[key] = 0; // 빈 데이터는 0으로 설정 (점수 계산에서 0점 처리)
+                    continue;
+                }
+                
+                const statValue = parseFloat(valueStr);
                 if(isNaN(statValue)) {
-                    alert(t('alert_stat_not_a_number', { line: i + 1, header: statHeaders[index], value: values[index + 3] }));
+                    alert(t('alert_stat_not_a_number', { line: i + 1, header: headerKey, value: valueStr }));
                     return;
                 }
                 stats[key] = statValue;
             }
 
             players.push({
-                originalName: values[1],
-                gender: values[2],
+                originalName: values[headerMapping['이름']],
+                gender: values[headerMapping['성별']],
                 class: studentClass,
                 studentNumber: studentNumber,
                 stats: stats as Stats,
+                // [핵심] 라벨을 데이터에 직접 심어버림 (데이터 문신)
+                customLabel1: skill1Label,
+                customLabel2: skill2Label,
             });
         }
         

@@ -10,9 +10,12 @@ interface RosterManagementModalProps {
     teamKey: string | null;
     teamConfig: SavedTeamInfo | null;
     onTeamNameChange: (newName: string) => void;
+    isTradeMode?: boolean;
+    tradeSource?: { player: Player; teamKey: string } | null;
+    onPlayerClick?: (player: Player, teamKey: string) => void;
 }
 
-const RosterManagementModal: React.FC<RosterManagementModalProps> = ({ isOpen, onClose, teamKey, teamConfig, onTeamNameChange }) => {
+const RosterManagementModal: React.FC<RosterManagementModalProps> = ({ isOpen, onClose, teamKey, teamConfig, onTeamNameChange, isTradeMode = false, tradeSource = null, onPlayerClick }) => {
     const { teamSetsMap, addPlayerToTeam, removePlayerFromTeam, bulkAddPlayersToTeam } = useData();
     const { t } = useTranslation();
     const [newPlayerName, setNewPlayerName] = useState('');
@@ -125,22 +128,47 @@ const RosterManagementModal: React.FC<RosterManagementModalProps> = ({ isOpen, o
                 
                 <div className="flex-grow overflow-y-auto pr-2 -mr-2 mb-4">
                     <ul className="space-y-2">
-                        {players.map(player => (
-                            <li key={player.id} className="flex items-center justify-between bg-slate-800 p-3 rounded-md">
-                                <div className="flex items-center gap-2">
-                                    {player.id === captainId && <CrownIcon className="w-5 h-5 text-yellow-400" />}
-                                    <span className="font-semibold text-slate-200">{player.originalName}</span>
-                                </div>
-                                <button
-                                    onClick={() => handleRemovePlayer(player.id)}
-                                    disabled={player.id === captainId}
-                                    className="text-slate-500 hover:text-red-500 disabled:text-slate-700 disabled:cursor-not-allowed"
-                                    aria-label={t('roster_delete_player_aria', { playerName: player.originalName })}
+                        {players.map(player => {
+                            const isSelected = tradeSource?.player.id === player.id && tradeSource?.teamKey === teamKey;
+                            const isClickable = isTradeMode && onPlayerClick;
+                            
+                            return (
+                                <li 
+                                    key={player.id} 
+                                    className={`flex items-center justify-between bg-slate-800 p-3 rounded-md transition-all ${
+                                        isSelected 
+                                            ? 'ring-4 ring-green-500 ring-offset-2 ring-offset-slate-900' 
+                                            : isClickable 
+                                                ? 'cursor-pointer hover:bg-slate-700' 
+                                                : ''
+                                    }`}
+                                    onClick={() => {
+                                        if (isClickable && teamKey) {
+                                            onPlayerClick(player, teamKey);
+                                        }
+                                    }}
                                 >
-                                    <TrashIcon className="w-5 h-5" />
-                                </button>
-                            </li>
-                        ))}
+                                    <div className="flex items-center gap-2">
+                                        {player.id === captainId && <CrownIcon className="w-5 h-5 text-yellow-400" />}
+                                        <span className="font-semibold text-slate-200">{player.originalName}</span>
+                                        {isSelected && <span className="text-xs text-green-400 font-bold">✓ 선택됨</span>}
+                                    </div>
+                                    {!isTradeMode && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleRemovePlayer(player.id);
+                                            }}
+                                            disabled={player.id === captainId}
+                                            className="text-slate-500 hover:text-red-500 disabled:text-slate-700 disabled:cursor-not-allowed"
+                                            aria-label={t('roster_delete_player_aria', { playerName: player.originalName })}
+                                        >
+                                            <TrashIcon className="w-5 h-5" />
+                                        </button>
+                                    )}
+                                </li>
+                            );
+                        })}
                     </ul>
                 </div>
 

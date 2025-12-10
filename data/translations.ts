@@ -295,7 +295,7 @@ export const translations: Record<string, Record<Language, string>> = {
   record_guide_desc1: { ko: "완료된 경기를 선택하면 상세 분석 리포트가 표시됩니다.", id: "Pilih laga selesai untuk melihat laporan analisis." },
   record_guide_desc2: { ko: "경기 중 발생한 모든 득점 상황, 타임라인, 선수별 활약상을 확인할 수 있습니다.", id: "Anda dapat melihat semua skor, linimasa, dan performa pemain." },
   score_trend: { ko: "득점 흐름", id: "Tren Skor" },
-  image_header_title: { ko: "JCT 배구 경기 결과", id: "Hasil Laga Voli JCT" },
+  image_header_title: { ko: "J-IVE배구 경기 결과", id: "Hasil Laga Voli JCT" },
   image_winner: { ko: "WINNER", id: "PEMENANG" },
   image_mvp: { ko: "MVP: {name}", id: "MVP: {name}" },
   image_stat_serve: { ko: "서브", id: "Servis" },
@@ -464,9 +464,9 @@ export const translations: Record<string, Record<Language, string>> = {
   team_builder_avg_score: { ko: "평균: {score}", id: "Rata2: {score}" },
   team_builder_total_score: { ko: "종합 점수", id: "Skor Total" },
   stat_height: { ko: "키", id: "Tinggi" },
-  stat_shuttleRun: { ko: "셔틀런", id: "Shuttle Run" },
+  stat_shuttleRun: { ko: "심폐지구력", id: "Shuttle Run" },
   stat_flexibility: { ko: "유연성", id: "Fleksibilitas" },
-  stat_fiftyMeterDash: { ko: "50m 달리기", id: "Lari 50m" },
+  stat_fiftyMeterDash: { ko: "순발력", id: "Lari 50m" },
   stat_underhand: { ko: "언더핸드", id: "Underhand" },
   stat_serve: { ko: "서브", id: "Servis" },
   team_builder_gender_ratio: { ko: "성비 (남/여)", id: "Gender (P/W)" },
@@ -510,6 +510,14 @@ export const translations: Record<string, Record<Language, string>> = {
   team_management_new_team_placeholder: { ko: "팀 이름 입력 (예: A팀, 청룡)", id: "Masukkan nama tim (mis. Tim A)" },
   team_management_no_sets_title: { ko: "저장된 팀 세트가 없습니다.", id: "Tidak Ada Set Tim Tersimpan" },
   team_management_no_sets_desc: { ko: "먼저 '새 팀 세트 만들기'를 통해 팀 그룹을 생성해주세요.", id: "Buat grup tim terlebih dahulu dengan 'Buat Set Tim Baru'." },
+  team_management_add_from_roster: { ko: "명단에서 추가", id: "Tambah dari Roster" },
+  
+  // Player Selection Modal
+  player_selection_modal_title: { ko: "{className} 학생 선택", id: "Pilih Siswa {className}" },
+  player_selection_search_placeholder: { ko: "이름으로 검색...", id: "Cari nama..." },
+  player_selection_no_results: { ko: "검색 결과가 없습니다.", id: "Tidak ada hasil." },
+  player_selection_no_players: { ko: "선택 가능한 학생이 없습니다.", id: "Tidak ada siswa tersedia." },
+  player_selection_assigned: { ko: "소속됨", id: "Ditugaskan" },
   
   // Roster Management & Bulk Import
   roster_title: { ko: "{teamName} 명단 관리", id: "Manajemen Roster {teamName}" },

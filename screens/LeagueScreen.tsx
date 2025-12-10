@@ -196,7 +196,7 @@ const LeagueScreen: React.FC<LeagueScreenProps> = ({ onStartMatch }) => {
             {selectedLeague ? (
                 <div className="printable-area">
                     <div className="printable-header hidden print:flex">
-                        <h1 className="printable-title">JCT {t('league_report_title')}</h1>
+                        <h1 className="printable-title">J-IVE {t('league_report_title')}</h1>
                         <p className="printable-subtitle">{selectedLeague.name}</p>
                     </div>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

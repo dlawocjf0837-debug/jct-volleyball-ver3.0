@@ -1067,7 +1067,7 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ onContinueGame, preselected
                     {enrichedSelectedMatch ? (
                         <div className="space-y-6 pt-6 border-t border-slate-700 animate-fade-in printable-area">
                              <div className="printable-header hidden print:flex">
-                                <h1 className="printable-title">JCT 경기 분석 리포트</h1>
+                                <h1 className="printable-title">J-IVE 경기 분석 리포트</h1>
                                 <div className="text-right">
                                     <p className="printable-subtitle">{enrichedSelectedMatch.teamA.name} vs {enrichedSelectedMatch.teamB.name}</p>
                                     <p className="printable-subtitle">{new Date(enrichedSelectedMatch.date).toLocaleString('ko-KR')}</p>

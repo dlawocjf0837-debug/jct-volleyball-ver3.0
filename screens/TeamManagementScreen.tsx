@@ -7,6 +7,7 @@ import { TeamProfileCardModal } from '../components/TeamProfileCardModal';
 import { IdentificationIcon, TrashIcon, UsersIcon } from '../components/icons';
 import ConfirmationModal from '../components/common/ConfirmationModal';
 import RosterManagementModal from '../components/RosterManagementModal';
+import PlayerSelectionModal from '../components/PlayerSelectionModal';
 import { useTranslation } from '../hooks/useTranslation';
 
 interface TeamWithSetId extends SavedTeamInfo {
@@ -57,7 +58,7 @@ const convertGithubUrl = (url: string | undefined): string | undefined => {
 };
 
 const TeamManagementScreen: React.FC = () => {
-    const { teamSets, saveTeamSets, deleteTeam, createTeamSet, addTeamToSet } = useData();
+    const { teamSets, saveTeamSets, deleteTeam, createTeamSet, addTeamToSet, teamSetsMap, removePlayerFromTeam, addPlayerToTeam } = useData();
     const { t } = useTranslation();
     const [configs, setConfigs] = useState<Record<string, Config>>({});
     const [isEmblemModalOpen, setIsEmblemModalOpen] = useState(false);
@@ -76,6 +77,18 @@ const TeamManagementScreen: React.FC = () => {
     const [newTeamName, setNewTeamName] = useState('');
     const [targetSetId, setTargetSetId] = useState<string | null>(null);
 
+    // Filter states
+    const [selectedClassFilter, setSelectedClassFilter] = useState<string>('all');
+    const [selectedFormatFilter, setSelectedFormatFilter] = useState<string>('all');
+
+    // Trade mode states
+    const [isTradeMode, setIsTradeMode] = useState(false);
+    const [tradeSource, setTradeSource] = useState<{ player: Player; teamKey: string } | null>(null);
+
+    // Player selection modal states
+    const [isPlayerSelectionModalOpen, setIsPlayerSelectionModalOpen] = useState(false);
+    const [selectingForTeamKey, setSelectingForTeamKey] = useState<string | null>(null);
+
 
     React.useEffect(() => {
         const initialConfigs: Record<string, Config> = {};
@@ -89,8 +102,42 @@ const TeamManagementScreen: React.FC = () => {
         setConfigs(initialConfigs);
     }, [teamSets]);
 
+    // 사용 가능한 반 목록 추출
+    const availableClasses = useMemo(() => {
+        const classSet = new Set<string>();
+        teamSets.forEach(set => {
+            if (set.className) {
+                classSet.add(set.className);
+            }
+        });
+        return Array.from(classSet).sort();
+    }, [teamSets]);
+
+    // 사용 가능한 포맷 목록 추출
+    const availableFormats = useMemo(() => {
+        const formatSet = new Set<number>();
+        teamSets.forEach(set => {
+            if (set.teamCount) {
+                formatSet.add(set.teamCount);
+            }
+        });
+        return Array.from(formatSet).sort((a, b) => a - b);
+    }, [teamSets]);
+
     const groupedTeams = useMemo(() => {
-        const sortedSets = [...teamSets].sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
+        let filteredSets = [...teamSets];
+        
+        // 반 필터 적용
+        if (selectedClassFilter !== 'all') {
+            filteredSets = filteredSets.filter(set => set.className === selectedClassFilter);
+        }
+        
+        // 포맷 필터 적용
+        if (selectedFormatFilter !== 'all') {
+            filteredSets = filteredSets.filter(set => String(set.teamCount) === selectedFormatFilter);
+        }
+        
+        const sortedSets = filteredSets.sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
         return sortedSets.map(set => {
             const teamsInSet = set.teams.map(team => ({
                 ...team,
@@ -99,7 +146,7 @@ const TeamManagementScreen: React.FC = () => {
             })).sort((a, b) => a.teamName.localeCompare(b.teamName));
             return { set, teams: teamsInSet };
         });
-    }, [teamSets]);
+    }, [teamSets, selectedClassFilter, selectedFormatFilter]);
 
 
     const colorConflicts = useMemo(() => {
@@ -205,6 +252,110 @@ const TeamManagementScreen: React.FC = () => {
         }
     };
 
+    // 트레이드 실행 함수
+    const executeTrade = async (source: { player: Player; teamKey: string }, target: { player: Player; teamKey: string }) => {
+        try {
+            const newTeamSets = JSON.parse(JSON.stringify(teamSets));
+            
+            // 소스 팀 찾기
+            const [sourceSetId, sourceTeamName] = source.teamKey.split('___');
+            const sourceSetIndex = newTeamSets.findIndex((s: TeamSet) => s.id === sourceSetId);
+            const sourceTeamIndex = newTeamSets[sourceSetIndex].teams.findIndex((t: SavedTeamInfo) => t.teamName === sourceTeamName);
+            
+            // 타겟 팀 찾기
+            const [targetSetId, targetTeamName] = target.teamKey.split('___');
+            const targetSetIndex = newTeamSets.findIndex((s: TeamSet) => s.id === targetSetId);
+            const targetTeamIndex = newTeamSets[targetSetIndex].teams.findIndex((t: SavedTeamInfo) => t.teamName === targetTeamName);
+            
+            if (sourceSetIndex === -1 || sourceTeamIndex === -1 || targetSetIndex === -1 || targetTeamIndex === -1) {
+                throw new Error('팀을 찾을 수 없습니다.');
+            }
+            
+            const sourceTeam = newTeamSets[sourceSetIndex].teams[sourceTeamIndex];
+            const targetTeam = newTeamSets[targetSetIndex].teams[targetTeamIndex];
+            
+            // 선수 교체
+            sourceTeam.playerIds = sourceTeam.playerIds.filter((id: string) => id !== source.player.id);
+            targetTeam.playerIds = targetTeam.playerIds.filter((id: string) => id !== target.player.id);
+            
+            sourceTeam.playerIds.push(target.player.id);
+            targetTeam.playerIds.push(source.player.id);
+            
+            // 주장 처리 (주장이 교체되면 첫 번째 선수를 주장으로)
+            if (sourceTeam.captainId === source.player.id) {
+                sourceTeam.captainId = targetTeam.playerIds[0] || source.player.id;
+            }
+            if (targetTeam.captainId === target.player.id) {
+                targetTeam.captainId = sourceTeam.playerIds[0] || target.player.id;
+            }
+            
+            await saveTeamSets(newTeamSets, `'${source.player.originalName}'과 '${target.player.originalName}'이 교체되었습니다.`);
+            setTradeSource(null);
+        } catch (error: any) {
+            console.error("Trade failed:", error);
+            alert(`교체 중 오류 발생: ${error.message}`);
+        }
+    };
+
+    // 선수 클릭 핸들러 (트레이드 모드)
+    const handlePlayerClick = (player: Player, teamKey: string) => {
+        if (!isTradeMode) return;
+        
+        if (!tradeSource) {
+            // 첫 번째 선수 선택
+            setTradeSource({ player, teamKey });
+        } else {
+            // 두 번째 선수 선택 -> 교체 실행
+            if (tradeSource.player.id === player.id && tradeSource.teamKey === teamKey) {
+                // 같은 선수를 다시 클릭하면 취소
+                setTradeSource(null);
+                return;
+            }
+            
+            executeTrade(tradeSource, { player, teamKey });
+        }
+    };
+
+    // 명단에서 추가 모달 열기
+    const handleOpenPlayerSelection = (teamKey: string) => {
+        setSelectingForTeamKey(teamKey);
+        setIsPlayerSelectionModalOpen(true);
+    };
+
+    // 명단에서 선수 선택
+    const handleSelectPlayer = async (playerId: string) => {
+        if (!selectingForTeamKey) return;
+        
+        const [setId] = selectingForTeamKey.split('___');
+        const set = teamSets.find(s => s.id === setId);
+        if (!set) return;
+        
+        const player = set.players[playerId];
+        if (!player) return;
+        
+        // 현재 다른 팀에 속해있는지 확인하고 제거
+        for (const team of set.teams) {
+            const teamKey = `${setId}___${team.teamName}`;
+            if (team.playerIds.includes(playerId) && teamKey !== selectingForTeamKey) {
+                // 다른 팀에서 제거
+                await removePlayerFromTeam(teamKey, playerId);
+            }
+        }
+        
+        // 새 팀에 추가 (이미 팀에 있으면 추가하지 않음)
+        const targetTeam = set.teams.find(t => `${setId}___${t.teamName}` === selectingForTeamKey);
+        if (targetTeam && !targetTeam.playerIds.includes(playerId)) {
+            const newTeamSets = JSON.parse(JSON.stringify(teamSets));
+            const setIndex = newTeamSets.findIndex((s: TeamSet) => s.id === setId);
+            const teamIndex = newTeamSets[setIndex].teams.findIndex((t: SavedTeamInfo) => t.teamName === targetTeam.teamName);
+            
+            if (setIndex !== -1 && teamIndex !== -1) {
+                newTeamSets[setIndex].teams[teamIndex].playerIds.push(playerId);
+                await saveTeamSets(newTeamSets, `'${player.originalName}' 선수가 추가되었습니다.`);
+            }
+        }
+    };
+
     return (
         <>
             <EmblemModal
@@ -230,7 +381,10 @@ const TeamManagementScreen: React.FC = () => {
             />
             <RosterManagementModal
                 isOpen={isRosterModalOpen}
-                onClose={() => setIsRosterModalOpen(false)}
+                onClose={() => {
+                    setIsRosterModalOpen(false);
+                    setTradeSource(null);
+                }}
                 teamKey={managingRosterTeamKey}
                 teamConfig={managingRosterTeamKey ? configs[managingRosterTeamKey] : null}
                 onTeamNameChange={(newName: string) => {
@@ -238,7 +392,26 @@ const TeamManagementScreen: React.FC = () => {
                         handleConfigChange(managingRosterTeamKey, 'teamName', newName);
                     }
                 }}
+                isTradeMode={isTradeMode}
+                tradeSource={tradeSource}
+                onPlayerClick={handlePlayerClick}
             />
+            {selectingForTeamKey && (
+                <PlayerSelectionModal
+                    isOpen={isPlayerSelectionModalOpen}
+                    onClose={() => {
+                        setIsPlayerSelectionModalOpen(false);
+                        setSelectingForTeamKey(null);
+                    }}
+                    teamKey={selectingForTeamKey}
+                    className={(() => {
+                        const [setId] = selectingForTeamKey.split('___');
+                        const set = teamSets.find(s => s.id === setId);
+                        return set?.className || null;
+                    })()}
+                    onSelect={handleSelectPlayer}
+                />
+            )}
             <ConfirmationModal
                 isOpen={isNewSetModalOpen}
                 onClose={() => setIsNewSetModalOpen(false)}
@@ -279,7 +452,71 @@ const TeamManagementScreen: React.FC = () => {
                     <button onClick={() => setIsNewSetModalOpen(true)} className="bg-sky-600 hover:bg-sky-500 text-white font-bold py-3 px-6 rounded-lg text-base min-h-[44px] w-full lg:w-auto">
                         {t('team_management_new_set_button')}
                     </button>
-                    <button onClick={handleSave} className="bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-6 rounded-lg text-base min-h-[44px] w-full lg:w-auto">{t('team_management_save_all')}</button>
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={() => {
+                                setIsTradeMode(!isTradeMode);
+                                setTradeSource(null);
+                            }}
+                            className={`font-bold py-3 px-6 rounded-lg text-base min-h-[44px] transition-all ${
+                                isTradeMode 
+                                    ? 'bg-green-600 hover:bg-green-500 text-white animate-pulse' 
+                                    : 'bg-slate-600 hover:bg-slate-500 text-white'
+                            }`}
+                        >
+                            {isTradeMode ? '✅ 교체 중...' : '🔄 트레이드 모드'}
+                        </button>
+                        <button onClick={handleSave} className="bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-6 rounded-lg text-base min-h-[44px] w-full lg:w-auto">{t('team_management_save_all')}</button>
+                    </div>
+                </div>
+                
+                {isTradeMode && (
+                    <div className="bg-blue-900/50 border border-blue-500 rounded-lg p-4 text-blue-200">
+                        <p className="font-semibold">
+                            {tradeSource 
+                                ? `선택됨: ${tradeSource.player.originalName} → 교체할 선수를 클릭하세요`
+                                : '교체할 첫 번째 선수를 클릭하세요'}
+                        </p>
+                    </div>
+                )}
+
+                {/* 필터 섹션 */}
+                <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                    <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 flex-1">
+                            <label className="font-semibold text-sm text-slate-300 whitespace-nowrap">{t('player_input_class_select_label')}</label>
+                            <select 
+                                value={selectedClassFilter}
+                                onChange={(e) => setSelectedClassFilter(e.target.value)}
+                                className="w-full sm:w-auto bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 min-h-[44px]"
+                            >
+                                <option value="all">{t('player_input_class_all')}</option>
+                                {availableClasses.map(className => (
+                                    <option key={className} value={className}>{className}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                            <label className="font-semibold text-sm text-slate-300 whitespace-nowrap">{t('record_all_formats')}</label>
+                            <div className="flex gap-1 flex-wrap">
+                                <button 
+                                    onClick={() => setSelectedFormatFilter('all')} 
+                                    className={`px-3 py-2 text-xs rounded transition-colors min-h-[44px] ${selectedFormatFilter === 'all' ? 'bg-[#00A3FF] text-white font-bold' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}
+                                >
+                                    {t('record_all_formats')}
+                                </button>
+                                {availableFormats.map(format => (
+                                    <button 
+                                        key={format}
+                                        onClick={() => setSelectedFormatFilter(String(format))} 
+                                        className={`px-3 py-2 text-xs rounded transition-colors min-h-[44px] ${selectedFormatFilter === String(format) ? 'bg-[#00A3FF] text-white font-bold' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}
+                                    >
+                                        {t('record_team_format', { count: format })}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 {groupedTeams.length > 0 ? (
@@ -316,6 +553,12 @@ const TeamManagementScreen: React.FC = () => {
                                                          <UsersIcon className="w-4 h-4" />
                                                          {t('team_management_roster_button')}
                                                      </button>
+                                                     <button 
+                                                        onClick={() => handleOpenPlayerSelection(team.key)} 
+                                                        className="flex-1 flex items-center justify-center gap-1 text-xs bg-blue-600 hover:bg-blue-500 text-white font-semibold py-1 px-2 rounded-md"
+                                                    >
+                                                        + {t('team_management_add_from_roster')}
+                                                    </button>
                                                     <button onClick={() => handleDeleteClick(team.key)} className="flex-shrink-0 flex items-center justify-center gap-1 text-xs bg-red-800 hover:bg-red-700 text-white font-semibold p-1 rounded-md">
                                                         <TrashIcon className="w-4 h-4" />
                                                     </button>

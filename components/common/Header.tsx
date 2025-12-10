@@ -12,7 +12,7 @@ interface HeaderProps {
     brand?: string;
 }
 
-const Header: React.FC<HeaderProps> = ({ title, showBackButton, onBack, showLanguageToggle, subtitle, brand = "JCT" }) => {
+const Header: React.FC<HeaderProps> = ({ title, showBackButton, onBack, showLanguageToggle, subtitle, brand = "J-IVE" }) => {
     const { t } = useTranslation();
     return (
         <header className="text-center mb-8 relative flex items-center justify-center no-print">
@@ -34,7 +34,7 @@ const Header: React.FC<HeaderProps> = ({ title, showBackButton, onBack, showLang
                         {subtitle}
                     </p>
                 )}
-                <p className="text-slate-500 mt-1 text-xs tracking-[0.3em] font-light opacity-80">By JCT</p>
+                <p className="text-slate-500 mt-1 text-xs tracking-[0.3em] font-light opacity-80">By J-IVE</p>
             </div>
             <div className="absolute right-0 top-0 flex items-center gap-4">
                 {showLanguageToggle && (

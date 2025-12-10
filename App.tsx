@@ -59,44 +59,64 @@ const AppContent = () => {
     const [currentClass, setCurrentClass] = useState<string>('all');
     
     const handleStartBuilding = useCallback((newPlayers: Omit<Player, 'id' | 'anonymousName' | 'isCaptain' | 'totalScore'>[], selectedClass: string) => {
+        // 각 종목별로 유효한 데이터(0보다 큰 값)만으로 min/max 계산
         const statsRange: Record<keyof Stats, { min: number, max: number }> = STAT_KEYS.reduce((acc, key) => {
             acc[key] = { min: Infinity, max: -Infinity };
             return acc;
         }, {} as Record<keyof Stats, { min: number, max: number }>);
 
+        // 유효한 데이터만으로 범위 계산
         newPlayers.forEach(p => {
             STAT_KEYS.forEach(key => {
-                statsRange[key].min = Math.min(statsRange[key].min, p.stats[key]);
-                statsRange[key].max = Math.max(statsRange[key].max, p.stats[key]);
+                const value = p.stats[key];
+                // null이 아니고 0보다 큰 값만 고려
+                if (value != null && value > 0) {
+                    statsRange[key].min = Math.min(statsRange[key].min, value);
+                    statsRange[key].max = Math.max(statsRange[key].max, value);
+                }
             });
         });
 
+        // Min-Max Normalization: 반 1등 = 100점, 반 꼴찌 = 30점
         const playersWithScores = newPlayers.map(p => {
             let totalNormalizedScore = 0;
+            let validStatCount = 0;
             const normalizedStats: Partial<Stats> = {};
+            
             STAT_KEYS.forEach(key => {
                 const { min, max } = statsRange[key];
                 const value = p.stats[key];
-                let normalizedValue = 0;
+                
+                // 기록이 없는 경우(null 또는 0)는 0점 부여
+                if (value == null || value <= 0) {
+                    normalizedStats[key] = 0;
+                    return;
+                }
 
+                // 유효한 데이터가 없는 경우 0점
+                if (min === Infinity || max === -Infinity || min === max) {
+                    normalizedStats[key] = 0;
+                    return;
+                }
+
+                let normalizedValue = 0;
+                
                 if (key === 'fiftyMeterDash') {
-                    if (value > 0) {
-                        normalizedValue = (min / value) * 100;
-                    } else {
-                        normalizedValue = 0;
-                    }
+                    // 50m 달리기는 기록이 작을수록 점수가 높아야 함 (역방향)
+                    // min(최고 기록) = 100점, max(최저 기록) = 30점
+                    normalizedValue = 30 + ((max - value) / (max - min)) * 70;
                 } else {
-                    if (max > 0) {
-                        normalizedValue = (value / max) * 100;
-                    } else {
-                        normalizedValue = 0;
-                    }
+                    // 일반 종목: max(최고 기록) = 100점, min(최저 기록) = 30점
+                    normalizedValue = 30 + ((value - min) / (max - min)) * 70;
                 }
                 
                 normalizedStats[key] = Math.max(0, Math.min(normalizedValue, 100));
                 totalNormalizedScore += normalizedStats[key]!;
+                validStatCount++;
             });
-            const totalScore = totalNormalizedScore / STAT_KEYS.length;
+            
+            // 유효한 통계가 있는 경우에만 평균 계산
+            const totalScore = validStatCount > 0 ? totalNormalizedScore / validStatCount : 0;
             return { ...p, stats: normalizedStats as Stats, totalScore };
         });
 
@@ -323,7 +343,7 @@ const AppContent = () => {
                 {renderView()}
             </main>
             <footer className="text-center mt-12 text-xs text-slate-500 no-print">
-                <p>&copy; 2025 <span className="font-semibold text-[#00A3FF]">JCT Labs</span>. All Rights Reserved. | Ver 3.0</p>
+                <p>&copy; 2025 <span className="font-semibold text-[#00A3FF]">J-IVE Labs</span>. All Rights Reserved. | Ver 3.0</p>
             </footer>
             {toast.message && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
             <ConfirmationModal

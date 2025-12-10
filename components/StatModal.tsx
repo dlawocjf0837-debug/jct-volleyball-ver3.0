@@ -1,25 +1,34 @@
 import React, { useMemo } from 'react';
-import { Player, STAT_KEYS, STAT_NAME_KEYS } from '../types';
+import { Player, STAT_KEYS } from '../types';
 import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Tooltip, ResponsiveContainer } from 'recharts';
 import { useTranslation } from '../hooks/useTranslation';
+import { getStatLabel } from '../utils/labelUtils';
 
 interface StatModalProps {
     player: Player;
     onClose: () => void;
     showRealNames: boolean;
+    allPlayers?: Player[]; // 반 전체 데이터 (스마트 축 필터링용)
 }
 
-const StatModal: React.FC<StatModalProps> = ({ player, onClose, showRealNames }) => {
+const StatModal: React.FC<StatModalProps> = ({ player, onClose, showRealNames, allPlayers = [] }) => {
     const { t } = useTranslation();
-    const chartData = useMemo(() => 
-        STAT_KEYS.map(key => ({
-            subject: t(STAT_NAME_KEYS[key]),
-            value: player.stats[key],
-            fullMark: 100,
-        }))
-    , [player.stats, t]);
-
-    const hasNoData = useMemo(() => Object.values(player.stats).every(s => s === 0), [player.stats]);
+    
+    // 데이터 안에 있는 라벨을 꺼내 씀 (없으면 기본값)
+    const skill1Label = player.customLabel1 || "언더핸드";
+    const skill2Label = player.customLabel2 || "서브";
+    
+    // 필터링 제거: 무조건 6개 축을 하드코딩으로 박아넣음
+    const chartData = useMemo(() => {
+        return [
+            { subject: getStatLabel('height', t), value: player.stats.height || 0, fullMark: 100 },
+            { subject: getStatLabel('shuttleRun', t), value: player.stats.shuttleRun || 0, fullMark: 100 },
+            { subject: getStatLabel('flexibility', t), value: player.stats.flexibility || 0, fullMark: 100 },
+            { subject: getStatLabel('fiftyMeterDash', t), value: player.stats.fiftyMeterDash || 0, fullMark: 100 },
+            { subject: skill1Label, value: player.stats.underhand || 0, fullMark: 100 }, // 5번째 축
+            { subject: skill2Label, value: player.stats.serve || 0, fullMark: 100 }, // 6번째 축 (무조건 포함)
+        ];
+    }, [player.stats, t, skill1Label, skill2Label]);
 
     return (
         <div 
@@ -40,35 +49,27 @@ const StatModal: React.FC<StatModalProps> = ({ player, onClose, showRealNames })
                     <button onClick={onClose} className="text-2xl font-bold text-slate-500 hover:text-white">&times;</button>
                 </div>
                 
-                {hasNoData ? (
-                    <div className="h-[300px] flex items-center justify-center text-center text-slate-500">
-                        <p>{t('stat_modal_no_data')}</p>
-                    </div>
-                ) : (
-                    <>
-                        <div style={{ width: '100%', height: 300 }}>
-                            <ResponsiveContainer>
-                                <RadarChart cx="50%" cy="50%" outerRadius="80%" data={chartData}>
-                                    <PolarGrid stroke="#475569" />
-                                    <PolarAngleAxis dataKey="subject" tick={{ fill: '#cbd5e1' }} />
-                                    <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="#475569" />
-                                    <Radar name={player.anonymousName} dataKey="value" stroke="#00A3FF" fill="#00A3FF" fillOpacity={0.6} />
-                                    <Tooltip
-                                        contentStyle={{
-                                            backgroundColor: 'rgba(10, 15, 31, 0.9)',
-                                            borderColor: '#475569',
-                                            borderRadius: '0.5rem'
-                                        }}
-                                        labelStyle={{ color: '#f1f5f9' }}
-                                    />
-                                </RadarChart>
-                            </ResponsiveContainer>
-                        </div>
-                        <p className="text-xs text-slate-500 text-center mt-4">
-                            * 100점은 현재 입력된 학생들 중 가장 높은 수치를 기준으로 한 상대적 점수입니다.
-                        </p>
-                    </>
-                )}
+                <div style={{ width: '100%', height: 300 }}>
+                    <ResponsiveContainer>
+                        <RadarChart cx="50%" cy="50%" outerRadius="80%" data={chartData}>
+                            <PolarGrid stroke="#475569" />
+                            <PolarAngleAxis dataKey="subject" tick={{ fill: '#cbd5e1' }} />
+                            <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="#475569" />
+                            <Radar name={player.anonymousName} dataKey="value" stroke="#00A3FF" fill="#00A3FF" fillOpacity={0.6} />
+                            <Tooltip
+                                contentStyle={{
+                                    backgroundColor: 'rgba(10, 15, 31, 0.9)',
+                                    borderColor: '#475569',
+                                    borderRadius: '0.5rem'
+                                }}
+                                labelStyle={{ color: '#f1f5f9' }}
+                            />
+                        </RadarChart>
+                    </ResponsiveContainer>
+                </div>
+                <p className="text-xs text-slate-500 text-center mt-4">
+                    * 100점은 현재 입력된 학생들 중 가장 높은 수치를 기준으로 한 상대적 점수입니다.
+                </p>
             </div>
         </div>
     );

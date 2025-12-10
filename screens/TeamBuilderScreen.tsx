@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Player, Team, TeamId, STAT_KEYS, STAT_NAME_KEYS, Stats } from '../types';
+import { Player, Team, TeamId, STAT_KEYS, Stats } from '../types';
 import PlayerCard from '../components/PlayerCard';
 import TeamPanel from '../components/TeamPanel';
 import StatModal from '../components/StatModal';
@@ -8,6 +8,7 @@ import FinalTeamsScreen from '../components/FinalTeamsScreen';
 import { UsersIcon, EyeIcon, EyeSlashIcon, ScaleIcon, UndoIcon } from '../components/icons';
 import { useData } from '../contexts/DataContext';
 import { useTranslation } from '../hooks/useTranslation';
+import { getStatLabel } from '../utils/labelUtils';
 
 interface TeamBuilderScreenProps {
     initialPlayers: Player[];
@@ -440,7 +441,7 @@ const TeamBuilderScreen: React.FC<TeamBuilderScreenProps> = ({ initialPlayers, o
             >
                 <option value="totalScore">{t('team_builder_total_score')}</option>
                 {STAT_KEYS.map(key => (
-                    <option key={key} value={key}>{t(STAT_NAME_KEYS[key])}</option>
+                    <option key={key} value={key}>{getStatLabel(key, t)}</option>
                 ))}
             </select>
         </div>
@@ -519,13 +520,14 @@ const TeamBuilderScreen: React.FC<TeamBuilderScreenProps> = ({ initialPlayers, o
                         ))}
                     </div>
                 </div>
-                 {selectedPlayer && <StatModal player={selectedPlayer} onClose={() => setSelectedPlayer(null)} showRealNames={showRealNames} />}
+                 {selectedPlayer && <StatModal player={selectedPlayer} onClose={() => setSelectedPlayer(null)} showRealNames={showRealNames} allPlayers={initialPlayers} />}
                  {isComparisonModalOpen && comparisonPlayerIds.size === 2 && (
                     <ComparisonModal
                         player1={players[Array.from(comparisonPlayerIds)[0]]}
                         player2={players[Array.from(comparisonPlayerIds)[1]]}
                         onClose={() => { setIsComparisonModalOpen(false); }}
                         showRealNames={showRealNames}
+                        allPlayers={initialPlayers}
                     />
                 )}
             </div>
@@ -586,7 +588,7 @@ const TeamBuilderScreen: React.FC<TeamBuilderScreenProps> = ({ initialPlayers, o
                                     const leaders = getStatLeaders(key as keyof Stats | 'total');
                                     return (
                                         <tr key={key} className="border-t border-slate-700">
-                                            <td className="p-1 sm:p-2 font-semibold text-slate-400 whitespace-nowrap">{key === 'total' ? t('team_builder_total_score') : t(STAT_NAME_KEYS[key as keyof Stats])}</td>
+                                            <td className="p-1 sm:p-2 font-semibold text-slate-400 whitespace-nowrap">{key === 'total' ? t('team_builder_total_score') : getStatLabel(key as keyof Stats, t)}</td>
                                             {teams.map(team => (
                                                 <td key={team.id} className={`p-1 sm:p-2 font-bold whitespace-nowrap ${leaders.includes(team.id) ? 'text-[#00A3FF]' : ''}`}>
                                                     {(key === 'total' ? teamAverages[team.id]?.total : teamAverages[team.id]?.stats[key as keyof Stats])?.toFixed(1) || '0.0'}
@@ -656,13 +658,14 @@ const TeamBuilderScreen: React.FC<TeamBuilderScreenProps> = ({ initialPlayers, o
                     </TeamPanel>
                 ))}
             </div>
-            {selectedPlayer && <StatModal player={selectedPlayer} onClose={() => setSelectedPlayer(null)} showRealNames={showRealNames} />}
+            {selectedPlayer && <StatModal player={selectedPlayer} onClose={() => setSelectedPlayer(null)} showRealNames={showRealNames} allPlayers={initialPlayers} />}
             {isComparisonModalOpen && comparisonPlayerIds.size === 2 && (
                 <ComparisonModal
                     player1={players[Array.from(comparisonPlayerIds)[0]]}
                     player2={players[Array.from(comparisonPlayerIds)[1]]}
                     onClose={() => { setIsComparisonModalOpen(false); }}
                     showRealNames={showRealNames}
+                    allPlayers={initialPlayers}
                 />
             )}
         </div>

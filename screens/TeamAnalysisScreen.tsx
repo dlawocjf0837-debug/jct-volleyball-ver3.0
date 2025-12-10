@@ -60,6 +60,7 @@ const TeamComparisonRadarModal: React.FC<TeamComparisonRadarModalProps> = ({ isO
     const chartData = useMemo(() => {
         if (!team1 || !team2) return [];
 
+        // 모든 항목을 항상 표시, 점수가 0이거나 없으면 0으로 설정
         const maxValues = radarMetrics.reduce((acc, metric) => {
             const maxValue = Math.max(...allTeamsData.map(t => Number((t as any)[metric.key]) || 0), 1);
             (acc as any)[metric.key] = Math.ceil(maxValue); // Round up for cleaner axis
@@ -68,8 +69,8 @@ const TeamComparisonRadarModal: React.FC<TeamComparisonRadarModalProps> = ({ isO
 
         return radarMetrics.map(metric => ({
             subject: metric.label,
-            [team1.teamName]: team1[metric.key] || 0,
-            [team2.teamName]: team2[metric.key] || 0,
+            [team1.teamName]: Number(team1[metric.key]) || 0,
+            [team2.teamName]: Number(team2[metric.key]) || 0,
             fullMark: (maxValues as any)[metric.key],
         }));
     }, [team1, team2, allTeamsData]);

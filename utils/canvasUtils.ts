@@ -102,7 +102,7 @@ export const generateMatchResultImage = async (match: EnrichedMatch, userEmblems
     
     ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
     ctx.font = '16px sans-serif';
-    ctx.fillText('© 2025 JCT', 600, 610);
+    ctx.fillText('© 2025 J-IVE', 600, 610);
     
     // --- Load Images ---
     const teamA = match.teamA;
