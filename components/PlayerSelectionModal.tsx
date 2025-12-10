@@ -57,18 +57,19 @@ const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({ isOpen, onC
         }).sort((a, b) => a.originalName.localeCompare(b.originalName));
     }, [allPlayers, searchTerm, currentTeamPlayerIds]);
 
-    // 선수가 어느 팀에 속해있는지 찾기
-    const getPlayerTeam = (playerId: string): string | null => {
-        if (!className) return null;
+    // 선수가 어느 팀에 속해있는지 찾기 (여러 팀 가능)
+    const getPlayerTeams = (playerId: string): string[] => {
+        if (!className) return [];
         const set = teamSets.find(s => s.className === className);
-        if (!set) return null;
+        if (!set) return [];
         
+        const teams: string[] = [];
         for (const team of set.teams) {
             if (team.playerIds.includes(playerId)) {
-                return team.teamName;
+                teams.push(team.teamName);
             }
         }
-        return null;
+        return teams;
     };
 
     if (!isOpen) return null;
@@ -105,20 +106,21 @@ const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({ isOpen, onC
                     ) : (
                         <ul className="space-y-2">
                             {filteredPlayers.map(player => {
-                                const assignedTeam = getPlayerTeam(player.id);
-                                const isAssigned = assignedTeam !== null;
+                                const assignedTeams = getPlayerTeams(player.id);
+                                const isInCurrentTeam = currentTeamPlayerIds.has(player.id);
+                                const isInOtherTeams = assignedTeams.length > 0 && !isInCurrentTeam;
                                 
                                 return (
                                     <li 
                                         key={player.id} 
                                         onClick={() => {
-                                            if (!isAssigned) {
+                                            if (!isInCurrentTeam) {
                                                 onSelect(player.id);
                                                 onClose();
                                             }
                                         }}
                                         className={`flex items-center justify-between bg-slate-800 p-3 rounded-md transition-colors ${
-                                            isAssigned 
+                                            isInCurrentTeam 
                                                 ? 'opacity-50 cursor-not-allowed' 
                                                 : 'cursor-pointer hover:bg-slate-700'
                                         }`}
@@ -129,11 +131,18 @@ const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({ isOpen, onC
                                                 <span className="text-xs text-slate-400">{player.class}반</span>
                                             )}
                                         </div>
-                                        {isAssigned && (
-                                            <span className="text-xs text-yellow-400 bg-yellow-900/50 px-2 py-1 rounded-md">
-                                                {assignedTeam} {t('player_selection_assigned')}
-                                            </span>
-                                        )}
+                                        <div className="flex items-center gap-2">
+                                            {isInOtherTeams && (
+                                                <span className="text-xs text-blue-400 bg-blue-900/50 px-2 py-1 rounded-md">
+                                                    ({assignedTeams.join(', ')} {t('player_selection_included')})
+                                                </span>
+                                            )}
+                                            {isInCurrentTeam && (
+                                                <span className="text-xs text-yellow-400 bg-yellow-900/50 px-2 py-1 rounded-md">
+                                                    {t('player_selection_already_in_team')}
+                                                </span>
+                                            )}
+                                        </div>
                                     </li>
                                 );
                             })}

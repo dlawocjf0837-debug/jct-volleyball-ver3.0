@@ -518,6 +518,8 @@ export const translations: Record<string, Record<Language, string>> = {
   player_selection_no_results: { ko: "검색 결과가 없습니다.", id: "Tidak ada hasil." },
   player_selection_no_players: { ko: "선택 가능한 학생이 없습니다.", id: "Tidak ada siswa tersedia." },
   player_selection_assigned: { ko: "소속됨", id: "Ditugaskan" },
+  player_selection_included: { ko: "포함됨", id: "Termasuk" },
+  player_selection_already_in_team: { ko: "이미 이 팀에 있음", id: "Sudah di tim ini" },
   
   // Roster Management & Bulk Import
   roster_title: { ko: "{teamName} 명단 관리", id: "Manajemen Roster {teamName}" },

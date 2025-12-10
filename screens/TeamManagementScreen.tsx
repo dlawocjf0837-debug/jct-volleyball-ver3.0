@@ -322,7 +322,7 @@ const TeamManagementScreen: React.FC = () => {
         setIsPlayerSelectionModalOpen(true);
     };
 
-    // 명단에서 선수 선택
+    // 명단에서 선수 선택 (중복 등록 허용)
     const handleSelectPlayer = async (playerId: string) => {
         if (!selectingForTeamKey) return;
         
@@ -333,26 +333,36 @@ const TeamManagementScreen: React.FC = () => {
         const player = set.players[playerId];
         if (!player) return;
         
-        // 현재 다른 팀에 속해있는지 확인하고 제거
-        for (const team of set.teams) {
-            const teamKey = `${setId}___${team.teamName}`;
-            if (team.playerIds.includes(playerId) && teamKey !== selectingForTeamKey) {
-                // 다른 팀에서 제거
-                await removePlayerFromTeam(teamKey, playerId);
-            }
+        // 타겟 팀 찾기
+        const targetTeam = set.teams.find(t => `${setId}___${t.teamName}` === selectingForTeamKey);
+        if (!targetTeam) return;
+        
+        // 이미 해당 팀에 있으면 추가하지 않음
+        if (targetTeam.playerIds.includes(playerId)) {
+            return;
         }
         
-        // 새 팀에 추가 (이미 팀에 있으면 추가하지 않음)
-        const targetTeam = set.teams.find(t => `${setId}___${t.teamName}` === selectingForTeamKey);
-        if (targetTeam && !targetTeam.playerIds.includes(playerId)) {
-            const newTeamSets = JSON.parse(JSON.stringify(teamSets));
-            const setIndex = newTeamSets.findIndex((s: TeamSet) => s.id === setId);
-            const teamIndex = newTeamSets[setIndex].teams.findIndex((t: SavedTeamInfo) => t.teamName === targetTeam.teamName);
+        // 중복 등록 허용: 다른 팀에서 제거하지 않고 그대로 추가
+        const newTeamSets = JSON.parse(JSON.stringify(teamSets));
+        const setIndex = newTeamSets.findIndex((s: TeamSet) => s.id === setId);
+        const teamIndex = newTeamSets[setIndex].teams.findIndex((t: SavedTeamInfo) => t.teamName === targetTeam.teamName);
+        
+        if (setIndex !== -1 && teamIndex !== -1) {
+            newTeamSets[setIndex].teams[teamIndex].playerIds.push(playerId);
             
-            if (setIndex !== -1 && teamIndex !== -1) {
-                newTeamSets[setIndex].teams[teamIndex].playerIds.push(playerId);
-                await saveTeamSets(newTeamSets, `'${player.originalName}' 선수가 추가되었습니다.`);
+            // 다른 팀에도 속해있는지 확인하여 메시지 생성
+            const otherTeams: string[] = [];
+            for (const team of set.teams) {
+                if (team.teamName !== targetTeam.teamName && team.playerIds.includes(playerId)) {
+                    otherTeams.push(team.teamName);
+                }
             }
+            
+            const message = otherTeams.length > 0 
+                ? `'${player.originalName}' 선수가 추가되었습니다. (${otherTeams.join(', ')}에도 소속됨)`
+                : `'${player.originalName}' 선수가 추가되었습니다.`;
+            
+            await saveTeamSets(newTeamSets, message);
         }
     };
 
@@ -383,7 +393,7 @@ const TeamManagementScreen: React.FC = () => {
                 isOpen={isRosterModalOpen}
                 onClose={() => {
                     setIsRosterModalOpen(false);
-                    setTradeSource(null);
+                    // 트레이드 모드 상태는 유지 (모달을 닫아도 tradeSource 유지)
                 }}
                 teamKey={managingRosterTeamKey}
                 teamConfig={managingRosterTeamKey ? configs[managingRosterTeamKey] : null}
