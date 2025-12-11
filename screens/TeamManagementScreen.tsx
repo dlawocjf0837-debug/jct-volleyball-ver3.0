@@ -58,7 +58,7 @@ const convertGithubUrl = (url: string | undefined): string | undefined => {
 };
 
 const TeamManagementScreen: React.FC = () => {
-    const { teamSets, saveTeamSets, deleteTeam, createTeamSet, addTeamToSet, teamSetsMap, removePlayerFromTeam, addPlayerToTeam } = useData();
+    const { teamSets, saveTeamSets, deleteTeam, createTeamSet, addTeamToSet, teamSetsMap, removePlayerFromTeam, addPlayerToTeam, setTeamCaptain } = useData();
     const { t } = useTranslation();
     const [configs, setConfigs] = useState<Record<string, Config>>({});
     const [isEmblemModalOpen, setIsEmblemModalOpen] = useState(false);
@@ -373,6 +373,23 @@ const TeamManagementScreen: React.FC = () => {
         }
     };
 
+    // 주장 설정 핸들러
+    const handleSetCaptain = async (playerId: string) => {
+        if (!managingRosterTeamKey) return;
+        
+        const [setId] = managingRosterTeamKey.split('___');
+        const set = teamSets.find(s => s.id === setId);
+        if (!set) return;
+        
+        const player = set.players[playerId];
+        if (!player) return;
+        
+        // 확인 다이얼로그
+        if (window.confirm(`'${player.originalName}' 학생을 주장으로 임명하시겠습니까?`)) {
+            await setTeamCaptain(managingRosterTeamKey, playerId);
+        }
+    };
+
     return (
         <>
             <EmblemModal
@@ -412,6 +429,7 @@ const TeamManagementScreen: React.FC = () => {
                 isTradeMode={isTradeMode}
                 tradeSource={tradeSource}
                 onPlayerClick={handlePlayerClick}
+                onSetCaptain={handleSetCaptain}
             />
             {selectingForTeamKey && (
                 <PlayerSelectionModal

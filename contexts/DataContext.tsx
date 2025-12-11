@@ -1237,30 +1237,60 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
             return;
         }
 
-        const captainName = t('referee_captain_label');
-        const newCaptain: Player = {
-            id: `player_${Date.now()}`,
-            originalName: captainName,
-            anonymousName: captainName,
-            class: '??', studentNumber: '01', gender: '기타',
-            stats: { height: 0, shuttleRun: 0, flexibility: 0, fiftyMeterDash: 0, underhand: 0, serve: 0 },
-            isCaptain: true,
-            totalScore: 0,
-        };
-
+        // 주장 없이 빈 팀 생성 (사용자가 나중에 주장을 직접 임명하도록)
         const newTeam: SavedTeamInfo = {
             teamName: finalTeamName,
-            captainId: newCaptain.id,
-            playerIds: [newCaptain.id],
+            captainId: '', // 주장 없음
+            playerIds: [], // 빈 팀
             color: TEAM_COLORS_PALETTE[set.teams.length % TEAM_COLORS_PALETTE.length],
         };
 
-        set.players[newCaptain.id] = newCaptain;
         set.teams.push(newTeam);
         set.teamCount = set.teams.length;
 
         await saveTeamSets(newTeamSets);
         showToast('toast_new_team_success', 'success', { teamName: finalTeamName, setName: set.className });
+    };
+
+    const setTeamCaptain = async (teamKey: string, playerId: string) => {
+        const [setId, teamName] = teamKey.split('___');
+        if (!setId || !teamName) {
+            showToast('잘못된 팀 정보입니다.', 'error');
+            return;
+        }
+
+        const newTeamSets = JSON.parse(JSON.stringify(teamSets));
+        const setIndex = newTeamSets.findIndex((s: TeamSet) => s.id === setId);
+        if (setIndex === -1) {
+            showToast('팀 세트를 찾을 수 없습니다.', 'error');
+            return;
+        }
+
+        const teamIndex = newTeamSets[setIndex].teams.findIndex((t: SavedTeamInfo) => t.teamName === teamName);
+        if (teamIndex === -1) {
+            showToast('팀을 찾을 수 없습니다.', 'error');
+            return;
+        }
+
+        const team = newTeamSets[setIndex].teams[teamIndex];
+        if (!team.playerIds.includes(playerId)) {
+            showToast('해당 선수가 이 팀에 속해있지 않습니다.', 'error');
+            return;
+        }
+
+        // 기존 주장의 isCaptain 플래그 제거
+        if (team.captainId && newTeamSets[setIndex].players[team.captainId]) {
+            newTeamSets[setIndex].players[team.captainId].isCaptain = false;
+        }
+
+        // 새 주장 설정
+        team.captainId = playerId;
+        if (newTeamSets[setIndex].players[playerId]) {
+            newTeamSets[setIndex].players[playerId].isCaptain = true;
+        }
+
+        const playerName = newTeamSets[setIndex].players[playerId]?.originalName || '선수';
+        await saveTeamSets(newTeamSets, `'${playerName}' 학생이 주장으로 임명되었습니다.`);
     };
 
 
@@ -1755,6 +1785,7 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
         bulkAddPlayersToTeam,
         createTeamSet,
         addTeamToSet,
+        setTeamCaptain,
         reloadData: loadAllData,
         exportData,
         saveImportedData,

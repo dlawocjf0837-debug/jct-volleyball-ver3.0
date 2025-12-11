@@ -524,6 +524,8 @@ export const translations: Record<string, Record<Language, string>> = {
   // Roster Management & Bulk Import
   roster_title: { ko: "{teamName} 명단 관리", id: "Manajemen Roster {teamName}" },
   roster_delete_player_aria: { ko: "{playerName} 삭제", id: "Hapus {playerName}" },
+  roster_captain_current: { ko: "현재 주장", id: "Kapten saat ini" },
+  roster_captain_set: { ko: "{playerName} 학생을 주장으로 임명", id: "Tetapkan {playerName} sebagai kapten" },
   roster_add_new_player: { ko: "새 선수 추가", id: "Tambah Pemain Baru" },
   roster_team_suffix: { ko: " 팀", id: " Tim" },
   roster_bulk_import_button: { ko: "명단 붙여넣기", id: "Tempel Roster" },

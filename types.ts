@@ -376,6 +376,7 @@ export interface DataContextType {
     bulkAddPlayersToTeam: (teamKey: string, playerNames: string[], overwrite: boolean) => Promise<void>;
     createTeamSet: (name: string) => Promise<void>;
     addTeamToSet: (setId: string, teamName: string) => Promise<void>;
+    setTeamCaptain: (teamKey: string, playerId: string) => Promise<void>;
     reloadData: () => void;
     exportData: () => void;
     saveImportedData: (data: any) => void;

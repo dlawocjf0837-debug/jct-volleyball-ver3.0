@@ -13,9 +13,10 @@ interface RosterManagementModalProps {
     isTradeMode?: boolean;
     tradeSource?: { player: Player; teamKey: string } | null;
     onPlayerClick?: (player: Player, teamKey: string) => void;
+    onSetCaptain?: (playerId: string) => void;
 }
 
-const RosterManagementModal: React.FC<RosterManagementModalProps> = ({ isOpen, onClose, teamKey, teamConfig, onTeamNameChange, isTradeMode = false, tradeSource = null, onPlayerClick }) => {
+const RosterManagementModal: React.FC<RosterManagementModalProps> = ({ isOpen, onClose, teamKey, teamConfig, onTeamNameChange, isTradeMode = false, tradeSource = null, onPlayerClick, onSetCaptain }) => {
     const { teamSetsMap, addPlayerToTeam, removePlayerFromTeam, bulkAddPlayersToTeam } = useData();
     const { t } = useTranslation();
     const [newPlayerName, setNewPlayerName] = useState('');
@@ -148,8 +149,24 @@ const RosterManagementModal: React.FC<RosterManagementModalProps> = ({ isOpen, o
                                         }
                                     }}
                                 >
-                                    <div className="flex items-center gap-2">
-                                        {player.id === captainId && <CrownIcon className="w-5 h-5 text-yellow-400" />}
+                                    <div className="flex items-center gap-2 flex-grow">
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (onSetCaptain) {
+                                                    onSetCaptain(player.id);
+                                                }
+                                            }}
+                                            className={`flex-shrink-0 transition-all hover:scale-110 ${
+                                                player.id === captainId 
+                                                    ? 'text-yellow-400' 
+                                                    : 'text-slate-500 hover:text-amber-400'
+                                            }`}
+                                            title={player.id === captainId ? t('roster_captain_current') : t('roster_captain_set')}
+                                            aria-label={player.id === captainId ? t('roster_captain_current') : t('roster_captain_set', { playerName: player.originalName })}
+                                        >
+                                            <CrownIcon className="w-5 h-5" />
+                                        </button>
                                         <span className="font-semibold text-slate-200">{player.originalName}</span>
                                         {isSelected && <span className="text-xs text-green-400 font-bold">✓ 선택됨</span>}
                                     </div>
