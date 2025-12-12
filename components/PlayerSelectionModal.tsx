@@ -36,32 +36,48 @@ const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
     const [searchTerm, setSearchTerm] = useState('');
 
     // ScoreboardScreen용: players prop이 있으면 사용
-    // TeamManagementScreen용: teamKey와 className으로 선수 목록 생성
+    // TeamManagementScreen용: selectedClass의 전체 학생 리스트 수집 (모든 TeamSet에서)
     const allPlayers = useMemo(() => {
         // ScoreboardScreen 케이스
         if (playersProp) {
             return Object.values(playersProp).filter((p): p is Player => !!p);
         }
         
-        // TeamManagementScreen 케이스
+        // TeamManagementScreen 케이스: selectedClass의 전체 학생 리스트 수집
+        // 같은 className을 가진 모든 TeamSet에서 선수를 수집하여 전체 학생 리스트 구성
+        // 이렇게 하면 제외되었던 학생(결석생)도 포함됨
         if (!className) return [];
         
-        const set = teamSets.find(s => s.className === className);
-        if (!set) return [];
+        // 같은 className을 가진 모든 TeamSet에서 선수 수집
+        const playersMap = new Map<string, Player>();
+        teamSets.forEach(set => {
+            if (set.className === className) {
+                Object.values(set.players).forEach((player: Player) => {
+                    // 중복 제거: 같은 id를 가진 선수는 한 번만 추가
+                    // (여러 TeamSet에 같은 선수가 있을 수 있음)
+                    if (player && !playersMap.has(player.id)) {
+                        playersMap.set(player.id, player);
+                    }
+                });
+            }
+        });
         
-        return Object.values(set.players).filter((p): p is Player => !!p);
+        return Array.from(playersMap.values());
     }, [playersProp, teamSets, className]);
 
     // 이미 다른 팀에 속한 선수 찾기 (TeamManagementScreen용)
+    // 같은 className을 가진 모든 TeamSet의 모든 팀에서 선수 수집
     const assignedPlayers = useMemo(() => {
         if (!className || playersProp) return new Set<string>();
         
-        const set = teamSets.find(s => s.className === className);
-        if (!set) return new Set<string>();
-        
         const assigned = new Set<string>();
-        set.teams.forEach(team => {
-            team.playerIds.forEach(id => assigned.add(id));
+        // 같은 className을 가진 모든 TeamSet에서 선수 수집
+        teamSets.forEach(set => {
+            if (set.className === className) {
+                set.teams.forEach(team => {
+                    team.playerIds.forEach(id => assigned.add(id));
+                });
+            }
         });
         return assigned;
     }, [teamSets, className, playersProp]);
@@ -84,6 +100,8 @@ const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
     };
 
     // 필터링된 선수 목록
+    // TeamManagementScreen용: selectedClass의 전체 학생 중 '현재 편집 중인 팀'에 있는 학생만 제외
+    // 제한 없는 검색: 다른 팀에 있어도 추가 가능 (중복 허용), 제외되었던 학생도 모두 표시
     const filteredPlayers = useMemo(() => {
         let filtered: Player[] = [];
         
@@ -93,11 +111,21 @@ const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
                 return player.originalName.toLowerCase().includes(searchTerm.toLowerCase());
             });
         } else {
-            // TeamManagementScreen: 검색 + 현재 팀 제외
+            // TeamManagementScreen: 검색 + 현재 편집 중인 팀에 있는 학생만 제외
+            // 조건: "우리 반 학생이고, 이 팀에 아직 안 들어왔다면" 무조건 추가 가능
+            // - 다른 팀에 있어도 추가 가능 (중복 허용)
+            // - 제외되었던 학생(결석생)도 모두 표시
+            // - 이름이나 번호로 검색 가능
             filtered = allPlayers.filter(player => {
-                const matchesSearch = player.originalName.toLowerCase().includes(searchTerm.toLowerCase());
-                const isNotInCurrentTeam = !currentTeamPlayerIds.has(player.id);
-                return matchesSearch && isNotInCurrentTeam;
+                const matchesSearch = searchTerm === '' || 
+                    player.originalName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    (player.studentNumber && player.studentNumber.includes(searchTerm));
+                
+                // 현재 편집 중인 팀에 이미 있는 학생만 제외
+                const isInCurrentTeam = currentTeamPlayerIds.has(player.id);
+                
+                // 현재 팀에 없는 학생만 표시 (다른 팀에 있어도 표시됨)
+                return matchesSearch && !isInCurrentTeam;
             });
         }
         
@@ -115,20 +143,24 @@ const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
             const numB = parseInt(b.studentNumber) || 999;
             return numA - numB;
         });
-    }, [allPlayers, searchTerm, currentTeamPlayerIds, playersProp]);
+    }, [allPlayers, searchTerm, currentTeamPlayerIds, assignedPlayers, playersProp]);
 
     // 선수가 어느 팀에 속해있는지 찾기 (여러 팀 가능) - TeamManagementScreen용
+    // 같은 className을 가진 모든 TeamSet에서 확인
     const getPlayerTeams = (playerId: string): string[] => {
         if (playersProp || !className) return [];
-        const set = teamSets.find(s => s.className === className);
-        if (!set) return [];
         
         const teams: string[] = [];
-        for (const team of set.teams) {
-            if (team.playerIds.includes(playerId)) {
-                teams.push(team.teamName);
+        // 같은 className을 가진 모든 TeamSet에서 확인
+        teamSets.forEach(set => {
+            if (set.className === className) {
+                for (const team of set.teams) {
+                    if (team.playerIds.includes(playerId)) {
+                        teams.push(team.teamName);
+                    }
+                }
             }
-        }
+        });
         return teams;
     };
 

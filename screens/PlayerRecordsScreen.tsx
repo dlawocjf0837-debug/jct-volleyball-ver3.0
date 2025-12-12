@@ -69,7 +69,7 @@ const PlayerRecordsScreen: React.FC = () => {
              const pClass = player.class.replace(/[^0-9]/g, '');
              return pClass === selectedClass || player.class === selectedClass;
         });
-    }, [allPlayers, selectedClass, t]);
+    }, [allPlayers, selectedClass]); // t 의존성 제거: 필터링 로직에서 사용하지 않음
     
     // Aggregate stats from all IDs belonging to the same person
     const getAggregatedStats = useCallback((player: Player) => {

@@ -100,12 +100,12 @@ const AppContent = () => {
                 }
 
                 let normalizedValue = 0;
-                
+
                 if (key === 'fiftyMeterDash') {
                     // 50m 달리기는 기록이 작을수록 점수가 높아야 함 (역방향)
                     // min(최고 기록) = 100점, max(최저 기록) = 30점
                     normalizedValue = 30 + ((max - value) / (max - min)) * 70;
-                } else {
+                    } else {
                     // 일반 종목: max(최고 기록) = 100점, min(최저 기록) = 30점
                     normalizedValue = 30 + ((value - min) / (max - min)) * 70;
                 }

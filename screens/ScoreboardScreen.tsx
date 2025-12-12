@@ -98,11 +98,12 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                 return Math.random() * (max - min) + min;
             }
 
-            const interval: any = setInterval(function() {
+            const interval: ReturnType<typeof setInterval> = setInterval(function() {
                 const timeLeft = animationEnd - Date.now();
 
                 if (timeLeft <= 0) {
-                    return clearInterval(interval);
+                    clearInterval(interval);
+                    return;
                 }
 
                 const particleCount = 50 * (timeLeft / duration);
@@ -118,6 +119,11 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                     origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 }
                 });
             }, 250);
+            
+            // Cleanup: 컴포넌트 언마운트 시 interval 정리
+            return () => {
+                clearInterval(interval);
+            };
         } else if (!matchState?.gameOver) {
             confettiFiredRef.current = false;
         }
@@ -140,14 +146,20 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                 onCourtB: matchState.teamB.onCourtPlayerIds || []
             };
             
-            // 점수 변경 또는 선수 교체 감지
+            // 점수 변경 또는 선수 교체 감지 (JSON.stringify 대신 배열 비교로 최적화)
             const scoreChanged = 
                 currentState.scoreA !== prevStateRef.current.scoreA ||
                 currentState.scoreB !== prevStateRef.current.scoreB;
             
+            // 배열 비교 최적화: 길이와 요소 직접 비교
+            const arraysEqual = (a: string[], b: string[]) => {
+                if (a.length !== b.length) return false;
+                return a.every((val, idx) => val === b[idx]);
+            };
+            
             const substitutionOccurred = 
-                JSON.stringify(currentState.onCourtA) !== JSON.stringify(prevStateRef.current.onCourtA) ||
-                JSON.stringify(currentState.onCourtB) !== JSON.stringify(prevStateRef.current.onCourtB);
+                !arraysEqual(currentState.onCourtA, prevStateRef.current.onCourtA) ||
+                !arraysEqual(currentState.onCourtB, prevStateRef.current.onCourtB);
             
             if (scoreChanged || substitutionOccurred) {
                 setShowAutoSaveToast(true);
@@ -209,22 +221,27 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
         }
     }, [matchState?.servingTeam, timerOn, matchTime, matchState?.gameOver, setTimerOn]);
     
+    // Timeout 타이머: timeout 객체가 변경될 때만 재생성되도록 최적화
     useEffect(() => {
         if (!matchState?.timeout) return;
+        
+        // timeout.timeLeft를 의존성에서 제거하여 불필요한 재생성 방지
         const timerId = setInterval(() => {
-            if (matchState?.timeout) {
-                const newTimeLeft = matchState.timeout.timeLeft - 1;
-                if (newTimeLeft >= 0) {
-                    dispatch({ type: 'UPDATE_TIMEOUT_TIMER', timeLeft: newTimeLeft });
-                } else {
-                    dispatch({ type: 'END_TIMEOUT' });
-                    showToast('작전 타임이 종료되었습니다.', 'success');
-                    if (!matchState.gameOver) setTimerOn(true);
-                }
-            }
+            // 최신 matchState를 직접 참조하지 않고, dispatch를 통해 상태 업데이트
+            dispatch({ type: 'UPDATE_TIMEOUT_TIMER', timeLeft: matchState.timeout.timeLeft - 1 });
         }, 1000);
+        
         return () => clearInterval(timerId);
-    }, [matchState?.timeout, dispatch, setTimerOn, matchState?.gameOver, showToast]);
+    }, [matchState?.timeout ? matchState.timeout.timeLeft : null, dispatch]); // timeout 객체 자체가 변경될 때만 재생성
+    
+    // timeout 종료 체크는 별도 effect로 분리
+    useEffect(() => {
+        if (matchState?.timeout && matchState.timeout.timeLeft <= 0) {
+            dispatch({ type: 'END_TIMEOUT' });
+            showToast('작전 타임이 종료되었습니다.', 'success');
+            if (!matchState.gameOver) setTimerOn(true);
+        }
+    }, [matchState?.timeout?.timeLeft, matchState?.gameOver, dispatch, setTimerOn, showToast]);
 
 
     const formatTime = (timeInSeconds: number) => {

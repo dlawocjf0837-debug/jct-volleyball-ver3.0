@@ -234,10 +234,19 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
                 // --- Save current state for Undo before modification ---
                 const { undoStack: _currentStack, ...stateToSave } = state;
                 const currentUndoStack = state.undoStack || [];
-                const updatedUndoStack = [...currentUndoStack, JSON.parse(JSON.stringify(stateToSave))].slice(-20);
+                // structuredClone 사용: JSON.parse(JSON.stringify())보다 빠르고 안전함
+                const updatedUndoStack = [...currentUndoStack, structuredClone(stateToSave)].slice(-20);
 
-                let newState = JSON.parse(JSON.stringify(state));
-                newState.undoStack = updatedUndoStack;
+                // matchReducer 최적화: 필요한 부분만 얕은 복사, 변경되는 부분만 깊은 복사
+                // 전체 깊은 복사 대신 필요한 객체만 선택적 복사
+                let newState: MatchState = {
+                    ...state,
+                    undoStack: updatedUndoStack,
+                    teamA: { ...state.teamA },
+                    teamB: { ...state.teamB },
+                    eventHistory: [...state.eventHistory],
+                    scoreHistory: [...state.scoreHistory]
+                };
 
                 let scoreChanged = false;
                 let newEventDescription: string | null = null;
@@ -504,29 +513,30 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
         return map;
     }, [teamSets]);
 
+    // playerCumulativeStats 계산 최적화: 초기화 로직 간소화 및 성능 개선
     const playerCumulativeStats = useMemo(() => {
         const stats: Record<string, Partial<PlayerCumulativeStats>> = {};
     
-        const ensurePlayer = (playerId: string) => {
-            if (!stats[playerId]) {
-                stats[playerId] = {
-                    serviceAces: 0,
-                    serviceFaults: 0,
-                    spikeSuccesses: 0,
-                    blockingPoints: 0,
-                    matchesPlayed: 0,
-                    wins: 0,
-                    points: 0,
-                    badgeCount: 0,
-                    plusMinus: 0,
-                    serveIn: 0,
-                    digs: 0,
-                    assists: 0,
-                };
-            }
-        };
+        // 초기값을 한 번만 생성하는 헬퍼 함수
+        const getInitialStats = (): Partial<PlayerCumulativeStats> => ({
+            serviceAces: 0,
+            serviceFaults: 0,
+            spikeSuccesses: 0,
+            blockingPoints: 0,
+            matchesPlayed: 0,
+            wins: 0,
+            points: 0,
+            badgeCount: 0,
+            plusMinus: 0,
+            serveIn: 0,
+            digs: 0,
+            assists: 0,
+        });
     
-        matchHistory.filter(m => m.status === 'completed').forEach(match => {
+        // 완료된 경기만 필터링 (한 번만)
+        const completedMatches = matchHistory.filter(m => m.status === 'completed');
+        
+        completedMatches.forEach(match => {
             const processedPlayersInMatch = new Set<string>();
     
             const processTeam = (teamState: TeamMatchState, isWinner: boolean) => {
@@ -534,23 +544,26 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
                 Object.keys(teamState.playerStats).forEach(playerId => {
                     if (processedPlayersInMatch.has(playerId)) return;
                     
-                    ensurePlayer(playerId);
-                    const playerStats = teamState.playerStats[playerId];
-                    
-                    stats[playerId]!.matchesPlayed! += 1;
-                    if (isWinner) {
-                        stats[playerId]!.wins! += 1;
+                    // 초기화가 필요한 경우에만 실행
+                    if (!stats[playerId]) {
+                        stats[playerId] = getInitialStats();
                     }
-                    stats[playerId]!.points! += playerStats.points || 0;
-                    stats[playerId]!.serviceAces! += playerStats.serviceAces || 0;
-                    stats[playerId]!.serviceFaults! += playerStats.serviceFaults || 0;
-                    stats[playerId]!.spikeSuccesses! += playerStats.spikeSuccesses || 0;
-                    stats[playerId]!.blockingPoints! += playerStats.blockingPoints || 0;
                     
-                    // New stats
-                    stats[playerId]!.serveIn! += playerStats.serveIn || 0;
-                    stats[playerId]!.digs! += playerStats.digs || 0;
-                    stats[playerId]!.assists! += playerStats.assists || 0;
+                    const playerStats = teamState.playerStats[playerId];
+                    const stat = stats[playerId]!;
+                    
+                    stat.matchesPlayed = (stat.matchesPlayed || 0) + 1;
+                    if (isWinner) {
+                        stat.wins = (stat.wins || 0) + 1;
+                    }
+                    stat.points = (stat.points || 0) + (playerStats.points || 0);
+                    stat.serviceAces = (stat.serviceAces || 0) + (playerStats.serviceAces || 0);
+                    stat.serviceFaults = (stat.serviceFaults || 0) + (playerStats.serviceFaults || 0);
+                    stat.spikeSuccesses = (stat.spikeSuccesses || 0) + (playerStats.spikeSuccesses || 0);
+                    stat.blockingPoints = (stat.blockingPoints || 0) + (playerStats.blockingPoints || 0);
+                    stat.serveIn = (stat.serveIn || 0) + (playerStats.serveIn || 0);
+                    stat.digs = (stat.digs || 0) + (playerStats.digs || 0);
+                    stat.assists = (stat.assists || 0) + (playerStats.assists || 0);
     
                     processedPlayersInMatch.add(playerId);
                 });
@@ -560,8 +573,11 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
             processTeam(match.teamB, match.winner === 'B');
         });
     
+        // 배지 카운트는 별도로 처리 (성능 최적화)
         for (const playerId in playerAchievements) {
-            ensurePlayer(playerId);
+            if (!stats[playerId]) {
+                stats[playerId] = getInitialStats();
+            }
             stats[playerId]!.badgeCount = playerAchievements[playerId].earnedBadgeIds.size;
         }
     
@@ -1055,7 +1071,8 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
                 throw new Error("Invalid team key for deletion.");
             }
     
-            const currentTeamSets = JSON.parse(JSON.stringify(teamSets));
+            // structuredClone 사용: 깊은 복사 최적화
+            const currentTeamSets = structuredClone(teamSets);
     
             const updatedTeamSets = currentTeamSets.map((set: TeamSet) => {
                 if (set.id === setId) {
@@ -1079,7 +1096,8 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
             return;
         }
     
-        const newTeamSets = JSON.parse(JSON.stringify(teamSets));
+        // structuredClone 사용: 깊은 복사 최적화
+        const newTeamSets = structuredClone(teamSets);
         const setIndex = newTeamSets.findIndex((s: TeamSet) => s.id === setId);
         if (setIndex === -1) {
             showToast('팀 세트를 찾을 수 없습니다.', 'error');
@@ -1116,7 +1134,8 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
             return;
         }
     
-        const newTeamSets = JSON.parse(JSON.stringify(teamSets));
+        // structuredClone 사용: 깊은 복사 최적화
+        const newTeamSets = structuredClone(teamSets);
         const setIndex = newTeamSets.findIndex((s: TeamSet) => s.id === setId);
         if (setIndex === -1) {
             showToast('팀 세트를 찾을 수 없습니다.', 'error');
@@ -1149,7 +1168,8 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
             return;
         }
 
-        const newTeamSets = JSON.parse(JSON.stringify(teamSets));
+        // structuredClone 사용: 깊은 복사 최적화
+        const newTeamSets = structuredClone(teamSets);
         const setIndex = newTeamSets.findIndex((s: TeamSet) => s.id === setId);
         if (setIndex === -1) {
             showToast('팀 세트를 찾을 수 없습니다.', 'error');
@@ -1223,7 +1243,8 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
             return;
         }
 
-        const newTeamSets = JSON.parse(JSON.stringify(teamSets));
+        // structuredClone 사용: 깊은 복사 최적화
+        const newTeamSets = structuredClone(teamSets);
         const setIndex = newTeamSets.findIndex((s: TeamSet) => s.id === setId);
         if (setIndex === -1) {
             showToast('팀 세트를 찾을 수 없습니다.', 'error');
@@ -1259,7 +1280,8 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
             return;
         }
 
-        const newTeamSets = JSON.parse(JSON.stringify(teamSets));
+        // structuredClone 사용: 깊은 복사 최적화
+        const newTeamSets = structuredClone(teamSets);
         const setIndex = newTeamSets.findIndex((s: TeamSet) => s.id === setId);
         if (setIndex === -1) {
             showToast('팀 세트를 찾을 수 없습니다.', 'error');
@@ -1369,11 +1391,13 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
             if (isValidCoachingLogs(coachingLogs)) setCoachingLogs(coachingLogs);
             
         } catch (error: any) {
-            showToast(`데이터 로딩 중 오류 발생: ${error.message}`, 'error');
+            // showToast 대신 직접 setToast 호출하여 의존성 순환 방지
+            const errorMessage = t(`데이터 로딩 중 오류 발생: ${error.message}`);
+            setToast({ message: errorMessage, type: 'error' });
         } finally {
             setIsLoading(false);
         }
-    }, [showToast]);
+    }, [t]); // showToast 의존성 제거, t만 유지
 
     useEffect(() => {
         loadAllData();
@@ -1561,8 +1585,9 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
             let teamBPlayers: Record<string, Player> = {};
 
             if (attendingPlayers && teams.teamAInfo && teams.teamBInfo) {
-                teamAPlayers = JSON.parse(JSON.stringify(attendingPlayers.teamA));
-                teamBPlayers = JSON.parse(JSON.stringify(attendingPlayers.teamB));
+                // structuredClone 사용: 깊은 복사 최적화
+                teamAPlayers = structuredClone(attendingPlayers.teamA);
+                teamBPlayers = structuredClone(attendingPlayers.teamB);
 
                 Object.values(teamAPlayers).forEach((p: Player) => { p.isCaptain = false; });
                 if (teams.teamAInfo.captainId && teamAPlayers[teams.teamAInfo.captainId]) {
@@ -1585,7 +1610,7 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
                         const { teamName: _t, captainId: _c, playerIds: _p, ...details } = dataA.team;
                         teamADetails = details;
                         teamAPlayers = _p.reduce((acc, id) => {
-                            if (dataA.set.players[id]) acc[id] = JSON.parse(JSON.stringify(dataA.set.players[id]));
+                            if (dataA.set.players[id]) acc[id] = structuredClone(dataA.set.players[id]);
                             return acc;
                         }, {} as Record<string, Player>);
                         if (_c && teamAPlayers[_c]) {
@@ -1599,7 +1624,7 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
                         const { teamName: _t, captainId: _c, playerIds: _p, ...details } = dataB.team;
                         teamBDetails = details;
                         teamBPlayers = _p.reduce((acc, id) => {
-                            if (dataB.set.players[id]) acc[id] = JSON.parse(JSON.stringify(dataB.set.players[id]));
+                            if (dataB.set.players[id]) acc[id] = structuredClone(dataB.set.players[id]);
                             return acc;
                         }, {} as Record<string, Player>);
                         if (_c && teamBPlayers[_c]) {

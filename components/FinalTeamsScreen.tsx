@@ -95,17 +95,9 @@ const FinalTeamsScreen: React.FC<FinalTeamsScreenProps> = ({ teams, players, onR
         if (isSaving) return;
         setIsSaving(true);
         try {
-            const allPlayerIdsInSet = new Set<string>();
-            editableTeams.forEach(team => {
-                team.playerIds.forEach(id => allPlayerIdsInSet.add(id));
-            });
-            
-            const playersInSet: Record<string, Player> = {};
-            allPlayerIdsInSet.forEach(id => {
-                if (players[id]) {
-                    playersInSet[id] = players[id];
-                }
-            });
+            // 모든 선수를 TeamSet.players에 포함 (제외된 선수 포함)
+            // 이렇게 하면 나중에 팀 관리 화면에서 제외되었던 선수도 추가할 수 있음
+            const playersInSet: Record<string, Player> = { ...players };
 
             // Format current date as YYYY. MM. DD
             const today = new Date();

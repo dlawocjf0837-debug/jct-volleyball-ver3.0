@@ -259,20 +259,39 @@ const TeamManagementScreen: React.FC = () => {
         }
     };
 
-    // 트레이드 실행 함수
+    // 트레이드 실행 함수: 불필요한 깊은 복사 제거, 필요한 부분만 수정
     const executeTrade = async (source: { player: Player; teamKey: string }, target: { player: Player; teamKey: string }) => {
         try {
-            const newTeamSets = JSON.parse(JSON.stringify(teamSets));
+            // 전체 깊은 복사 대신, 변경되는 팀만 얕은 복사로 최적화
+            const newTeamSets = teamSets.map(set => {
+                const [sourceSetId] = source.teamKey.split('___');
+                const [targetSetId] = target.teamKey.split('___');
+                
+                // 변경이 필요한 세트만 복사
+                if (set.id === sourceSetId || set.id === targetSetId) {
+                    return {
+                        ...set,
+                        teams: set.teams.map(team => {
+                            const teamKey = `${set.id}___${team.teamName}`;
+                            if (teamKey === source.teamKey || teamKey === target.teamKey) {
+                                return { ...team };
+                            }
+                            return team;
+                        })
+                    };
+                }
+                return set; // 변경 불필요한 세트는 그대로 반환
+            });
             
             // 소스 팀 찾기
             const [sourceSetId, sourceTeamName] = source.teamKey.split('___');
             const sourceSetIndex = newTeamSets.findIndex((s: TeamSet) => s.id === sourceSetId);
-            const sourceTeamIndex = newTeamSets[sourceSetIndex].teams.findIndex((t: SavedTeamInfo) => t.teamName === sourceTeamName);
+            const sourceTeamIndex = newTeamSets[sourceSetIndex]?.teams.findIndex((t: SavedTeamInfo) => t.teamName === sourceTeamName);
             
             // 타겟 팀 찾기
             const [targetSetId, targetTeamName] = target.teamKey.split('___');
             const targetSetIndex = newTeamSets.findIndex((s: TeamSet) => s.id === targetSetId);
-            const targetTeamIndex = newTeamSets[targetSetIndex].teams.findIndex((t: SavedTeamInfo) => t.teamName === targetTeamName);
+            const targetTeamIndex = newTeamSets[targetSetIndex]?.teams.findIndex((t: SavedTeamInfo) => t.teamName === targetTeamName);
             
             if (sourceSetIndex === -1 || sourceTeamIndex === -1 || targetSetIndex === -1 || targetTeamIndex === -1) {
                 throw new Error('팀을 찾을 수 없습니다.');
@@ -281,7 +300,7 @@ const TeamManagementScreen: React.FC = () => {
             const sourceTeam = newTeamSets[sourceSetIndex].teams[sourceTeamIndex];
             const targetTeam = newTeamSets[targetSetIndex].teams[targetTeamIndex];
             
-            // 선수 교체
+            // 선수 교체 (배열 복사 후 수정)
             sourceTeam.playerIds = sourceTeam.playerIds.filter((id: string) => id !== source.player.id);
             targetTeam.playerIds = targetTeam.playerIds.filter((id: string) => id !== target.player.id);
             

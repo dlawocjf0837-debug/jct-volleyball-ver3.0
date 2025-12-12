@@ -121,19 +121,16 @@ const CameraDirectorScreen: React.FC = () => {
     
     }, [matchState, isRecording]);
 
-    // Timer for recording duration
+    // Timer for recording duration: cleanup 로직 중복 제거
     useEffect(() => {
-        let interval: ReturnType<typeof setInterval> | null = null;
-        if (isRecording) {
-            interval = setInterval(() => {
-                setTimer(t => t + 1);
-            }, 1000);
-        } else if (interval) {
-            clearInterval(interval);
-        }
-        return () => {
-            if (interval) clearInterval(interval);
-        };
+        if (!isRecording) return;
+        
+        const interval = setInterval(() => {
+            setTimer(t => t + 1);
+        }, 1000);
+        
+        // cleanup 함수만으로 충분 (중복 체크 불필요)
+        return () => clearInterval(interval);
     }, [isRecording]);
 
     // 3. Recording Logic
