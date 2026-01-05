@@ -34,7 +34,7 @@ const Header: React.FC<HeaderProps> = ({ title, showBackButton, onBack, showLang
                         {subtitle}
                     </p>
                 )}
-                <p className="text-slate-500 mt-1 text-xs tracking-[0.3em] font-light opacity-80">By J-IVE</p>
+                <p className="text-slate-500 mt-1 text-xs tracking-[0.3em] font-light opacity-80">By JCT</p>
             </div>
             <div className="absolute right-0 top-0 flex items-center gap-4">
                 {showLanguageToggle && (
