@@ -5,6 +5,7 @@ import { useData } from '../contexts/DataContext';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { LockClosedIcon, CrownIcon } from './icons';
 import { useTranslation } from '../hooks/useTranslation';
+import { BADGE_DEFINITIONS } from '../data/badges';
 
 type MatchPerformance = {
     match: MatchState & { date: string };
@@ -35,7 +36,7 @@ const statOrder: (keyof PlayerStats | 'serveSuccessRate' | 'serveAceRate')[] = [
 ];
 
 export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, cumulativeStats, performanceHistory, onClose, teamSets }) => {
-    const { coachingLogs, saveCoachingLog, requestPassword } = useData();
+    const { coachingLogs, saveCoachingLog, requestPassword, playerAchievements } = useData();
     const { t } = useTranslation();
     const [newLog, setNewLog] = useState('');
     const [isLogUnlocked, setIsLogUnlocked] = useState(false);
@@ -188,6 +189,18 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
         
         return { aceRate, successRate };
     }, [cumulativeStats]);
+
+    // Get badges earned by this player
+    const earnedBadges = useMemo(() => {
+        const playerBadges = playerAchievements[player.id];
+        if (!playerBadges || !playerBadges.earnedBadgeIds) {
+            return [];
+        }
+        
+        return BADGE_DEFINITIONS.filter(badge => 
+            playerBadges.earnedBadgeIds.has(badge.id)
+        );
+    }, [playerAchievements, player.id]);
 
     // Custom Tooltip Component
     const CustomTooltip = ({ active, payload, label }: any) => {
@@ -367,6 +380,41 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
                                             </tbody>
                                         </table>
                                     </div>
+                                </div>
+
+                                {/* Earned Badges Section */}
+                                <div className="bg-slate-800/50 p-4 rounded-lg">
+                                    <h3 className="text-lg font-bold text-slate-300 mb-4">{t('player_history_earned_badges')}</h3>
+                                    {earnedBadges.length > 0 ? (
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                                            {earnedBadges.map(badge => {
+                                                const isCompetitive = badge.isCompetitive;
+                                                return (
+                                                    <div
+                                                        key={badge.id}
+                                                        className={`p-3 bg-slate-700/50 rounded-lg flex flex-col items-center justify-center gap-2 text-center border-2 transition-all duration-200 ${
+                                                            isCompetitive 
+                                                                ? 'border-yellow-400/50 hover:border-yellow-400 yellow-glowing-border' 
+                                                                : 'border-sky-500/50 hover:border-sky-400'
+                                                        }`}
+                                                    >
+                                                        <badge.icon className={`w-10 h-10 ${
+                                                            isCompetitive ? 'text-yellow-400' : 'text-sky-400'
+                                                        }`} />
+                                                        <p className={`text-xs font-semibold ${
+                                                            isCompetitive ? 'text-yellow-300' : 'text-slate-200'
+                                                        }`}>
+                                                            {t(badge.nameKey)}
+                                                        </p>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-6">
+                                            <p className="text-slate-500">{t('player_history_no_badges')}</p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}

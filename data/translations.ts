@@ -691,6 +691,8 @@ export const translations: Record<string, Record<Language, string>> = {
   player_history_coaching_log_private: { ko: "코칭 로그는 비공개입니다.", id: "Log Pelatih Bersifat Pribadi" },
   player_history_coaching_log_unlock_prompt: { ko: "내용을 보려면 관리자 비밀번호를 입력해주세요.", id: "Masukkan sandi admin untuk melihat." },
   player_history_roster_title: { ko: "{teamName} 선수 명단", id: "Roster {teamName}" },
+  player_history_earned_badges: { ko: "획득한 배지", id: "Lencana yang Diraih" },
+  player_history_no_badges: { ko: "아직 획득한 배지가 없습니다.", id: "Belum ada lencana yang diraih." },
   
   // Achievements (Badges)
   badge_first_score_name: { ko: "첫 득점의 주인공", id: "Pencetak Poin Pertama" },
