@@ -342,8 +342,19 @@ const AppContent = () => {
             <main className="flex-grow flex flex-col">
                 {renderView()}
             </main>
-            <footer className="text-center mt-12 text-xs text-slate-500 no-print">
-                <p>&copy; 2025 <span className="font-semibold text-[#00A3FF]">J-IVE Labs</span>. All Rights Reserved. | Ver 3.0</p>
+            <footer className="border-t border-gray-200 pt-4 mt-12 flex flex-col items-center gap-4 no-print">
+                <a
+                    href="https://luck-bike-94e.notion.site/JCT-Ver-3-0-2e1033dce3ee80e7a175c85af33c333a"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-full hover:bg-blue-500/20 hover:border-blue-500/30 transition-colors text-sm"
+                >
+                    📖 사용 설명서 (매뉴얼) 보기
+                </a>
+                <div className="text-center text-[10px] text-gray-600">
+                    <p>© 2025. Jaecheol Im. All rights reserved.</p>
+                    <p className="mt-1">본 프로그램은 비상업적 교육 목적으로만 사용 가능합니다.</p>
+                </div>
             </footer>
             {toast.message && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
             <ConfirmationModal

@@ -3,6 +3,7 @@ import { useData } from '../contexts/DataContext';
 import { Player, PlayerStats, Badge, PlayerCumulativeStats } from '../types';
 // Fix: Changed import to be a named import as PlayerHistoryModal is not a default export.
 import { PlayerHistoryModal } from '../components/PlayerHistoryModal';
+import { BadgeDetailModal } from '../components/BadgeDetailModal';
 import { BADGE_DEFINITIONS } from '../data/badges';
 import { useTranslation } from '../hooks/useTranslation';
 
@@ -12,6 +13,7 @@ const PlayerRecordsScreen: React.FC = () => {
     const [selectedClass, setSelectedClass] = useState<string>('');
     const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
     const [playerHistoryData, setPlayerHistoryData] = useState<any | null>(null);
+    const [selectedBadgeDetail, setSelectedBadgeDetail] = useState<{ badge: Badge, player: Player, stats: Partial<PlayerCumulativeStats> } | null>(null);
 
     const availableClasses = useMemo(() => {
         const classSet = new Set<string>();
@@ -202,6 +204,14 @@ const PlayerRecordsScreen: React.FC = () => {
                     teamSets={teamSets}
                 />
             )}
+            {selectedBadgeDetail && (
+                <BadgeDetailModal
+                    badge={selectedBadgeDetail.badge}
+                    player={selectedBadgeDetail.player}
+                    playerStats={selectedBadgeDetail.stats}
+                    onClose={() => setSelectedBadgeDetail(null)}
+                />
+            )}
             <div className="max-w-4xl mx-auto bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-4 sm:p-6 rounded-lg shadow-2xl space-y-6 animate-fade-in w-full px-4">
                 <div className="flex flex-col lg:flex-row items-center lg:justify-between mb-6 gap-4">
                     <h1 className="text-3xl lg:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 text-center lg:text-right">
@@ -253,10 +263,18 @@ const PlayerRecordsScreen: React.FC = () => {
                                             {badges.map(badge => {
                                                 const Icon = badge.icon;
                                                 return (
-                                                    <div key={badge.id} className="flex items-center justify-center gap-1.5 text-yellow-400" title={t(badge.descriptionKey)}>
+                                                    <button
+                                                        key={badge.id}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setSelectedBadgeDetail({ badge, player, stats });
+                                                        }}
+                                                        className="w-full flex items-center justify-center gap-1.5 text-yellow-400 hover:text-yellow-300 hover:bg-slate-700/50 rounded px-2 py-1 transition-colors"
+                                                        title={t(badge.descriptionKey)}
+                                                    >
                                                         <Icon className="w-4 h-4 flex-shrink-0" />
                                                         <span className="truncate text-sm font-semibold text-yellow-300">{t(badge.nameKey)}</span>
-                                                    </div>
+                                                    </button>
                                                 );
                                             })}
                                         </div>

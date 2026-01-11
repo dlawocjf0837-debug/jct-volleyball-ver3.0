@@ -1,11 +1,12 @@
 
 import React, { useState, useMemo } from 'react';
-import { Player, PlayerStats, MatchState, TeamSet, PlayerCumulativeStats, CoachingLog } from '../types';
+import { Player, PlayerStats, MatchState, TeamSet, PlayerCumulativeStats, CoachingLog, Badge } from '../types';
 import { useData } from '../contexts/DataContext';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { LockClosedIcon, CrownIcon } from './icons';
 import { useTranslation } from '../hooks/useTranslation';
 import { BADGE_DEFINITIONS } from '../data/badges';
+import { BadgeDetailModal } from './BadgeDetailModal';
 
 type MatchPerformance = {
     match: MatchState & { date: string };
@@ -46,6 +47,7 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
     const [chartStat, setChartStat] = useState<keyof PlayerStats | 'serveSuccessRate' | 'serveAceRate'>('points');
     const [winRateFilter, setWinRateFilter] = useState('all');
     const [rosterToShow, setRosterToShow] = useState<{ teamName: string, players: Player[], captainId?: string } | null>(null);
+    const [selectedBadgeDetail, setSelectedBadgeDetail] = useState<{ badge: Badge, player: Player, stats: Partial<PlayerCumulativeStats> } | null>(null);
 
     const statDisplayNames: Record<string, string> = {
         points: t('stat_display_points'),
@@ -228,6 +230,14 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
     return (
         <>
             {rosterToShow && <RosterModal teamName={rosterToShow.teamName} players={rosterToShow.players} captainId={rosterToShow.captainId} onClose={() => setRosterToShow(null)} />}
+            {selectedBadgeDetail && (
+                <BadgeDetailModal
+                    badge={selectedBadgeDetail.badge}
+                    player={selectedBadgeDetail.player}
+                    playerStats={selectedBadgeDetail.stats}
+                    onClose={() => setSelectedBadgeDetail(null)}
+                />
+            )}
             <div 
                 className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4 animate-fade-in"
                 onClick={onClose}
@@ -390,9 +400,10 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
                                             {earnedBadges.map(badge => {
                                                 const isCompetitive = badge.isCompetitive;
                                                 return (
-                                                    <div
+                                                    <button
                                                         key={badge.id}
-                                                        className={`p-3 bg-slate-700/50 rounded-lg flex flex-col items-center justify-center gap-2 text-center border-2 transition-all duration-200 ${
+                                                        onClick={() => setSelectedBadgeDetail({ badge, player, stats: cumulativeStats })}
+                                                        className={`p-3 bg-slate-700/50 rounded-lg flex flex-col items-center justify-center gap-2 text-center border-2 transition-all duration-200 cursor-pointer ${
                                                             isCompetitive 
                                                                 ? 'border-yellow-400/50 hover:border-yellow-400 yellow-glowing-border' 
                                                                 : 'border-sky-500/50 hover:border-sky-400'
@@ -406,7 +417,7 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
                                                         }`}>
                                                             {t(badge.nameKey)}
                                                         </p>
-                                                    </div>
+                                                    </button>
                                                 );
                                             })}
                                         </div>
