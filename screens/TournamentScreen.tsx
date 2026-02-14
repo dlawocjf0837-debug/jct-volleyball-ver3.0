@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useData } from '../contexts/DataContext';
-import { Tournament, TournamentMatch, SavedTeamInfo, Player } from '../types';
+import { Tournament, TournamentMatch, SavedTeamInfo, Player, MatchState, TeamMatchState, PlayerStats } from '../types';
 import TeamEmblem from '../components/TeamEmblem';
 import { useTranslation } from '../hooks/useTranslation';
 import MatchDetailAnalysis from '../components/MatchDetailAnalysis';
@@ -1020,7 +1020,7 @@ const TournamentScreen: React.FC<TournamentScreenProps> = ({ onStartMatch, onOpe
                                     );
                                 }
                                 const totals = Object.values(team.playerStats).reduce(
-                                    (acc, s: any) => {
+                                    (acc: { points: number; serviceAces: number; blockingPoints: number; spikeSuccesses: number }, s: PlayerStats) => {
                                         acc.points += s.points || 0;
                                         acc.serviceAces += s.serviceAces || 0;
                                         acc.blockingPoints += s.blockingPoints || 0;

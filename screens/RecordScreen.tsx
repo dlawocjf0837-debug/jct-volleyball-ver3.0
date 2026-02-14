@@ -429,7 +429,7 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ onContinueGame, preselected
             ...generalHistory.map((m, i) => ({
                 ...m,
                 id: `history-${i}`,
-                status: (m.status || 'completed') as const,
+                status: (m.status || 'completed') as 'completed' | 'in_progress',
             }))
         ];
 

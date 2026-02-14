@@ -54,7 +54,7 @@ const MatchDetailAnalysis: React.FC<MatchDetailAnalysisProps> = ({ matchData, te
     const enrichedMatch: EnrichedMatch = useMemo(() => {
         return {
             ...matchData,
-            id: matchData.id || `match-${Date.now()}`,
+            id: (matchData as { id?: string }).id || `match-${Date.now()}`,
             status: matchData.status || 'completed',
             date: matchData.date || new Date().toISOString(),
             time: matchData.time,
@@ -199,17 +199,17 @@ const MatchDetailAnalysis: React.FC<MatchDetailAnalysisProps> = ({ matchData, te
                     <h3 className="text-3xl font-bold text-[#00A3FF]">{winnerMessage}</h3>
                     <div className="text-xl mt-1 flex flex-col gap-1">
                         <p>
-                            <span className="font-bold">{t('record_score_breakdown_format', { 
+                            <span className="font-bold">{(t as (key: string, opts?: Record<string, string | number>) => string)('record_score_breakdown_format', { 
                                 teamName: teamA.name, 
                                 totalScore: finalScoreA, 
-                                breakdown: `${t('record_score_part_match')} ${teamA.score} + ${t('record_score_part_fairplay')} ${teamA.fairPlay} + ${t('record_score_part_3hit')} ${teamA.threeHitPlays}` 
+                                breakdown: `${(t as (k: string) => string)('record_score_part_match')} ${teamA.score} + ${(t as (k: string) => string)('record_score_part_fairplay')} ${teamA.fairPlay} + ${(t as (k: string) => string)('record_score_part_3hit')} ${teamA.threeHitPlays}` 
                             })}</span>
                         </p>
                         <p>
-                            <span className="font-bold">{t('record_score_breakdown_format', { 
+                            <span className="font-bold">{(t as (key: string, opts?: Record<string, string | number>) => string)('record_score_breakdown_format', { 
                                 teamName: teamB.name, 
                                 totalScore: finalScoreB, 
-                                breakdown: `${t('record_score_part_match')} ${teamB.score} + ${t('record_score_part_fairplay')} ${teamB.fairPlay} + ${t('record_score_part_3hit')} ${teamB.threeHitPlays}` 
+                                breakdown: `${(t as (k: string) => string)('record_score_part_match')} ${teamB.score} + ${(t as (k: string) => string)('record_score_part_fairplay')} ${teamB.fairPlay} + ${(t as (k: string) => string)('record_score_part_3hit')} ${teamB.threeHitPlays}` 
                             })}</span>
                         </p>
                     </div>
@@ -274,7 +274,7 @@ const MatchDetailAnalysis: React.FC<MatchDetailAnalysisProps> = ({ matchData, te
                 </div>
 
                 <div className="mt-6 pt-4 border-t border-yellow-400/20 w-full max-w-sm">
-                    <p className="font-bold text-lg text-yellow-300">{t('record_mvp_score', { score: mvpScore.toFixed(1) })}</p>
+                    <p className="font-bold text-lg text-yellow-300">{(t as (key: string, opts?: Record<string, string | number>) => string)('record_mvp_score', { score: mvpScore.toFixed(1) })}</p>
                     
                     <div className="mt-6 p-5 bg-slate-800/80 rounded-xl text-sm text-slate-300 text-left space-y-2 shadow-inner border border-slate-700">
                         <p className="font-bold text-sky-400 mb-3 text-lg border-b border-slate-600 pb-2">리그/토너먼트 MVP 산정 기준</p>
