@@ -533,8 +533,10 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
             assists: 0,
         });
     
-        // 완료된 경기만 필터링 (한 번만)
-        const completedMatches = matchHistory.filter(m => m.status === 'completed');
+        // 완료된 일반 경기만 필터링 (리그/토너먼트 경기는 제외)
+        const completedMatches = matchHistory.filter(
+            m => m.status === 'completed' && !m.leagueId && !m.tournamentId
+        );
         
         completedMatches.forEach(match => {
             const processedPlayersInMatch = new Set<string>();
@@ -1159,6 +1161,30 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
         team.playerIds = team.playerIds.filter((id: string) => id !== playerId);
         
         await saveTeamSets(newTeamSets, `'${playerName}' 선수가 '${teamName}' 팀에서 삭제되었습니다.`);
+    };
+
+    /** 개인정보보호법 삭제 요구권: 해당 세트에서 학생 데이터를 영구 삭제하고 모든 팀 명단에서 제거 */
+    const deletePlayerFromSet = async (setId: string, playerId: string) => {
+        const newTeamSets = structuredClone(teamSets);
+        const setIndex = newTeamSets.findIndex((s: TeamSet) => s.id === setId);
+        if (setIndex === -1) {
+            showToast('팀 세트를 찾을 수 없습니다.', 'error');
+            return;
+        }
+        const theSet = newTeamSets[setIndex];
+        const player = theSet.players[playerId];
+        const playerName = player ? player.originalName : '학생';
+
+        delete theSet.players[playerId];
+
+        theSet.teams.forEach((team: SavedTeamInfo) => {
+            team.playerIds = team.playerIds.filter((id: string) => id !== playerId);
+            if (team.captainId === playerId) {
+                team.captainId = team.playerIds[0] || '';
+            }
+        });
+
+        await saveTeamSets(newTeamSets, `'${playerName}' 학생 데이터가 삭제되었습니다.`);
     };
     
     const bulkAddPlayersToTeam = async (teamKey: string, playerNames: string[], overwrite: boolean) => {
@@ -1807,6 +1833,7 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
         deleteTeam,
         addPlayerToTeam,
         removePlayerFromTeam,
+        deletePlayerFromSet,
         bulkAddPlayersToTeam,
         createTeamSet,
         addTeamToSet,

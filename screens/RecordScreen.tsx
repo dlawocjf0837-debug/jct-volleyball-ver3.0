@@ -421,11 +421,15 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ onContinueGame, preselected
 
     // ... (useEffect for preselection, allMatches calculation remain similar)
     const allMatches = useMemo((): EnrichedMatch[] => {
+        const generalHistory = matchHistory.filter(
+            m => !m.leagueId && !m.tournamentId
+        );
+
         const all = [
-            ...matchHistory.map((m, i) => ({
+            ...generalHistory.map((m, i) => ({
                 ...m,
                 id: `history-${i}`,
-                status: m.status || 'completed' as const,
+                status: (m.status || 'completed') as const,
             }))
         ];
 
@@ -679,7 +683,7 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ onContinueGame, preselected
         const performanceHistory: any[] = [];
     
         const completedMatches = matchHistory
-            .filter(m => m.status === 'completed')
+            .filter(m => m.status === 'completed' && !m.leagueId && !m.tournamentId)
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     
         completedMatches.forEach(match => {

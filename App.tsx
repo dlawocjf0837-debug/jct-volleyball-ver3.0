@@ -20,9 +20,11 @@ import CheerSongScreen from './screens/CheerSongScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import TournamentScreen from './screens/TournamentScreen';
 import LeagueScreen from './screens/LeagueScreen';
+import LeagueLobbyScreen from './screens/LeagueLobbyScreen';
 import AnnouncerScreen from './screens/AnnouncerScreen';
 import CameraDirectorScreen from './screens/CameraDirectorScreen';
 import CompetitionScreen from './screens/CompetitionScreen';
+import AdminLockScreen from './screens/AdminLockScreen';
 import { Player, Screen, Stats, STAT_KEYS, MatchState, SavedTeamInfo } from './types';
 import ConfirmationModal from './components/common/ConfirmationModal';
 import PasswordModal from './components/common/PasswordModal';
@@ -40,7 +42,7 @@ type LeagueInfo = {
 
 
 const AppContent = () => {
-    const [view, setView] = useState<'menu' | 'teamBuilder' | 'matchSetup' | 'attendance' | 'scoreboard' | 'history' | 'referee' | 'teamManagement' | 'teamAnalysis' | 'achievements' | 'skillDrill' | 'playerRecords' | 'cheerSong' | 'settings' | 'tournament' | 'league' | 'announcer' | 'cameraDirector' | 'competition'>('menu');
+    const [view, setView] = useState<'menu' | 'teamBuilder' | 'matchSetup' | 'attendance' | 'scoreboard' | 'history' | 'referee' | 'teamManagement' | 'teamAnalysis' | 'achievements' | 'skillDrill' | 'playerRecords' | 'cheerSong' | 'settings' | 'tournament' | 'leagueLobby' | 'league' | 'announcer' | 'cameraDirector' | 'competition'>('menu');
     const [scoreboardMode, setScoreboardMode] = useState<'record' | 'referee'>('record');
     const { 
         toast, hideToast, isLoading, exportData, saveImportedData, startMatch, resetAllData, recoveryData, handleRestoreFromBackup, dismissRecovery,
@@ -50,6 +52,7 @@ const AppContent = () => {
     const [preselectedMatchId, setPreselectedMatchId] = useState<string | null>(null);
     const [tournamentInfoForMatch, setTournamentInfoForMatch] = useState<TournamentInfo | null>(null);
     const [leagueInfoForMatch, setLeagueInfoForMatch] = useState<LeagueInfo | null>(null);
+    const [selectedLeagueId, setSelectedLeagueId] = useState<string | null>(null);
     const { t } = useTranslation();
 
 
@@ -197,6 +200,7 @@ const AppContent = () => {
         setPreselectedMatchId(null);
         setTournamentInfoForMatch(null);
         setLeagueInfoForMatch(null);
+        setSelectedLeagueId(null);
         closeSession();
         setView('menu');
     }
@@ -249,11 +253,29 @@ const AppContent = () => {
             case 'settings':
                 return <SettingsScreen />;
             case 'competition':
-                return <CompetitionScreen onSelectTournament={() => setView('tournament')} onSelectLeague={() => setView('league')} />;
+                return (
+                    <CompetitionScreen
+                        onSelectTournament={() => setView('tournament')}
+                        onSelectLeague={() => setView('leagueLobby')}
+                    />
+                );
             case 'tournament':
-                return <TournamentScreen onStartMatch={handleStartTournamentMatch} />;
+                return <TournamentScreen onStartMatch={handleStartTournamentMatch} onOpenMatchAnalysis={(matchId) => { setPreselectedMatchId(matchId); setView('history'); }} />;
             case 'league':
-                return <LeagueScreen onStartMatch={handleStartLeagueMatch} />;
+                return <LeagueScreen onStartMatch={handleStartLeagueMatch} selectedLeagueId={selectedLeagueId} onOpenMatchAnalysis={(matchId) => { setPreselectedMatchId(matchId); setView('history'); }} />;
+            case 'leagueLobby':
+                return (
+                    <LeagueLobbyScreen
+                        onCreateNewLeague={() => {
+                            setSelectedLeagueId(null);
+                            setView('league');
+                        }}
+                        onSelectLeague={(leagueId) => {
+                            setSelectedLeagueId(leagueId);
+                            setView('league');
+                        }}
+                    />
+                );
             case 'announcer':
                 return <AnnouncerScreen onNavigateToHistory={() => setView('history')} />;
             case 'cameraDirector':
@@ -311,6 +333,7 @@ const AppContent = () => {
             case 'settings': return 'settings_title';
             case 'competition': return 'competition_title';
             case 'tournament': return 'tournament_title';
+            case 'leagueLobby': return 'league_title';
             case 'league': return 'league_title';
             case 'announcer': return 'announcer_title';
             case 'cameraDirector': return 'camera_director_title';
@@ -325,7 +348,8 @@ const AppContent = () => {
         ? {
             brand: "J-ive",
             title: t('app_title_volleyball'),
-            subtitle: t('app_subtitle')
+            subtitle: t('app_subtitle'),
+            showUpdateNotesIcon: true
         }
         : {
             title: t(getHeaderTitleKey())
@@ -338,6 +362,7 @@ const AppContent = () => {
                 showBackButton={view !== 'menu'}
                 onBack={navigateToMenu}
                 showLanguageToggle={showLanguageToggle}
+                showUpdateNotesIcon={view === 'menu'}
             />
             <main className="flex-grow flex flex-col">
                 {renderView()}
@@ -375,10 +400,19 @@ const AppContent = () => {
 };
 
 
+/** 최상단 인증 방어막: 잠금 해제 전에는 AdminLockScreen만 표시, 메인 앱은 렌더하지 않음 */
+const AppWithGate = () => {
+    const [isUnlocked, setIsUnlocked] = useState(false);
+    if (!isUnlocked) {
+        return <AdminLockScreen onUnlock={() => setIsUnlocked(true)} />;
+    }
+    return <AppContent />;
+};
+
 const App = () => {
     return (
         <DataProvider>
-            <AppContent />
+            <AppWithGate />
         </DataProvider>
     );
 };

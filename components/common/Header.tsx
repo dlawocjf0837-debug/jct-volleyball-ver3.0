@@ -1,6 +1,7 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import LanguageToggle from './LanguageToggle';
+import UpdateNotesModal from './UpdateNotesModal';
 import { useTranslation } from '../../hooks/useTranslation';
 
 interface HeaderProps {
@@ -8,13 +9,17 @@ interface HeaderProps {
     showBackButton: boolean;
     onBack: () => void;
     showLanguageToggle?: boolean;
+    showUpdateNotesIcon?: boolean;
     subtitle?: string;
     brand?: string;
 }
 
-const Header: React.FC<HeaderProps> = ({ title, showBackButton, onBack, showLanguageToggle, subtitle, brand = "J-IVE" }) => {
+const Header: React.FC<HeaderProps> = ({ title, showBackButton, onBack, showLanguageToggle, showUpdateNotesIcon = false, subtitle, brand = "J-IVE" }) => {
     const { t } = useTranslation();
+    const [showUpdateNotes, setShowUpdateNotes] = useState(false);
+
     return (
+        <>
         <header className="text-center mb-8 relative flex items-center justify-center no-print">
              {showBackButton && (
                 <button 
@@ -36,12 +41,25 @@ const Header: React.FC<HeaderProps> = ({ title, showBackButton, onBack, showLang
                 )}
                 <p className="text-slate-500 mt-1 text-xs tracking-[0.3em] font-light opacity-80">By JCT</p>
             </div>
-            <div className="absolute right-0 top-0 flex items-center gap-4">
+            <div className="absolute right-0 top-0 flex items-center gap-3">
+                {showUpdateNotesIcon && (
+                    <button
+                        onClick={() => setShowUpdateNotes(true)}
+                        className="relative p-2 rounded-lg bg-slate-700/80 hover:bg-slate-600 text-white text-xl transition-colors"
+                        aria-label="업데이트 노트"
+                        title="업데이트 노트"
+                    >
+                        🔔
+                        <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full ring-2 ring-slate-900" aria-hidden />
+                    </button>
+                )}
                 {showLanguageToggle && (
                     <LanguageToggle />
                 )}
             </div>
         </header>
+        <UpdateNotesModal isOpen={showUpdateNotes} onClose={() => setShowUpdateNotes(false)} />
+        </>
     );
 };
 

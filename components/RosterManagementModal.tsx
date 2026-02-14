@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../contexts/DataContext';
 import { Player, SavedTeamInfo } from '../types';
 import { TrashIcon, CrownIcon } from './icons';
+import ConfirmationModal from './common/ConfirmationModal';
 import { useTranslation } from '../hooks/useTranslation';
 
 interface RosterManagementModalProps {
@@ -17,7 +18,7 @@ interface RosterManagementModalProps {
 }
 
 const RosterManagementModal: React.FC<RosterManagementModalProps> = ({ isOpen, onClose, teamKey, teamConfig, onTeamNameChange, isTradeMode = false, tradeSource = null, onPlayerClick, onSetCaptain }) => {
-    const { teamSetsMap, addPlayerToTeam, removePlayerFromTeam, bulkAddPlayersToTeam } = useData();
+    const { teamSetsMap, addPlayerToTeam, removePlayerFromTeam, deletePlayerFromSet, bulkAddPlayersToTeam } = useData();
     const { t } = useTranslation();
     const [newPlayerName, setNewPlayerName] = useState('');
     const [isEditingName, setIsEditingName] = useState(false);
@@ -26,6 +27,7 @@ const RosterManagementModal: React.FC<RosterManagementModalProps> = ({ isOpen, o
     const [bulkPlayerNames, setBulkPlayerNames] = useState('');
     const [bulkOverwrite, setBulkOverwrite] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{ playerId: string; playerName: string } | null>(null);
 
     const { players, captainId } = useMemo(() => {
         if (!teamKey || !teamConfig) return { players: [], captainId: null };
@@ -83,6 +85,18 @@ const RosterManagementModal: React.FC<RosterManagementModalProps> = ({ isOpen, o
         if (teamKey) {
             removePlayerFromTeam(teamKey, playerId);
         }
+    };
+
+    const handleDeleteStudentClick = (playerId: string, playerName: string) => {
+        setDeleteConfirmTarget({ playerId, playerName });
+    };
+
+    const handleDeleteConfirm = () => {
+        if (!teamKey || !deleteConfirmTarget) return;
+        const setId = teamKey.split('___')[0];
+        if (!setId) return;
+        deletePlayerFromSet(setId, deleteConfirmTarget.playerId);
+        setDeleteConfirmTarget(null);
     };
     
     const handleNameSave = () => {
@@ -174,10 +188,10 @@ const RosterManagementModal: React.FC<RosterManagementModalProps> = ({ isOpen, o
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                handleRemovePlayer(player.id);
+                                                handleDeleteStudentClick(player.id, player.originalName);
                                             }}
-                                            disabled={player.id === captainId}
-                                            className="text-slate-500 hover:text-red-500 disabled:text-slate-700 disabled:cursor-not-allowed"
+                                            className="p-1.5 rounded text-slate-400 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                                            title="학생 데이터 영구 삭제 (복구 불가)"
                                             aria-label={t('roster_delete_player_aria', { playerName: player.originalName })}
                                         >
                                             <TrashIcon className="w-5 h-5" />
@@ -257,6 +271,15 @@ const RosterManagementModal: React.FC<RosterManagementModalProps> = ({ isOpen, o
                     <button onClick={onClose} className="bg-slate-600 hover:bg-slate-500 font-bold py-2 px-6 rounded-lg">{t('close')}</button>
                 </div>
             </div>
+
+            <ConfirmationModal
+                isOpen={!!deleteConfirmTarget}
+                onClose={() => setDeleteConfirmTarget(null)}
+                onConfirm={handleDeleteConfirm}
+                title="학생 데이터 영구 삭제"
+                message="정말 이 학생의 데이터를 영구적으로 삭제하시겠습니까? (복구 불가)"
+                confirmText="삭제"
+            />
         </div>
     );
 };

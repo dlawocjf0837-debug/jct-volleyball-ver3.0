@@ -118,6 +118,13 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
         const latestMatch = completedMatchesWithIndex[0];
         const winnerName = latestMatch.winner === 'A' ? latestMatch.teamA.name : latestMatch.teamB.name;
         const matchId = `history-${latestMatch.originalIndex}`;
+
+        let matchTypeLabel: string | null = null;
+        if (latestMatch.leagueId) {
+            matchTypeLabel = '[리그]';
+        } else if (latestMatch.tournamentId) {
+            matchTypeLabel = '[토너먼트]';
+        }
         
         return {
             id: matchId,
@@ -125,7 +132,8 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
             teamBName: latestMatch.teamB.name,
             teamAScore: latestMatch.teamA.score,
             teamBScore: latestMatch.teamB.score,
-            winnerName: winnerName,
+            winnerName,
+            matchTypeLabel,
         };
     }, [matchHistory]);
 
@@ -236,11 +244,18 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
                             className="w-full text-left p-3 sm:p-4 bg-slate-800 rounded-lg transition-all duration-200 hover:bg-slate-700 hover:ring-2 ring-sky-500"
                         >
                             <p className="text-xs sm:text-sm text-sky-400 font-semibold mb-1">{t('menu_latest_match')}</p>
-                            <p className="text-sm sm:text-base lg:text-lg text-slate-300 break-words">
-                                {latestMatchInfo.teamAName} vs {latestMatchInfo.teamBName}
-                                <span className="font-bold text-sky-400 mx-1 sm:mx-2">
-                                    ({latestMatchInfo.teamAScore}:{latestMatchInfo.teamBScore} {latestMatchInfo.winnerName} {t('menu_winner')})
+                            <p className="text-sm sm:text-base lg:text-lg text-slate-300 break-words flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <span>
+                                    {latestMatchInfo.teamAName} vs {latestMatchInfo.teamBName}
+                                    <span className="font-bold text-sky-400 mx-1 sm:mx-2">
+                                        ({latestMatchInfo.teamAScore}:{latestMatchInfo.teamBScore} {latestMatchInfo.winnerName} {t('menu_winner')})
+                                    </span>
                                 </span>
+                                {latestMatchInfo.matchTypeLabel && (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-sky-600/20 text-sky-300 border border-sky-500/40">
+                                        {latestMatchInfo.matchTypeLabel}
+                                    </span>
+                                )}
                             </p>
                         </button>
                     ) : (
