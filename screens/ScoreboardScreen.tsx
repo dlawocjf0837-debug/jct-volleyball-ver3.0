@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import { useData } from '../contexts/DataContext';
 import { VolleyballIcon, StopwatchIcon, QuestionMarkCircleIcon, SwitchHorizontalIcon, ShieldIcon, BoltIcon, TargetIcon, FireIcon, WallIcon, LinkIcon, HandshakeIcon } from '../components/icons';
 import RulesModal from '../components/RulesModal';
@@ -547,35 +548,50 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
 
                 {/* 우측 영역 */}
                 <div className="flex-1 flex justify-end items-center gap-2 sm:gap-4">
-                    {matchState.status === 'in_progress' && p2p.isHost && p2p.peerId && (
-                        <>
-                            {/* 참여 코드 - 데스크톱에서만 표시 */}
-                            <button
-                                onClick={() => {
-                                    navigator.clipboard.writeText(p2p.peerId!);
-                                    showToast(t('toast_code_copied'));
-                                }}
-                                className="hidden md:flex flex-col items-center justify-center bg-slate-800 border-2 border-yellow-500/50 rounded-lg px-3 py-1 cursor-pointer hover:bg-slate-700 transition-all hover:scale-105"
-                                title={t('join_code_label')}
-                            >
-                                <span className="text-[10px] text-slate-400 uppercase tracking-widest">{t('join_code_label')}</span>
-                                <span className="text-xl font-mono font-black text-yellow-400 tracking-wider leading-none">
-                                    {p2p.peerId}
-                                </span>
-                            </button>
-                            {/* 모바일: 참여 코드 아이콘 버튼 */}
-                            <button
-                                onClick={() => {
-                                    navigator.clipboard.writeText(p2p.peerId!);
-                                    showToast(t('toast_code_copied'));
-                                }}
-                                className="md:hidden bg-slate-800 border-2 border-yellow-500/50 rounded-lg p-2 cursor-pointer hover:bg-slate-700 transition-all min-h-[44px] min-w-[44px] flex items-center justify-center"
-                                title={`${t('join_code_label')}: ${p2p.peerId}`}
-                            >
-                                <span className="text-yellow-400 font-mono text-xs font-bold">CODE</span>
-                            </button>
-                        </>
-                    )}
+                    {matchState.status === 'in_progress' && p2p.isHost && p2p.peerId && (() => {
+                        const pin = p2p.peerId.replace(/^jive-/, '');
+                        const joinUrl = `${window.location.origin}${window.location.pathname || '/'}?code=${encodeURIComponent(pin)}`;
+                        return (
+                            <>
+                                {/* 참여 코드(PIN) + QR - 데스크톱 */}
+                                <div className="hidden md:flex items-center gap-2 bg-slate-800 border-2 border-yellow-500/50 rounded-lg px-3 py-2">
+                                    <button
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(pin);
+                                            showToast(t('toast_code_copied'));
+                                        }}
+                                        className="flex flex-col items-center justify-center cursor-pointer hover:bg-slate-700 rounded transition-all"
+                                        title={t('join_code_label')}
+                                    >
+                                        <span className="text-[10px] text-slate-400 uppercase tracking-widest">{t('join_code_label')}</span>
+                                        <span className="text-2xl font-mono font-black text-yellow-400 tracking-[0.2em] leading-none">
+                                            {pin}
+                                        </span>
+                                    </button>
+                                    <div className="flex-shrink-0 w-14 h-14 bg-white p-1 rounded">
+                                        <QRCodeSVG value={joinUrl} size={48} level="M" />
+                                    </div>
+                                </div>
+                                {/* 모바일: PIN + QR */}
+                                <div className="md:hidden flex items-center gap-2 bg-slate-800 border-2 border-yellow-500/50 rounded-lg p-2">
+                                    <button
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(pin);
+                                            showToast(t('toast_code_copied'));
+                                        }}
+                                        className="flex flex-col items-center justify-center min-h-[44px] min-w-[44px]"
+                                        title={`${t('join_code_label')}: ${pin}`}
+                                    >
+                                        <span className="text-[10px] text-slate-400">PIN</span>
+                                        <span className="text-yellow-400 font-mono text-lg font-black tracking-wider">{pin}</span>
+                                    </button>
+                                    <div className="w-10 h-10 bg-white p-0.5 rounded flex-shrink-0">
+                                        <QRCodeSVG value={joinUrl} size={36} level="M" />
+                                    </div>
+                                </div>
+                            </>
+                        );
+                    })()}
 
                     {mode === 'referee' && (
                         <span className="bg-yellow-600 text-white text-xs px-2 py-1 rounded font-bold whitespace-nowrap">

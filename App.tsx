@@ -48,7 +48,17 @@ const AppContent = () => {
         toast, hideToast, isLoading, exportData, saveImportedData, startMatch, resetAllData, recoveryData, handleRestoreFromBackup, dismissRecovery,
         isPasswordModalOpen, handlePasswordSuccess, handlePasswordCancel, closeSession, p2p, requestPassword
     } = useData();
+    const [pendingJoinCode, setPendingJoinCode] = useState<string | null>(null);
     const [teamsForAttendance, setTeamsForAttendance] = useState<{ teamA: string, teamB: string, teamAKey?: string, teamBKey?: string } | null>(null);
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+        if (code) {
+            setView('announcer');
+            setPendingJoinCode(code.trim().toUpperCase());
+        }
+    }, []);
     const [preselectedMatchId, setPreselectedMatchId] = useState<string | null>(null);
     const [tournamentInfoForMatch, setTournamentInfoForMatch] = useState<TournamentInfo | null>(null);
     const [leagueInfoForMatch, setLeagueInfoForMatch] = useState<LeagueInfo | null>(null);
@@ -277,7 +287,13 @@ const AppContent = () => {
                     />
                 );
             case 'announcer':
-                return <AnnouncerScreen onNavigateToHistory={() => setView('history')} />;
+                return (
+                    <AnnouncerScreen
+                        onNavigateToHistory={() => setView('history')}
+                        pendingJoinCode={pendingJoinCode}
+                        clearPendingJoinCode={() => setPendingJoinCode(null)}
+                    />
+                );
             case 'cameraDirector':
                 return <CameraDirectorScreen />;
             case 'menu':

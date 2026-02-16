@@ -11,6 +11,8 @@ import { useTranslation } from '../hooks/useTranslation';
 
 interface AnnouncerScreenProps {
     onNavigateToHistory: () => void;
+    pendingJoinCode?: string | null;
+    clearPendingJoinCode?: () => void;
 }
 
 // Helper function to convert GitHub URLs to jsDelivr CDN URLs
@@ -352,18 +354,47 @@ const LiveGameDisplay: React.FC<{ match: MatchState }> = ({ match }) => {
     };
 
     return (
-        <div className="flex flex-col gap-6 animate-fade-in flex-grow">
+        <div className="flex flex-col gap-4 animate-fade-in flex-grow">
             {showGuideModal && <CommentaryGuideModal onClose={() => setShowGuideModal(false)} />}
             {selectedPlayer && <StatModal player={selectedPlayer} onClose={() => setSelectedPlayer(null)} showRealNames={true} />}
+
+            {/* 아나운서용 전광판 스코어보드 - 상단 고정, 크고 직관적 */}
+            <div className="w-full bg-slate-950 border-2 border-slate-600 rounded-xl p-4 sm:p-6 shadow-2xl">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center justify-center gap-3 min-w-0 flex-1">
+                        <TeamEmblem emblem={match.teamA.emblem} color={match.teamA.color} className="w-12 h-12 sm:w-16 sm:h-16 flex-shrink-0" />
+                        <span className="text-xl sm:text-2xl lg:text-3xl font-bold text-white truncate" style={{ color: match.teamA.color || '#38bdf8' }}>{match.teamA.name}</span>
+                    </div>
+                    <div className="flex items-center justify-center gap-3 sm:gap-6 px-4">
+                        <span className="text-6xl sm:text-7xl lg:text-8xl xl:text-9xl font-black tabular-nums min-w-[1.2em] text-center" style={{ color: match.teamA.color || '#38bdf8' }}>{match.teamA.score}</span>
+                        <span className="text-4xl sm:text-5xl font-bold text-slate-500">:</span>
+                        <span className="text-6xl sm:text-7xl lg:text-8xl xl:text-9xl font-black tabular-nums min-w-[1.2em] text-center" style={{ color: match.teamB.color || '#f87171' }}>{match.teamB.score}</span>
+                    </div>
+                    <div className="flex items-center justify-center gap-3 min-w-0 flex-1">
+                        <span className="text-xl sm:text-2xl lg:text-3xl font-bold text-white truncate" style={{ color: match.teamB.color || '#f87171' }}>{match.teamB.name}</span>
+                        <TeamEmblem emblem={match.teamB.emblem} color={match.teamB.color} className="w-12 h-12 sm:w-16 sm:h-16 flex-shrink-0" />
+                    </div>
+                </div>
+                <div className="flex flex-wrap items-center justify-center gap-4 mt-3 pt-3 border-t border-slate-700">
+                    <span className="text-slate-400 font-semibold">세트 {match.currentSet}</span>
+                    {match.servingTeam && !match.gameOver && (
+                        <span className="flex items-center gap-1.5 text-sky-400 font-bold">
+                            <VolleyballIcon className="w-5 h-5 animate-pulse" />
+                            {(match.servingTeam === 'A' ? match.teamA : match.teamB).name} 서빙
+                        </span>
+                    )}
+                    {match.isDeuce && !match.gameOver && <span className="text-yellow-400 font-bold">듀스</span>}
+                    {match.gameOver && <span className="text-green-400 font-bold text-lg">경기 종료</span>}
+                </div>
+            </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr_1fr] gap-6 h-full max-h-[80vh]">
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr_1fr] gap-6 h-full max-h-[70vh]">
                 <TeamRoster team={match.teamA} />
-                <div className="bg-slate-900/50 p-4 rounded-lg flex flex-col items-center justify-center gap-4 text-center h-full overflow-y-auto">
-                    <h2 className="text-4xl font-bold text-white">{match.teamA.name} vs {match.teamB.name}</h2>
-                    <div className="flex items-center justify-center gap-6 my-4">
-                        <span className="text-8xl font-extrabold" style={{ color: match.teamA.color || '#38bdf8' }}>{match.teamA.score}</span>
-                        <span className="text-6xl font-bold text-slate-400">-</span>
-                        <span className="text-8xl font-extrabold" style={{ color: match.teamB.color || '#f87171' }}>{match.teamB.score}</span>
+                <div className="bg-slate-900/50 p-4 rounded-lg flex flex-col items-center justify-start gap-4 text-center h-full overflow-y-auto">
+                    <div className="flex items-center justify-center gap-4 my-2">
+                        <span className="text-4xl font-extrabold" style={{ color: match.teamA.color || '#38bdf8' }}>{match.teamA.score}</span>
+                        <span className="text-3xl font-bold text-slate-400">-</span>
+                        <span className="text-4xl font-extrabold" style={{ color: match.teamB.color || '#f87171' }}>{match.teamB.score}</span>
                     </div>
 
                     {match.timeout && (() => {
@@ -430,9 +461,17 @@ const LiveGameDisplay: React.FC<{ match: MatchState }> = ({ match }) => {
     );
 };
 
-const AnnouncerScreen: React.FC<AnnouncerScreenProps> = ({ onNavigateToHistory }) => {
-    const { matchState, p2p } = useData();
+const AnnouncerScreen: React.FC<AnnouncerScreenProps> = ({ onNavigateToHistory, pendingJoinCode, clearPendingJoinCode }) => {
+    const { matchState, p2p, joinSession } = useData();
     const { t } = useTranslation();
+    const hasTriedJoinRef = useRef(false);
+
+    useEffect(() => {
+        if (pendingJoinCode && joinSession && clearPendingJoinCode && !hasTriedJoinRef.current) {
+            hasTriedJoinRef.current = true;
+            joinSession(pendingJoinCode, clearPendingJoinCode);
+        }
+    }, [pendingJoinCode, joinSession, clearPendingJoinCode]);
 
     return (
         <div className="w-full max-w-7xl mx-auto flex flex-col gap-6 flex-grow h-full">
@@ -444,10 +483,19 @@ const AnnouncerScreen: React.FC<AnnouncerScreenProps> = ({ onNavigateToHistory }
             {matchState ? (
                 <LiveGameDisplay match={matchState} />
             ) : (
-                <div className="flex-grow flex flex-col items-center justify-center text-center text-slate-400">
-                    <p className="text-2xl font-bold">{t('no_active_game')}</p>
-                    <p className="mt-2">{t('host_will_display')}</p>
-                    <p className="mt-1 text-sm">현재 세션 ID: <span className="font-mono text-slate-300">{p2p.connections[0]?.peer || '연결되지 않음'}</span></p>
+                <div className="flex-grow flex flex-col items-center justify-center text-center text-slate-400 min-h-[40vh]">
+                    {p2p.status === 'connecting' && (
+                        <p className="text-xl font-semibold text-sky-400">연결 중...</p>
+                    )}
+                    {p2p.isConnected && !matchState && (
+                        <p className="text-lg text-slate-500">데이터 수신 대기 중...</p>
+                    )}
+                    {!p2p.isConnected && p2p.status !== 'connecting' && (
+                        <>
+                            <p className="text-2xl font-bold">{t('no_active_game')}</p>
+                            <p className="mt-2">{t('host_will_display')}</p>
+                        </>
+                    )}
                     <button onClick={onNavigateToHistory} className="mt-6 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg">
                         {t('view_past_games')}
                     </button>

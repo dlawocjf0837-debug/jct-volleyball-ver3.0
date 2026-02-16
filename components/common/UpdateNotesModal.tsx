@@ -8,6 +8,16 @@ export interface ReleaseNoteItem {
 
 const DEFAULT_RELEASE_NOTES: ReleaseNoteItem[] = [
     {
+        version: 'v3.4',
+        date: '2026.02.16',
+        items: [
+            '📡 4자리 PIN 기반 실시간 아나운서(전광판) 연동 시스템 도입',
+            '🔗 복잡한 접속 코드 대신 직관적인 \'4자리 핀 번호\'와 \'QR 코드\' 연결 지원 (대소문자 구분 없음)',
+            '⚡ WebRTC(PeerJS) 기술 적용으로 다른 와이파이/데이터 환경에서도 0.1초 만에 실시간 점수 동기화',
+            '⏱️ 경기 중간에 아나운서 화면 접속 시 0:0으로 초기화되는 현상(동기화 지연) 완벽 해결',
+        ],
+    },
+    {
         version: 'v3.3',
         date: '2026.02.16',
         items: [

@@ -83,7 +83,7 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
     onStartAnnouncer,
     onStartCameraDirector,
 }) => {
-    const { showToast, matchHistory, p2p, joinSession } = useData();
+    const { showToast, matchHistory, p2p, joinSession, closeSession } = useData();
     const { t } = useTranslation();
     const [isResetModalOpen, setIsResetModalOpen] = useState(false);
     const [passwordInput, setPasswordInput] = useState('');
@@ -205,7 +205,7 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
         if (joinId.trim()) {
             setJoinError('');
             setIsJoining(true);
-            joinSession(joinId.trim(), () => {
+            joinSession(joinId.trim().toUpperCase(), () => {
                 setIsJoining(false);
                 setIsJoinModalOpen(false);
                 onStartAnnouncer();
@@ -314,6 +314,8 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
                     if (isJoining) return;
                     setIsJoinModalOpen(false);
                     setJoinError('');
+                    setIsJoining(false);
+                    closeSession();
                 }}
                 onConfirm={handleJoinSession}
                 title={t('menu_join_session_title')}

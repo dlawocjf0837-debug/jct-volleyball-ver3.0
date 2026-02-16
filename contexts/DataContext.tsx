@@ -1,8 +1,22 @@
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useReducer, useRef, PropsWithChildren, useMemo } from 'react';
+import Peer from 'peerjs';
 import { MatchState, TeamSet, TeamMatchState, Player, PlayerStats, Action, UserEmblem, SavedTeamInfo, ScoreEvent, PlayerAchievements, PlayerCumulativeStats, ToastState, AppSettings, Tournament, League, PlayerCoachingLogs, CoachingLog, TeamStats, DataContextType, Badge, P2PState, DataConnection, P2PMessage, Language, ScoreEventType } from '../types';
 import { BADGE_DEFINITIONS } from '../data/badges';
 import { translations } from '../data/translations';
 import localforage from 'localforage';
+
+const P2P_PIN_PREFIX = 'jive-';
+const PIN_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 영문대문자+숫자 (혼동 가능 문자 제외)
+function generatePin(): string {
+    let pin = '';
+    for (let i = 0; i < 4; i++) pin += PIN_CHARS[Math.floor(Math.random() * PIN_CHARS.length)];
+    return pin;
+}
+function toHostPeerId(pinOrId: string): string {
+    const s = pinOrId.trim().toUpperCase();
+    if (s.length === 4 && /^[A-Z0-9]+$/.test(s)) return P2P_PIN_PREFIX + s;
+    return s.startsWith(P2P_PIN_PREFIX) ? s : P2P_PIN_PREFIX + s;
+}
 
 const TEAM_SETS_KEY = 'jct_volleyball_team_sets';
 const MATCH_HISTORY_KEY = 'jct_volleyball_match_history';
@@ -101,9 +115,11 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
     }, []);
     
     const [p2p, setP2p] = useState<P2PState>({ peerId: null, isHost: false, isConnected: false, connections: [], status: 'disconnected' });
-    const peerRef = useRef<any>(null); // Using 'any' for PeerJS object
+    const peerRef = useRef<any>(null);
     const connRef = useRef<DataConnection[]>([]);
     const isIntentionallyClosing = useRef(false);
+    /** Stale closure 방지: 클라이언트 중간 접속 시 항상 최신 스코어 전송용 */
+    const latestMatchStateRef = useRef<MatchState | null>(null);
     
     const t = useCallback((key: string, replacements?: Record<string, string | number>): string => {
         let translation = translations[key]?.[language] || key;
@@ -1475,11 +1491,14 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
         if (peerRef.current) {
             peerRef.current.destroy();
         }
+        latestMatchStateRef.current = initialState ?? matchState ?? null;
+        const pin = generatePin();
+        const peerId = P2P_PIN_PREFIX + pin;
         setP2p(prev => ({ ...prev, status: 'connecting', isHost: true, isConnected: false, peerId: null, connections: [] }));
         connRef.current = [];
 
-        const newPeer = new (window as any).Peer(undefined, {
-            config: {'iceServers': [
+        const newPeer = new Peer(peerId, {
+            config: { iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' },
                 { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' }
@@ -1487,16 +1506,16 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
         });
         peerRef.current = newPeer;
 
-        newPeer.on('open', (id: string) => {
-            setP2p(prev => ({ ...prev, peerId: id, status: 'connected', isConnected: true }));
-            showToast(`실시간 세션이 시작되었습니다. 참여 코드: ${id}`, 'success');
+        newPeer.on('open', () => {
+            setP2p(prev => ({ ...prev, peerId, status: 'connected', isConnected: true }));
+            showToast(`실시간 세션이 시작되었습니다. 참여 코드: ${pin}`, 'success');
         });
 
         newPeer.on('connection', (conn: DataConnection) => {
-            showToast(`${conn.peer}가 연결되었습니다.`, 'success');
             conn.on('open', () => {
-                const stateToSync = initialState || matchState;
-                if(stateToSync) {
+                showToast('아나운서 화면이 성공적으로 연결되었습니다!', 'success');
+                const stateToSync = latestMatchStateRef.current ?? initialState ?? matchState;
+                if (stateToSync) {
                     conn.send({ type: 'full_state_sync', payload: stateToSync });
                 }
                 conn.send({ type: 'settings_sync', payload: settings });
@@ -1528,13 +1547,18 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
         });
     }, [showToast, matchState, settings, teamSets, userEmblems]);
 
-    const joinSession = useCallback((peerId: string, onSuccess: () => void) => {
+    useEffect(() => {
+        latestMatchStateRef.current = matchState;
+    }, [matchState]);
+
+    const joinSession = useCallback((pinOrId: string, onSuccess: () => void) => {
         if (peerRef.current) peerRef.current.destroy();
         
+        const hostPeerId = toHostPeerId(pinOrId);
         setP2p({ peerId: null, isHost: false, isConnected: false, connections: [], status: 'connecting', error: undefined });
         
-        const newPeer = new (window as any).Peer(undefined, {
-             config: {'iceServers': [
+        const newPeer = new Peer(undefined, {
+            config: { iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' },
                 { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' }
@@ -1542,12 +1566,29 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
         });
         peerRef.current = newPeer;
 
+        const JOIN_TIMEOUT_MS = 6000;
+        const timeoutMessage = '연결 시간 초과. 코드를 다시 확인해 주세요.';
+
         newPeer.on('open', () => {
-            const conn = newPeer.connect(peerId, { reliable: true });
+            const conn = newPeer.connect(hostPeerId, { reliable: true });
             connRef.current = [conn];
 
+            let timeoutId: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+                timeoutId = null;
+                try { conn.close(); } catch (_) {}
+                peerRef.current?.destroy();
+                peerRef.current = null;
+                connRef.current = [];
+                setP2p(prev => ({ ...prev, status: 'error', error: timeoutMessage, isConnected: false }));
+                showToast(timeoutMessage, 'error');
+            }, JOIN_TIMEOUT_MS);
+
             conn.on('open', () => {
-                showToast(`호스트(${peerId})에 연결되었습니다.`, 'success');
+                if (timeoutId !== null) {
+                    clearTimeout(timeoutId);
+                    timeoutId = null;
+                }
+                showToast('호스트에 연결되었습니다.', 'success');
                 setP2p(prev => ({ ...prev, peerId: newPeer.id, isConnected: true, status: 'connected', connections: [conn] }));
                 onSuccess();
             });
@@ -1568,17 +1609,27 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
 
             conn.on('close', () => {
                 if (!isIntentionallyClosing.current) {
+                    if (timeoutId !== null) {
+                        clearTimeout(timeoutId);
+                        timeoutId = null;
+                    }
                     showToast('호스트와의 연결이 끊어졌습니다.', 'error');
                     dispatch({type: 'RESET_STATE'});
                     closeSession();
                 }
             });
             conn.on('error', (err: any) => {
+                if (timeoutId !== null) {
+                    clearTimeout(timeoutId);
+                    timeoutId = null;
+                }
                 console.error("PeerJS connection error:", err);
                 const message = `연결 오류: ${err.type}`;
                 setP2p(prev => ({ ...prev, status: 'error', error: message, isConnected: false }));
                 showToast(message, 'error');
-                closeSession();
+                peerRef.current?.destroy();
+                peerRef.current = null;
+                connRef.current = [];
             });
         });
 
@@ -1587,7 +1638,9 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
             const message = err.type === 'peer-unavailable' ? '호스트에 연결할 수 없습니다. 코드를 확인하세요.' : `연결 오류: ${err.type}`;
             setP2p(prev => ({ ...prev, status: 'error', error: message, isConnected: false }));
             showToast(message, 'error');
-            closeSession();
+            peerRef.current?.destroy();
+            peerRef.current = null;
+            connRef.current = [];
         });
     }, [showToast, closeSession]);
 
@@ -1686,7 +1739,6 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
         if (newState) {
             dispatch({ type: 'LOAD_STATE', state: newState });
             if (p2p.isHost) {
-                // FIX: Send Full State Sync on UNDO to ensure clients match exactly
                 if (action.type === 'UNDO') {
                     broadcast({ type: 'full_state_sync', payload: newState });
                 } else {
@@ -1695,6 +1747,14 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
             }
         }
     }, [matchState, p2p.isHost, broadcast, matchReducer]);
+
+    // Phase 2: 경기 데이터 변경 시마다 연결된 모든 클라이언트에 최신 상태 브로드캐스트 (ref 사용으로 항상 최신값 전송)
+    useEffect(() => {
+        if (p2p.isHost && connRef.current.length > 0) {
+            const state = latestMatchStateRef.current ?? matchState;
+            if (state) broadcast({ type: 'full_state_sync', payload: state });
+        }
+    }, [matchState, p2p.isHost, broadcast]);
 
     useEffect(() => {
         let interval: ReturnType<typeof setInterval> | null = null;
