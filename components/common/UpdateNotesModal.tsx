@@ -8,6 +8,15 @@ export interface ReleaseNoteItem {
 
 const DEFAULT_RELEASE_NOTES: ReleaseNoteItem[] = [
     {
+        version: 'v3.3',
+        date: '2026.02.16',
+        items: [
+            '🕸️ 단일 팀 방사형(레이더) 그래프 조회 지원 및 팀 분석 표 수비/범실 지표 추가',
+            '✏️ 팀 관리 화면 내 직관적인 이름 수정(연필 아이콘) 및 엠블럼 라벨 도입',
+            '💡 실제 학교 현장 선생님들의 피드백을 반영한 사용성 향상',
+        ],
+    },
+    {
         version: 'v3.2',
         date: '2026.02.14',
         items: [

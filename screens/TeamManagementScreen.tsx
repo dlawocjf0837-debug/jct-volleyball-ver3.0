@@ -4,7 +4,7 @@ import { SavedTeamInfo, Player, TeamSet } from '../types';
 import EmblemModal from '../components/EmblemModal';
 import TeamEmblem from '../components/TeamEmblem';
 import { TeamProfileCardModal } from '../components/TeamProfileCardModal';
-import { IdentificationIcon, TrashIcon, UsersIcon } from '../components/icons';
+import { IdentificationIcon, PencilIcon, TrashIcon, UsersIcon } from '../components/icons';
 import ConfirmationModal from '../components/common/ConfirmationModal';
 import RosterManagementModal from '../components/RosterManagementModal';
 import PlayerSelectionModal from '../components/PlayerSelectionModal';
@@ -630,6 +630,7 @@ const TeamManagementScreen: React.FC = () => {
                                     <div key={team.key} className="bg-slate-800 p-4 rounded-lg space-y-4">
                                         <div className="flex items-start gap-4">
                                             <div className="flex-shrink-0 flex flex-col items-center gap-2">
+                                                <span className="text-xs text-slate-400">{t('team_management_emblem_label')}</span>
                                                 <button 
                                                     onClick={() => { setCurrentTargetTeamKey(team.key); setIsEmblemModalOpen(true); }}
                                                     className="w-20 h-20 bg-slate-900 rounded-lg flex items-center justify-center border-2 border-dashed border-slate-600 hover:border-sky-500 transition-colors"
@@ -654,13 +655,14 @@ const TeamManagementScreen: React.FC = () => {
                                                 </div>
                                             </div>
                                             <div className="flex-grow space-y-3">
-                                                <div className="flex items-center gap-3">
+                                                <div className="flex items-center gap-3 flex-wrap">
                                                     <button
                                                         onClick={() => handleOpenRosterModal(team.key)}
-                                                        className="font-semibold text-xl hover:underline hover:opacity-80 text-left transition-all"
+                                                        className="inline-flex items-center gap-1.5 font-semibold text-xl hover:underline hover:opacity-80 text-left transition-all group"
                                                         style={{ color: config.color || '#cbd5e1' }}
                                                     >
-                                                        {config.teamName}
+                                                        <span>{config.teamName}</span>
+                                                        <PencilIcon className="w-5 h-5 text-slate-400 cursor-pointer group-hover:text-slate-300 transition-colors flex-shrink-0" />
                                                     </button>
                                                     {conflict && <span className="text-xs text-yellow-400 bg-yellow-900/50 px-2 py-1 rounded-md">{t('team_management_color_conflict', { teams: conflict.join(', ') })}</span>}
                                                 </div>

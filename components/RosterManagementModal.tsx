@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../contexts/DataContext';
 import { Player, SavedTeamInfo } from '../types';
-import { TrashIcon, CrownIcon } from './icons';
+import { TrashIcon, CrownIcon, PencilIcon } from './icons';
 import ConfirmationModal from './common/ConfirmationModal';
 import { useTranslation } from '../hooks/useTranslation';
 
@@ -133,11 +133,11 @@ const RosterManagementModal: React.FC<RosterManagementModalProps> = ({ isOpen, o
                     </div>
                 ) : (
                     <h2
-                        className="text-2xl font-bold text-sky-400 mb-4 flex-shrink-0 cursor-pointer group"
+                        className="text-2xl font-bold text-sky-400 mb-4 flex-shrink-0 cursor-pointer inline-flex items-center gap-2 hover:opacity-90 transition-opacity"
                         onClick={() => setIsEditingName(true)}
                     >
-                        {t('roster_title', { teamName: teamConfig.teamName })}
-                        <span className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity">✏️</span>
+                        <span>{t('roster_title', { teamName: teamConfig.teamName })}</span>
+                        <PencilIcon className="w-6 h-6 text-slate-400 flex-shrink-0" />
                     </h2>
                 )}
                 

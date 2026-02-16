@@ -26,6 +26,7 @@ type TeamStats = {
     serviceFaults: number;
     blockingPoints: number;
     spikeSuccesses: number;
+    digs: number;
     threeHitPlays: number;
     fairPlay: number;
     serveIn?: number;
@@ -40,40 +41,50 @@ type SortConfig = {
 interface TeamComparisonRadarModalProps {
     isOpen: boolean;
     onClose: () => void;
-    team1: TeamStats;
-    team2: TeamStats;
+    teams: TeamStats[];
     allTeamsData: TeamStats[];
 }
 
-const TeamComparisonRadarModal: React.FC<TeamComparisonRadarModalProps> = ({ isOpen, onClose, team1, team2, allTeamsData }) => {
+const TeamComparisonRadarModal: React.FC<TeamComparisonRadarModalProps> = ({ isOpen, onClose, teams, allTeamsData }) => {
     const { t } = useTranslation();
     const radarMetrics: { key: keyof TeamStats; label: string }[] = [
         { key: 'avgPointsFor', label: t('analysis_radar_avg_score') },
+        { key: 'avgPointsAgainst', label: t('analysis_radar_avg_against') },
         { key: 'serviceAces', label: t('analysis_radar_avg_serve') },
         { key: 'avgServeSuccess', label: t('analysis_radar_avg_serve_success') },
+        { key: 'serviceFaults', label: t('analysis_radar_avg_serve_fault') },
         { key: 'spikeSuccesses', label: t('analysis_radar_avg_spike') },
         { key: 'blockingPoints', label: t('analysis_radar_avg_blocking') },
+        { key: 'digs', label: t('analysis_radar_avg_digs') },
         { key: 'threeHitPlays', label: t('analysis_radar_avg_3hit') },
         { key: 'fairPlay', label: t('analysis_radar_avg_fairplay') },
     ];
 
     const chartData = useMemo(() => {
-        if (!team1 || !team2) return [];
+        if (!teams || teams.length === 0) return [];
 
-        // 모든 항목을 항상 표시, 점수가 0이거나 없으면 0으로 설정
+        const team1 = teams[0];
+        // 모든 항목을 항상 표시, 점수가 0이거나 없으면 0으로 설정 (allTeamsData로 스케일 통일)
         const maxValues = radarMetrics.reduce((acc, metric) => {
-            const maxValue = Math.max(...allTeamsData.map(t => Number((t as any)[metric.key]) || 0), 1);
-            (acc as any)[metric.key] = Math.ceil(maxValue); // Round up for cleaner axis
+            const maxValue = Math.max(...(allTeamsData || []).map(t => Number((t as any)[metric.key]) || 0), 1);
+            (acc as any)[metric.key] = Math.ceil(maxValue);
             return acc;
         }, {} as Partial<Record<keyof TeamStats, number>>);
 
-        return radarMetrics.map(metric => ({
-            subject: metric.label,
-            [team1.teamName]: Number(team1[metric.key]) || 0,
-            [team2.teamName]: Number(team2[metric.key]) || 0,
-            fullMark: (maxValues as any)[metric.key],
-        }));
-    }, [team1, team2, allTeamsData]);
+        return radarMetrics.map(metric => {
+            const point: Record<string, string | number> = {
+                subject: metric.label,
+                [team1.teamName]: Number(team1[metric.key]) || 0,
+                fullMark: (maxValues as any)[metric.key],
+            };
+            if (teams.length >= 2 && teams[1]) {
+                point[teams[1].teamName] = Number(teams[1][metric.key]) || 0;
+            }
+            return point;
+        });
+    }, [teams, allTeamsData]);
+
+    const modalTitle = teams?.length === 2 ? t('analysis_compare_title') : t('analysis_radar_title_single');
 
     if (!isOpen) return null;
 
@@ -82,10 +93,11 @@ const TeamComparisonRadarModal: React.FC<TeamComparisonRadarModalProps> = ({ isO
             <div className="bg-slate-900 rounded-lg shadow-2xl p-6 w-full max-w-2xl text-white border border-slate-700" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-start mb-4">
                     <div>
-                        <h2 className="text-2xl font-bold text-[#00A3FF]">{t('analysis_compare_title')}</h2>
-                        <div className="flex items-center gap-4 mt-1 text-slate-300">
-                           <p><span className="font-bold text-lg" style={{color: team1.color || '#3b82f6'}}>■</span> {team1.teamName}</p>
-                           <p><span className="font-bold text-lg" style={{color: team2.color || '#ef4444'}}>■</span> {team2.teamName}</p>
+                        <h2 className="text-2xl font-bold text-[#00A3FF]">{modalTitle}</h2>
+                        <div className="flex items-center gap-4 mt-1 text-slate-300 flex-wrap">
+                            {teams?.map((team, i) => (
+                                <p key={team.teamName}><span className="font-bold text-lg" style={{ color: team.color || (i === 0 ? '#3b82f6' : '#ef4444') }}>■</span> {team.teamName}</p>
+                            ))}
                         </div>
                     </div>
                     <button onClick={onClose} className="text-2xl font-bold text-slate-500 hover:text-white">&times;</button>
@@ -96,8 +108,9 @@ const TeamComparisonRadarModal: React.FC<TeamComparisonRadarModalProps> = ({ isO
                             <PolarGrid stroke="#475569" />
                             <PolarAngleAxis dataKey="subject" tick={{ fill: '#cbd5e1' }} />
                             <PolarRadiusAxis angle={30} domain={[0, 'dataMax']} stroke="#475569" />
-                            <Radar name={team1.teamName} dataKey={team1.teamName} stroke={team1.color || '#3b82f6'} fill={team1.color || '#3b82f6'} fillOpacity={0.6} />
-                            <Radar name={team2.teamName} dataKey={team2.teamName} stroke={team2.color || '#ef4444'} fill={team2.color || '#ef4444'} fillOpacity={0.6} />
+                            {teams?.map((team, i) => (
+                                <Radar key={team.teamName} name={team.teamName} dataKey={team.teamName} stroke={team.color || (i === 0 ? '#3b82f6' : '#ef4444')} fill={team.color || (i === 0 ? '#3b82f6' : '#ef4444')} fillOpacity={0.6} />
+                            ))}
                             <Tooltip contentStyle={{ backgroundColor: 'rgba(10, 15, 31, 0.9)', borderColor: '#475569', borderRadius: '0.5rem' }} />
                             <Legend />
                         </RadarChart>
@@ -144,7 +157,7 @@ const TeamAnalysisScreen: React.FC = () => {
                     if (!stats[teamName]) {
                         stats[teamName] = {
                             gamesPlayed: 0, wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0,
-                            serviceAces: 0, serviceFaults: 0, blockingPoints: 0, spikeSuccesses: 0, threeHitPlays: 0, fairPlay: 0,
+                            serviceAces: 0, serviceFaults: 0, blockingPoints: 0, spikeSuccesses: 0, digs: 0, threeHitPlays: 0, fairPlay: 0,
                             serveIn: 0
                         };
                     }
@@ -161,6 +174,10 @@ const TeamAnalysisScreen: React.FC = () => {
                     stats[teamName].serviceFaults += teamData.serviceFaults || 0;
                     stats[teamName].blockingPoints += teamData.blockingPoints || 0;
                     stats[teamName].spikeSuccesses += teamData.spikeSuccesses || 0;
+                    // 나이스 수비(디그): 선수별 기록 합산
+                    if (teamData.playerStats) {
+                        stats[teamName].digs += Object.values(teamData.playerStats).reduce<number>((sum, p: any) => sum + (Number(p.digs) || 0), 0);
+                    }
                     stats[teamName].threeHitPlays += teamData.threeHitPlays || 0;
                     stats[teamName].fairPlay += teamData.fairPlay || 0;
                     
@@ -202,6 +219,7 @@ const TeamAnalysisScreen: React.FC = () => {
                 fairPlay: gamesPlayed > 0 ? data.fairPlay / gamesPlayed : 0,
                 serviceFaults: data.serviceFaults,
                 blockingPoints: data.blockingPoints,
+                digs: data.digs,
                 serveIn: data.serveIn
             };
         });
@@ -283,12 +301,13 @@ const TeamAnalysisScreen: React.FC = () => {
     };
 
     const comparisonTeams = useMemo(() => {
-        if (selectedTeamsForComparison.size !== 2) return null;
+        if (selectedTeamsForComparison.size < 1) return null;
         const teamNames = Array.from(selectedTeamsForComparison);
-        const team1 = teamPerformanceData.find(t => t.teamName === teamNames[0]);
-        const team2 = teamPerformanceData.find(t => t.teamName === teamNames[1]);
-        if (!team1 || !team2) return null;
-        return { team1, team2 };
+        const teams = teamNames
+            .map(name => teamPerformanceData.find(t => t.teamName === name))
+            .filter((t): t is TeamStats => t != null);
+        if (teams.length === 0) return null;
+        return teams;
     }, [selectedTeamsForComparison, teamPerformanceData]);
     
     const tooltips: Partial<Record<keyof TeamStats, string>> = {
@@ -300,7 +319,10 @@ const TeamAnalysisScreen: React.FC = () => {
         avgPointsAgainst: t('analysis_tooltip_avg_against'),
         serviceAces: t('analysis_tooltip_avg_serve'),
         avgServeSuccess: t('analysis_tooltip_avg_serve_success'),
+        serviceFaults: t('analysis_tooltip_serve_fault'),
         spikeSuccesses: t('analysis_tooltip_avg_spike'),
+        blockingPoints: t('analysis_tooltip_blocking'),
+        digs: t('analysis_tooltip_digs'),
         threeHitPlays: t('analysis_tooltip_avg_3hit'),
         fairPlay: t('analysis_tooltip_avg_fairplay'),
     };
@@ -311,7 +333,8 @@ const TeamAnalysisScreen: React.FC = () => {
         const maxVals: Partial<Record<keyof TeamStats, number>> = {};
         const keysToCompare: (keyof TeamStats)[] = [
             'gamesPlayed', 'wins', 'winRate', 'avgPointsFor', 
-            'serviceAces', 'avgServeSuccess', 'spikeSuccesses', 'threeHitPlays', 'fairPlay'
+            'serviceAces', 'avgServeSuccess', 'spikeSuccesses', 'threeHitPlays', 'fairPlay',
+            'serviceFaults', 'blockingPoints', 'digs'
         ];
     
         keysToCompare.forEach(key => {
@@ -331,7 +354,10 @@ const TeamAnalysisScreen: React.FC = () => {
         { key: 'avgPointsAgainst', label: t('analysis_header_avg_against'), format: v => v.toFixed(1) },
         { key: 'serviceAces', label: t('analysis_header_avg_serve'), format: v => v.toFixed(1) },
         { key: 'avgServeSuccess', label: t('analysis_header_avg_serve_success'), format: v => v.toFixed(1) },
-        { key: 'spikeSuccesses', label: t('analysis_header_avg_spike'), format: v => v.toFixed(1) },
+        { key: 'serviceFaults', label: t('analysis_header_serve_fault') },
+        { key: 'spikeSuccesses', label: t('analysis_header_spike_success'), format: v => v.toFixed(1) },
+        { key: 'blockingPoints', label: t('analysis_header_blocking') },
+        { key: 'digs', label: t('analysis_header_digs') },
         { key: 'threeHitPlays', label: t('analysis_header_avg_3hit'), format: v => v.toFixed(1) },
         { key: 'fairPlay', label: t('analysis_header_avg_fairplay'), format: v => v.toFixed(1) },
     ];
@@ -349,12 +375,11 @@ const TeamAnalysisScreen: React.FC = () => {
     
     return (
         <>
-            {comparisonTeams && (
+            {comparisonTeams && comparisonTeams.length > 0 && (
                 <TeamComparisonRadarModal 
                     isOpen={isComparisonModalOpen}
                     onClose={() => setIsComparisonModalOpen(false)}
-                    team1={comparisonTeams.team1}
-                    team2={comparisonTeams.team2}
+                    teams={comparisonTeams}
                     allTeamsData={teamPerformanceData}
                 />
             )}
@@ -404,10 +429,10 @@ const TeamAnalysisScreen: React.FC = () => {
                             <div className="p-3 flex justify-end bg-slate-800/50 border-b border-slate-700">
                                 <button 
                                     onClick={() => setIsComparisonModalOpen(true)}
-                                    disabled={selectedTeamsForComparison.size !== 2}
+                                    disabled={selectedTeamsForComparison.size < 1}
                                     className="bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold py-2 px-4 rounded transition-colors disabled:bg-slate-600 disabled:cursor-not-allowed"
                                 >
-                                    {t('analysis_compare_button')} ({selectedTeamsForComparison.size}/2)
+                                    {selectedTeamsForComparison.size === 2 ? t('analysis_radar_button_compare') : selectedTeamsForComparison.size === 1 ? t('analysis_radar_button_single') : t('analysis_radar_button_none')}
                                 </button>
                             </div>
                             <div className="overflow-x-auto">

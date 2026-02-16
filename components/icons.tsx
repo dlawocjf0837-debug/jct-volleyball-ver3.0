@@ -79,6 +79,20 @@ export const BookmarkSquareIcon: React.FC<{ className?: string }> = ({ className
     </svg>
 );
 
+/** 노란색 연필 모양(몸통·지우개·심) - 편집 직관용 */
+export const PencilIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className}>
+        {/* 연필 심(끝) - 진한 노랑 */}
+        <path fill="#CA8A04" d="M10.5 21 L13.5 21 L12 24 Z" />
+        {/* 연필 몸통 - 노란색 */}
+        <path fill="#EAB308" d="M8 6.5 16 6.5 13.5 21 10.5 21 Z" />
+        {/* 금속 밴드 */}
+        <path fill="#94A3B8" d="M9.5 5 14.5 5 14.5 6.5 9.5 6.5 Z" />
+        {/* 지우개 - 분홍 */}
+        <path fill="#F472B6" d="M9 2 15 2 15 5 9 5 Z" />
+    </svg>
+);
+
 export const IdentificationIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={className}>
       <path fillRule="evenodd" d="M1 4a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V4Zm12 4a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM4 9a1 1 0 0 1 1-1h.226a4.99 4.99 0 0 0 .524 1.5 5 5 0 0 1-1.5.5H4V9Zm11 1h.25a5 5 0 0 1-1.5-.5 4.99 4.99 0 0 0 .524-1.5H15v1Zm-5.5 2.5a3.5 3.5 0 0 0-3.395 2.5h6.79A3.5 3.5 0 0 0 9.5 12.5Z" clipRule="evenodd" />
