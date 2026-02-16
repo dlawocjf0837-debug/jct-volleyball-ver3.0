@@ -330,11 +330,30 @@ export interface P2PState {
     connections: DataConnection[];
     status: 'disconnected' | 'connecting' | 'connected' | 'error';
     error?: string;
+    /** 클라이언트 전용: 방장이 켠 대회 모드 여부 */
+    clientTournamentMode?: boolean;
+    /** 시청자 수 (호스트: 실시간 계산, 클라이언트: 수신값) */
+    viewerCount?: number;
 }
 
 export type P2PMessage = {
     type: 'full_state_sync';
-    payload: MatchState;
+    payload: MatchState | { matchData: MatchState; isTournamentMode: boolean };
+} | {
+    type: 'tournament_mode_sync';
+    payload: boolean;
+} | {
+    type: 'ticker_sync';
+    payload: string;
+} | {
+    type: 'REACTION';
+    payload: { emoji: string };
+} | {
+    type: 'reaction_broadcast';
+    payload: { emoji: string };
+} | {
+    type: 'viewer_count_sync';
+    payload: number;
 } | {
     type: 'action';
     payload: Action;
@@ -410,6 +429,14 @@ export interface DataContextType {
     settings: AppSettings;
     saveSettings: (newSettings: AppSettings) => Promise<void>;
     p2p: P2PState;
+    setHostTournamentMode?: (value: boolean) => void;
+    sendTicker?: (message: string) => void;
+    sendReaction?: (emoji: string) => void;
+    receivedTickerMessage: string | null;
+    clearTicker: () => void;
+    receivedReactions: { id: number; emoji: string }[];
+    addReceivedReaction: (emoji: string) => void;
+    removeReceivedReaction: (id: number) => void;
     startHostSession: (initialState?: MatchState) => void;
     joinSession: (peerId: string, onSuccess: () => void) => void;
     closeSession: () => void;

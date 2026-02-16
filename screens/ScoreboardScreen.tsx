@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { QRCodeSVG } from 'qrcode.react';
+import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 import { useData } from '../contexts/DataContext';
-import { VolleyballIcon, StopwatchIcon, QuestionMarkCircleIcon, SwitchHorizontalIcon, ShieldIcon, BoltIcon, TargetIcon, FireIcon, WallIcon, LinkIcon, HandshakeIcon } from '../components/icons';
+import { VolleyballIcon, StopwatchIcon, QuestionMarkCircleIcon, SwitchHorizontalIcon, ShieldIcon, BoltIcon, TargetIcon, FireIcon, WallIcon, LinkIcon, HandshakeIcon, MagnifyingGlassIcon } from '../components/icons';
 import RulesModal from '../components/RulesModal';
 import TimeoutModal from '../components/TimeoutModal';
 import PlayerSelectionModal from '../components/PlayerSelectionModal';
@@ -27,7 +27,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
     const { 
         matchState, matchTime, timerOn, dispatch, setTimerOn,
         matchHistory, saveMatchHistory, showToast, p2p, clearInProgressMatch,
-        settings
+        settings, setHostTournamentMode, sendTicker
     } = useData();
     const { t } = useTranslation();
 
@@ -38,6 +38,42 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
     // Logic for Assist selection modal chain
     const [assistModalOpen, setAssistModalOpen] = useState(false);
     const [pendingAssistTeam, setPendingAssistTeam] = useState<'A' | 'B' | null>(null);
+
+    // 대회 전광판 모드 (방장 전용, 비밀번호 9999로만 활성화)
+    const [isTournamentMode, setIsTournamentMode] = useState(false);
+    const [showTournamentPasswordModal, setShowTournamentPasswordModal] = useState(false);
+    const [tournamentPasswordInput, setTournamentPasswordInput] = useState('');
+    const [tickerInput, setTickerInput] = useState('');
+    const latestIsTournamentModeRef = useRef(false);
+    useEffect(() => {
+        latestIsTournamentModeRef.current = isTournamentMode;
+    }, [isTournamentMode]);
+    useEffect(() => {
+        if (p2p.isHost && setHostTournamentMode) setHostTournamentMode(isTournamentMode);
+    }, [isTournamentMode, p2p.isHost, setHostTournamentMode]);
+
+    const handleTournamentModeToggle = (nextChecked: boolean) => {
+        if (nextChecked) {
+            setShowTournamentPasswordModal(true);
+            setTournamentPasswordInput('');
+        } else {
+            setIsTournamentMode(false);
+        }
+    };
+    const handleTournamentPasswordConfirm = () => {
+        if (tournamentPasswordInput.trim() === '9999') {
+            setIsTournamentMode(true);
+            setShowTournamentPasswordModal(false);
+            setTournamentPasswordInput('');
+        } else {
+            showToast('비밀번호가 일치하지 않습니다.', 'error');
+        }
+    };
+
+    // QR 확대 모달
+    const [showQRZoomModal, setShowQRZoomModal] = useState(false);
+    const [qrZoomPin, setQrZoomPin] = useState<string | null>(null);
+    const qrCanvasContainerRef = useRef<HTMLDivElement>(null);
 
     // UX 디테일: 소리 및 자동 저장 알림
     const [soundEnabled, setSoundEnabled] = useState(true);
@@ -550,7 +586,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                 <div className="flex-1 flex justify-end items-center gap-2 sm:gap-4">
                     {matchState.status === 'in_progress' && p2p.isHost && p2p.peerId && (() => {
                         const pin = p2p.peerId.replace(/^jive-/, '');
-                        const joinUrl = `${window.location.origin}${window.location.pathname || '/'}?code=${encodeURIComponent(pin)}`;
+                        const joinUrl = `${window.location.origin}${window.location.pathname || '/'}?liveCode=${encodeURIComponent(pin)}`;
                         return (
                             <>
                                 {/* 참여 코드(PIN) + QR - 데스크톱 */}
@@ -571,7 +607,32 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                                     <div className="flex-shrink-0 w-14 h-14 bg-white p-1 rounded">
                                         <QRCodeSVG value={joinUrl} size={48} level="M" />
                                     </div>
+                                    <button
+                                        onClick={() => { setQrZoomPin(pin); setShowQRZoomModal(true); }}
+                                        className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white min-h-[44px] min-w-[44px] flex items-center justify-center"
+                                        title="QR 코드 확대"
+                                    >
+                                        <MagnifyingGlassIcon className="w-5 h-5" />
+                                    </button>
                                 </div>
+                                {/* 대회 전광판 모드 토글 스위치 */}
+                                <div className="hidden md:flex items-center gap-2 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2">
+                                    <span className="text-sm font-medium text-slate-200 whitespace-nowrap">🏆 대회 전광판 모드</span>
+                                    <button
+                                        type="button"
+                                        role="switch"
+                                        aria-checked={isTournamentMode}
+                                        onClick={() => handleTournamentModeToggle(!isTournamentMode)}
+                                        className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-slate-800 ${isTournamentMode ? 'bg-amber-500/70' : 'bg-slate-600'}`}
+                                    >
+                                        <span className={`pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform ${isTournamentMode ? 'translate-x-5' : 'translate-x-0'}`} />
+                                    </button>
+                                </div>
+                                {p2p.isHost && (
+                                    <span className="hidden md:inline-flex items-center px-3 py-1.5 rounded-lg bg-sky-500/20 border border-sky-500/50 text-sky-400 text-sm font-semibold">
+                                        👀 {p2p.viewerCount ?? 0}명 시청 중
+                                    </span>
+                                )}
                                 {/* 모바일: PIN + QR */}
                                 <div className="md:hidden flex items-center gap-2 bg-slate-800 border-2 border-yellow-500/50 rounded-lg p-2">
                                     <button
@@ -588,7 +649,32 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                                     <div className="w-10 h-10 bg-white p-0.5 rounded flex-shrink-0">
                                         <QRCodeSVG value={joinUrl} size={36} level="M" />
                                     </div>
+                                    <button
+                                        onClick={() => { setQrZoomPin(pin); setShowQRZoomModal(true); }}
+                                        className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white min-h-[44px] min-w-[44px] flex items-center justify-center"
+                                        title="QR 코드 확대"
+                                    >
+                                        <MagnifyingGlassIcon className="w-5 h-5" />
+                                    </button>
                                 </div>
+                                {/* 모바일: 대회 전광판 모드 토글 스위치 */}
+                                <div className="md:hidden flex items-center gap-2 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 min-h-[44px]">
+                                    <span className="text-sm font-medium text-slate-200 whitespace-nowrap">🏆 대회 전광판</span>
+                                    <button
+                                        type="button"
+                                        role="switch"
+                                        aria-checked={isTournamentMode}
+                                        onClick={() => handleTournamentModeToggle(!isTournamentMode)}
+                                        className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-slate-800 ${isTournamentMode ? 'bg-amber-500/70' : 'bg-slate-600'}`}
+                                    >
+                                        <span className={`pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform ${isTournamentMode ? 'translate-x-5' : 'translate-x-0'}`} />
+                                    </button>
+                                </div>
+                                {p2p.isHost && (
+                                    <span className="md:hidden inline-flex items-center px-2 py-1 rounded-lg bg-sky-500/20 border border-sky-500/50 text-sky-400 text-xs font-semibold">
+                                        👀 {p2p.viewerCount ?? 0}명
+                                    </span>
+                                )}
                             </>
                         );
                     })()}
@@ -629,6 +715,27 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                     </button>
                 </div>
             </div>
+
+            {/* 대회 모드 시: 대회 공지 자막 송출 */}
+            {isTournamentMode && p2p.isHost && sendTicker && (
+                <div className="flex flex-wrap items-center gap-2 mb-3 p-2 bg-slate-800/80 border border-amber-500/30 rounded-lg">
+                    <input
+                        type="text"
+                        value={tickerInput}
+                        onChange={(e) => setTickerInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && sendTicker(tickerInput) && setTickerInput('')}
+                        placeholder="대회 공지 자막 송출"
+                        className="flex-1 min-w-[120px] bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                    <button
+                        type="button"
+                        onClick={() => { sendTicker(tickerInput); setTickerInput(''); }}
+                        className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold text-sm"
+                    >
+                        전송
+                    </button>
+                </div>
+            )}
 
             {/* Game Timeline (Moved to middle) */}
             <div className="mb-3 sm:mb-4">
@@ -690,6 +797,80 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                 show={showAutoSaveToast} 
                 onHide={() => setShowAutoSaveToast(false)} 
             />
+
+            {/* 대회 모드 비밀번호 모달 */}
+            {showTournamentPasswordModal && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
+                    <div className="bg-slate-900 rounded-2xl border border-slate-600 shadow-2xl w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+                        <h3 className="text-lg font-bold text-slate-200 mb-3">🏆 대회 전광판 모드</h3>
+                        <p className="text-sm text-slate-400 mb-4">비밀번호를 입력하세요.</p>
+                        <input
+                            type="password"
+                            value={tournamentPasswordInput}
+                            onChange={(e) => setTournamentPasswordInput(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleTournamentPasswordConfirm()}
+                            placeholder="비밀번호"
+                            className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 mb-4"
+                            autoFocus
+                        />
+                        <div className="flex gap-2">
+                            <button onClick={() => { setShowTournamentPasswordModal(false); setTournamentPasswordInput(''); }} className="flex-1 py-2 rounded-lg bg-slate-600 hover:bg-slate-500 text-white font-medium">
+                                취소
+                            </button>
+                            <button onClick={handleTournamentPasswordConfirm} className="flex-1 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-medium">
+                                확인
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* QR 확대 모달 */}
+            {showQRZoomModal && qrZoomPin && (
+                <div
+                    className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+                    onClick={() => { setShowQRZoomModal(false); setQrZoomPin(null); }}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="qr-zoom-title"
+                >
+                    <div
+                        className="bg-slate-900 rounded-2xl border border-slate-600 shadow-2xl w-full max-w-sm flex flex-col items-center p-6"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h2 id="qr-zoom-title" className="text-lg font-bold text-sky-300 mb-4">실시간 참여 QR 코드</h2>
+                        <div ref={qrCanvasContainerRef} className="bg-white p-3 rounded-lg flex-shrink-0">
+                            <QRCodeCanvas
+                                value={`${window.location.origin}${window.location.pathname || '/'}?liveCode=${encodeURIComponent(qrZoomPin)}`}
+                                size={260}
+                                level="M"
+                            />
+                        </div>
+                        <p className="text-slate-400 text-sm mt-3 font-mono">PIN: {qrZoomPin}</p>
+                        <button
+                            onClick={() => {
+                                const canvas = qrCanvasContainerRef.current?.querySelector('canvas');
+                                if (!canvas || !qrZoomPin) return;
+                                const dataUrl = canvas.toDataURL('image/png');
+                                const a = document.createElement('a');
+                                a.href = dataUrl;
+                                a.download = `J-IVE_Live_Code_${qrZoomPin}.png`;
+                                a.click();
+                                showToast('이미지가 저장되었습니다.', 'success');
+                            }}
+                            className="mt-4 w-full py-3 px-4 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-semibold text-sm transition-colors"
+                        >
+                            이미지 저장
+                        </button>
+                        <button
+                            onClick={() => { setShowQRZoomModal(false); setQrZoomPin(null); }}
+                            className="mt-2 text-slate-400 hover:text-white text-sm"
+                        >
+                            닫기
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

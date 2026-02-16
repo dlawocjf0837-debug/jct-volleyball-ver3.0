@@ -28,6 +28,20 @@
     .animate-fade-in {
         animation: fade-in 0.5s ease-out forwards;
     }
+    @keyframes floatUp {
+        from { opacity: 1; transform: translateX(-50%) translateY(0); }
+        to { opacity: 0; transform: translateX(-50%) translateY(-120px); }
+    }
+    .animate-float-up {
+        animation: floatUp 2.5s ease-out forwards;
+    }
+    @keyframes marquee {
+        0% { transform: translateX(100%); }
+        100% { transform: translateX(-100%); }
+    }
+    .animate-marquee {
+        animation: marquee 12s linear infinite;
+    }
     @keyframes glow {
         0%, 100% { box-shadow: 0 0 5px #00A3FF, 0 0 10px #00A3FF, 0 0 15px #00A3FF; }
         50% { box-shadow: 0 0 10px #00A3FF, 0 0 20px #00A3FF, 0 0 30px #00A3FF; }

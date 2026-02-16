@@ -120,6 +120,8 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
     const isIntentionallyClosing = useRef(false);
     /** Stale closure 방지: 클라이언트 중간 접속 시 항상 최신 스코어 전송용 */
     const latestMatchStateRef = useRef<MatchState | null>(null);
+    /** 방장 대회 모드 상태 (브로드캐스트용) */
+    const latestHostTournamentModeRef = useRef<boolean>(false);
     
     const t = useCallback((key: string, replacements?: Record<string, string | number>): string => {
         let translation = translations[key]?.[language] || key;
@@ -152,6 +154,33 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
 
     const broadcast = useCallback((message: P2PMessage) => {
         connRef.current.forEach(conn => conn.send(message));
+    }, []);
+
+    const setHostTournamentMode = useCallback((value: boolean) => {
+        latestHostTournamentModeRef.current = value;
+        broadcast({ type: 'tournament_mode_sync', payload: value });
+    }, [broadcast]);
+
+    const [receivedTickerMessage, setReceivedTickerMessage] = useState<string | null>(null);
+    const [receivedReactions, setReceivedReactions] = useState<{ id: number; emoji: string }[]>([]);
+    const reactionIdRef = useRef(0);
+
+    const clearTicker = useCallback(() => setReceivedTickerMessage(null), []);
+    const addReceivedReaction = useCallback((emoji: string) => {
+        const id = ++reactionIdRef.current;
+        setReceivedReactions(prev => [...prev, { id, emoji }]);
+    }, []);
+    const removeReceivedReaction = useCallback((id: number) => {
+        setReceivedReactions(prev => prev.filter(r => r.id !== id));
+    }, []);
+
+    const sendTicker = useCallback((message: string) => {
+        if (!message.trim()) return;
+        broadcast({ type: 'ticker_sync', payload: message.trim() });
+    }, [broadcast]);
+
+    const sendReaction = useCallback((emoji: string) => {
+        connRef.current.forEach(conn => conn.send({ type: 'REACTION', payload: { emoji } }));
     }, []);
 
     const saveSettings = async (newSettings: AppSettings) => {
@@ -1483,7 +1512,9 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
         peerRef.current?.destroy();
         connRef.current = [];
         peerRef.current = null;
-        setP2p({ peerId: null, isHost: false, isConnected: false, connections: [], status: 'disconnected', error: undefined });
+        setP2p({ peerId: null, isHost: false, isConnected: false, connections: [], status: 'disconnected', error: undefined, clientTournamentMode: undefined, viewerCount: undefined });
+        setReceivedTickerMessage(null);
+        setReceivedReactions([]);
         setTimeout(() => { isIntentionallyClosing.current = false; }, 500);
     }, []);
 
@@ -1507,30 +1538,42 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
         peerRef.current = newPeer;
 
         newPeer.on('open', () => {
-            setP2p(prev => ({ ...prev, peerId, status: 'connected', isConnected: true }));
+            setP2p(prev => ({ ...prev, peerId, status: 'connected', isConnected: true, viewerCount: 0 }));
             showToast(`실시간 세션이 시작되었습니다. 참여 코드: ${pin}`, 'success');
         });
 
         newPeer.on('connection', (conn: DataConnection) => {
+            conn.on('data', (data: P2PMessage) => {
+                if (data.type === 'REACTION') {
+                    broadcast({ type: 'reaction_broadcast', payload: data.payload });
+                }
+            });
             conn.on('open', () => {
                 showToast('아나운서 화면이 성공적으로 연결되었습니다!', 'success');
                 const stateToSync = latestMatchStateRef.current ?? initialState ?? matchState;
                 if (stateToSync) {
-                    conn.send({ type: 'full_state_sync', payload: stateToSync });
+                    conn.send({
+                        type: 'full_state_sync',
+                        payload: { matchData: stateToSync, isTournamentMode: latestHostTournamentModeRef.current },
+                    });
                 }
                 conn.send({ type: 'settings_sync', payload: settings });
                 conn.send({ type: 'team_sets_sync', payload: teamSets });
                 conn.send({ type: 'user_emblems_sync', payload: userEmblems });
                 
                 connRef.current.push(conn);
-                setP2p(prev => ({ ...prev, connections: [...connRef.current] }));
+                const viewerCount = connRef.current.length;
+                setP2p(prev => ({ ...prev, connections: [...connRef.current], viewerCount }));
+                broadcast({ type: 'viewer_count_sync', payload: viewerCount });
             });
             conn.on('close', () => {
                 if (!isIntentionallyClosing.current) {
                     showToast(`${conn.peer}의 연결이 끊어졌습니다.`, 'error');
                 }
                 connRef.current = connRef.current.filter(c => c.peer !== conn.peer);
-                setP2p(prev => ({ ...prev, connections: [...connRef.current] }));
+                const viewerCount = connRef.current.length;
+                setP2p(prev => ({ ...prev, connections: [...connRef.current], viewerCount }));
+                broadcast({ type: 'viewer_count_sync', payload: viewerCount });
             });
         });
         newPeer.on('error', (err: any) => {
@@ -1595,7 +1638,21 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
 
             conn.on('data', (data: P2PMessage) => {
                 if (data.type === 'full_state_sync') {
-                    dispatch({ type: 'LOAD_STATE', state: data.payload });
+                    const p = data.payload;
+                    if (p && typeof p === 'object' && 'matchData' in p) {
+                        dispatch({ type: 'LOAD_STATE', state: (p as { matchData: MatchState }).matchData });
+                        setP2p(prev => ({ ...prev, clientTournamentMode: (p as { isTournamentMode: boolean }).isTournamentMode }));
+                    } else {
+                        dispatch({ type: 'LOAD_STATE', state: p as MatchState });
+                    }
+                } else if (data.type === 'tournament_mode_sync') {
+                    setP2p(prev => ({ ...prev, clientTournamentMode: data.payload }));
+                } else if (data.type === 'ticker_sync') {
+                    setReceivedTickerMessage(data.payload);
+                } else if (data.type === 'reaction_broadcast') {
+                    addReceivedReaction(data.payload.emoji);
+                } else if (data.type === 'viewer_count_sync') {
+                    setP2p(prev => ({ ...prev, viewerCount: data.payload }));
                 } else if (data.type === 'action') {
                     dispatch(data.payload);
                 } else if (data.type === 'settings_sync') {
@@ -1740,7 +1797,7 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
             dispatch({ type: 'LOAD_STATE', state: newState });
             if (p2p.isHost) {
                 if (action.type === 'UNDO') {
-                    broadcast({ type: 'full_state_sync', payload: newState });
+                    broadcast({ type: 'full_state_sync', payload: { matchData: newState, isTournamentMode: latestHostTournamentModeRef.current } });
                 } else {
                     broadcast({ type: 'action', payload: action });
                 }
@@ -1752,7 +1809,7 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
     useEffect(() => {
         if (p2p.isHost && connRef.current.length > 0) {
             const state = latestMatchStateRef.current ?? matchState;
-            if (state) broadcast({ type: 'full_state_sync', payload: state });
+            if (state) broadcast({ type: 'full_state_sync', payload: { matchData: state, isTournamentMode: latestHostTournamentModeRef.current } });
         }
     }, [matchState, p2p.isHost, broadcast]);
 
@@ -1922,6 +1979,14 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
         settings,
         saveSettings,
         p2p,
+        setHostTournamentMode,
+        sendTicker,
+        sendReaction,
+        receivedTickerMessage,
+        clearTicker,
+        receivedReactions,
+        addReceivedReaction,
+        removeReceivedReaction,
         startHostSession,
         joinSession,
         closeSession,

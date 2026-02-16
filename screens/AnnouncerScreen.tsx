@@ -286,7 +286,7 @@ const ScoreTrendChart: React.FC<{ match: MatchState }> = ({ match }) => {
     );
 };
 
-const LiveGameDisplay: React.FC<{ match: MatchState }> = ({ match }) => {
+const LiveGameDisplay: React.FC<{ match: MatchState; isTournamentMode?: boolean }> = ({ match, isTournamentMode }) => {
     const { t } = useTranslation();
     const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
     const [showGuideModal, setShowGuideModal] = useState(false);
@@ -341,7 +341,11 @@ const LiveGameDisplay: React.FC<{ match: MatchState }> = ({ match }) => {
                             const isCaptain = player.isCaptain;
                             const onCourt = team.onCourtPlayerIds?.includes(player.id);
                             return (
-                                <li key={player.id} onClick={() => setSelectedPlayer(player)} className={`flex items-center gap-3 bg-slate-800 p-4 rounded-lg cursor-pointer hover:bg-slate-700 transition-colors ${!onCourt ? 'opacity-50' : ''}`}>
+                                <li
+                                    key={player.id}
+                                    onClick={isTournamentMode ? undefined : () => setSelectedPlayer(player)}
+                                    className={`flex items-center gap-3 bg-slate-800 p-4 rounded-lg transition-colors ${!onCourt ? 'opacity-50' : ''} ${isTournamentMode ? '' : 'cursor-pointer hover:bg-slate-700'}`}
+                                >
                                     {isCaptain && <CrownIcon className="w-6 h-6 text-yellow-400 flex-shrink-0" />}
                                     <span className={`font-bold text-xl text-slate-200 truncate ${!isCaptain ? 'ml-9' : ''}`}>{player.originalName}</span>
                                 </li>
@@ -388,9 +392,9 @@ const LiveGameDisplay: React.FC<{ match: MatchState }> = ({ match }) => {
                 </div>
             </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr_1fr] gap-6 h-full max-h-[70vh]">
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr_1fr] gap-6">
                 <TeamRoster team={match.teamA} />
-                <div className="bg-slate-900/50 p-4 rounded-lg flex flex-col items-center justify-start gap-4 text-center h-full overflow-y-auto">
+                <div className="bg-slate-900/50 p-4 rounded-lg flex flex-col items-center justify-start gap-4 text-center overflow-y-auto min-h-0">
                     <div className="flex items-center justify-center gap-4 my-2">
                         <span className="text-4xl font-extrabold" style={{ color: match.teamA.color || '#38bdf8' }}>{match.teamA.score}</span>
                         <span className="text-3xl font-bold text-slate-400">-</span>
@@ -449,22 +453,53 @@ const LiveGameDisplay: React.FC<{ match: MatchState }> = ({ match }) => {
                     </button>
 
                      {/* Timeline added to Announcer Screen */}
-                    <div className="w-full max-w-md flex-grow overflow-hidden flex flex-col">
+                    <div className="w-full max-w-md flex-grow min-h-0 overflow-y-auto flex flex-col">
                         <GameLog events={match.eventHistory} showUndoButton={false} />
                     </div>
                 </div>
                 <TeamRoster team={match.teamB} />
             </div>
             
-            {match.scoreHistory && match.scoreHistory.length > 1 && <ScoreTrendChart match={match} />}
+            {match.scoreHistory && match.scoreHistory.length > 1 && (
+                <div className="mt-6 pb-4">
+                    <ScoreTrendChart match={match} />
+                </div>
+            )}
         </div>
     );
 };
 
+const TICKER_DURATION_MS = 24000; // 12초 마퀴 × 2번 지나가도록 표시
+const FLOATING_EMOJI_DURATION_MS = 2500;
+const EMOJI_COOLDOWN_SEC = 3;
+
+const FloatingEmoji: React.FC<{ id: number; emoji: string; onEnd: () => void }> = ({ id, emoji, onEnd }) => {
+    useEffect(() => {
+        const t = setTimeout(onEnd, FLOATING_EMOJI_DURATION_MS);
+        return () => clearTimeout(t);
+    }, [onEnd]);
+    const leftPercent = 30 + (id % 5) * 10;
+    return (
+        <span
+            className="absolute text-5xl pointer-events-none animate-float-up"
+            style={{
+                left: `${leftPercent}%`,
+                bottom: '6rem',
+                transform: 'translateX(-50%)',
+                textShadow: '0 0 20px rgba(255,255,255,0.8)',
+            }}
+        >
+            {emoji}
+        </span>
+    );
+};
+
 const AnnouncerScreen: React.FC<AnnouncerScreenProps> = ({ onNavigateToHistory, pendingJoinCode, clearPendingJoinCode }) => {
-    const { matchState, p2p, joinSession } = useData();
+    const { matchState, p2p, joinSession, receivedTickerMessage, clearTicker, receivedReactions, removeReceivedReaction, sendReaction } = useData();
     const { t } = useTranslation();
     const hasTriedJoinRef = useRef(false);
+    const isTournamentMode = p2p.clientTournamentMode ?? false;
+    const [emojiCooldownRemaining, setEmojiCooldownRemaining] = useState(0);
 
     useEffect(() => {
         if (pendingJoinCode && joinSession && clearPendingJoinCode && !hasTriedJoinRef.current) {
@@ -473,15 +508,49 @@ const AnnouncerScreen: React.FC<AnnouncerScreenProps> = ({ onNavigateToHistory, 
         }
     }, [pendingJoinCode, joinSession, clearPendingJoinCode]);
 
+    useEffect(() => {
+        if (!receivedTickerMessage) return;
+        const t = setTimeout(clearTicker, TICKER_DURATION_MS);
+        return () => clearTimeout(t);
+    }, [receivedTickerMessage, clearTicker]);
+
+    useEffect(() => {
+        if (emojiCooldownRemaining <= 0) return;
+        const interval = setInterval(() => setEmojiCooldownRemaining(prev => Math.max(0, prev - 1)), 1000);
+        return () => clearInterval(interval);
+    }, [emojiCooldownRemaining]);
+
+    const handleEmojiClick = useCallback((emoji: string) => {
+        if (emojiCooldownRemaining > 0 || !sendReaction) return;
+        sendReaction(emoji);
+        setEmojiCooldownRemaining(EMOJI_COOLDOWN_SEC);
+    }, [emojiCooldownRemaining, sendReaction]);
+
     return (
-        <div className="w-full max-w-7xl mx-auto flex flex-col gap-6 flex-grow h-full">
-            <div className="bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-4 rounded-lg shadow-2xl flex-shrink-0">
-                <h3 className="text-xl font-bold text-center text-slate-300 mb-2">{t('sound_panel')}</h3>
-                <SoundPanel match={matchState} />
-            </div>
+        <div className="w-full max-w-7xl mx-auto flex flex-col gap-6 flex-grow min-h-screen overflow-y-auto pb-10 px-4 relative">
+            {receivedReactions.length > 0 && (
+                <div className="fixed inset-0 pointer-events-none z-30 flex items-end justify-center pb-32">
+                    {receivedReactions.map(r => (
+                        <FloatingEmoji key={r.id} id={r.id} emoji={r.emoji} onEnd={() => removeReceivedReaction(r.id)} />
+                    ))}
+                </div>
+            )}
+            {isTournamentMode && (
+                <div className="flex justify-end">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/50 text-amber-400 text-sm font-bold">
+                        🏆 공식 대회 모드
+                    </span>
+                </div>
+            )}
+            {!isTournamentMode && (
+                <div className="bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-4 rounded-lg shadow-2xl flex-shrink-0">
+                    <h3 className="text-xl font-bold text-center text-slate-300 mb-2">{t('sound_panel')}</h3>
+                    <SoundPanel match={matchState} />
+                </div>
+            )}
 
             {matchState ? (
-                <LiveGameDisplay match={matchState} />
+                <LiveGameDisplay match={matchState} isTournamentMode={isTournamentMode} />
             ) : (
                 <div className="flex-grow flex flex-col items-center justify-center text-center text-slate-400 min-h-[40vh]">
                     {p2p.status === 'connecting' && (
@@ -499,6 +568,51 @@ const AnnouncerScreen: React.FC<AnnouncerScreenProps> = ({ onNavigateToHistory, 
                     <button onClick={onNavigateToHistory} className="mt-6 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg">
                         {t('view_past_games')}
                     </button>
+                </div>
+            )}
+
+            {isTournamentMode && receivedTickerMessage && (
+                <div className="fixed bottom-20 left-0 right-0 z-20 overflow-hidden bg-slate-900/95 border-t border-amber-500/30 py-2">
+                    <div className="animate-marquee whitespace-nowrap text-amber-400 font-semibold text-lg">
+                        {receivedTickerMessage}
+                    </div>
+                </div>
+            )}
+
+            {isTournamentMode && (
+                <div className="fixed bottom-4 left-0 right-0 z-20 flex flex-col items-center gap-2 px-4">
+                    {emojiCooldownRemaining > 0 && (
+                        <span className="text-xs text-slate-400">{emojiCooldownRemaining}초 후 가능</span>
+                    )}
+                    <div className="flex justify-center gap-4">
+                    <button
+                        type="button"
+                        disabled={emojiCooldownRemaining > 0}
+                        onClick={() => handleEmojiClick('👏')}
+                        className="w-14 h-14 rounded-full bg-slate-700 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed text-2xl flex items-center justify-center transition-colors border-2 border-slate-600"
+                        title="박수"
+                    >
+                        👏
+                    </button>
+                    <button
+                        type="button"
+                        disabled={emojiCooldownRemaining > 0}
+                        onClick={() => handleEmojiClick('🔥')}
+                        className="w-14 h-14 rounded-full bg-slate-700 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed text-2xl flex items-center justify-center transition-colors border-2 border-slate-600"
+                        title="불꽃"
+                    >
+                        🔥
+                    </button>
+                    <button
+                        type="button"
+                        disabled={emojiCooldownRemaining > 0}
+                        onClick={() => handleEmojiClick('🏐')}
+                        className="w-14 h-14 rounded-full bg-slate-700 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed text-2xl flex items-center justify-center transition-colors border-2 border-slate-600"
+                        title="배구"
+                    >
+                        🏐
+                    </button>
+                    </div>
                 </div>
             )}
         </div>

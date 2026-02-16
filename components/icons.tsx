@@ -287,3 +287,10 @@ export const PlayCircleIcon: React.FC<{ className?: string }> = ({ className }) 
         <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm14.024-.553a.75.75 0 0 0 0-1.394l-6.363-3.676a.75.75 0 0 0-1.136.632v7.951a.75.75 0 0 0 1.136.632l6.363-3.676a.75.75 0 0 0 .424-.469Z" clipRule="evenodd" />
     </svg>
 );
+
+/** 돋보기(확대) 아이콘 - QR 확대 모달 등 */
+export const MagnifyingGlassIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={className}>
+        <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z" clipRule="evenodd" />
+    </svg>
+);

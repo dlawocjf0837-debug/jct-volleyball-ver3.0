@@ -53,10 +53,10 @@ const AppContent = () => {
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
-        const code = params.get('code');
-        if (code) {
+        const liveCode = params.get('liveCode') ?? params.get('code');
+        if (liveCode) {
             setView('announcer');
-            setPendingJoinCode(code.trim().toUpperCase());
+            setPendingJoinCode(liveCode.trim().toUpperCase());
         }
     }, []);
     const [preselectedMatchId, setPreselectedMatchId] = useState<string | null>(null);
