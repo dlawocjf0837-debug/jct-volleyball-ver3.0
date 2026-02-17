@@ -554,7 +554,9 @@ const AnnouncerScreen: React.FC<AnnouncerScreenProps> = ({ onNavigateToHistory, 
             ) : (
                 <div className="flex-grow flex flex-col items-center justify-center text-center text-slate-400 min-h-[40vh]">
                     {p2p.status === 'connecting' && (
-                        <p className="text-xl font-semibold text-sky-400">연결 중...</p>
+                        <p className="text-xl font-semibold text-sky-400">
+                            {pendingJoinCode ? '📡 QR 코드로 자동 연결 중입니다...' : '연결 중...'}
+                        </p>
                     )}
                     {p2p.isConnected && !matchState && (
                         <p className="text-lg text-slate-500">데이터 수신 대기 중...</p>

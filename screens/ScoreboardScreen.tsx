@@ -582,15 +582,16 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                     </button>
                 </div>
 
-                {/* 우측 영역 */}
-                <div className="flex-1 flex justify-end items-center gap-2 sm:gap-4">
+                {/* 우측 영역 - flex-row로 가로 정렬, 여백 확보 */}
+                <div className="flex-1 flex justify-end items-center">
+                    <div className="flex flex-row items-center gap-x-3 sm:gap-x-4 flex-wrap justify-end">
                     {matchState.status === 'in_progress' && p2p.isHost && p2p.peerId && (() => {
                         const pin = p2p.peerId.replace(/^jive-/, '');
                         const joinUrl = `${window.location.origin}${window.location.pathname || '/'}?liveCode=${encodeURIComponent(pin)}`;
                         return (
                             <>
                                 {/* 참여 코드(PIN) + QR - 데스크톱 */}
-                                <div className="hidden md:flex items-center gap-2 bg-slate-800 border-2 border-yellow-500/50 rounded-lg px-3 py-2">
+                                <div className="hidden md:flex items-center gap-2 bg-slate-800 border-2 border-yellow-500/50 rounded-lg px-3 py-2 flex-shrink-0">
                                     <button
                                         onClick={() => {
                                             navigator.clipboard.writeText(pin);
@@ -616,7 +617,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                                     </button>
                                 </div>
                                 {/* 대회 전광판 모드 토글 스위치 */}
-                                <div className="hidden md:flex items-center gap-2 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2">
+                                <div className="hidden md:flex items-center gap-2 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 flex-shrink-0">
                                     <span className="text-sm font-medium text-slate-200 whitespace-nowrap">🏆 대회 전광판 모드</span>
                                     <button
                                         type="button"
@@ -628,13 +629,13 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                                         <span className={`pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform ${isTournamentMode ? 'translate-x-5' : 'translate-x-0'}`} />
                                     </button>
                                 </div>
-                                {p2p.isHost && (
-                                    <span className="hidden md:inline-flex items-center px-3 py-1.5 rounded-lg bg-sky-500/20 border border-sky-500/50 text-sky-400 text-sm font-semibold">
+                                {isTournamentMode && (
+                                    <span className="hidden md:inline-flex items-center px-3 py-1.5 rounded-lg bg-sky-500/20 border border-sky-500/50 text-sky-400 text-sm font-semibold flex-shrink-0">
                                         👀 {p2p.viewerCount ?? 0}명 시청 중
                                     </span>
                                 )}
                                 {/* 모바일: PIN + QR */}
-                                <div className="md:hidden flex items-center gap-2 bg-slate-800 border-2 border-yellow-500/50 rounded-lg p-2">
+                                <div className="md:hidden flex items-center gap-2 bg-slate-800 border-2 border-yellow-500/50 rounded-lg p-2 flex-shrink-0">
                                     <button
                                         onClick={() => {
                                             navigator.clipboard.writeText(pin);
@@ -658,7 +659,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                                     </button>
                                 </div>
                                 {/* 모바일: 대회 전광판 모드 토글 스위치 */}
-                                <div className="md:hidden flex items-center gap-2 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 min-h-[44px]">
+                                <div className="md:hidden flex items-center gap-2 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 min-h-[44px] flex-shrink-0">
                                     <span className="text-sm font-medium text-slate-200 whitespace-nowrap">🏆 대회 전광판</span>
                                     <button
                                         type="button"
@@ -670,8 +671,8 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                                         <span className={`pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform ${isTournamentMode ? 'translate-x-5' : 'translate-x-0'}`} />
                                     </button>
                                 </div>
-                                {p2p.isHost && (
-                                    <span className="md:hidden inline-flex items-center px-2 py-1 rounded-lg bg-sky-500/20 border border-sky-500/50 text-sky-400 text-xs font-semibold">
+                                {isTournamentMode && (
+                                    <span className="md:hidden inline-flex items-center px-2 py-1 rounded-lg bg-sky-500/20 border border-sky-500/50 text-sky-400 text-xs font-semibold flex-shrink-0">
                                         👀 {p2p.viewerCount ?? 0}명
                                     </span>
                                 )}
@@ -688,7 +689,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                     {/* 소리 켜기/끄기 토글 */}
                     <button
                         onClick={() => setSoundEnabled(!soundEnabled)}
-                        className={`bg-slate-700 hover:bg-slate-600 p-2 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors ${
+                        className={`bg-slate-700 hover:bg-slate-600 p-2 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center flex-shrink-0 transition-colors ${
                             soundEnabled 
                                 ? 'text-yellow-400' 
                                 : 'text-slate-500'
@@ -700,7 +701,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                     
                     <button 
                         onClick={() => setIsSubModalOpen(true)} 
-                        className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center" 
+                        className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center flex-shrink-0" 
                         title={t('substitute_player')}
                     >
                         <SwitchHorizontalIcon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
@@ -708,11 +709,12 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                     
                     <button 
                         onClick={() => setShowRulesModal(true)} 
-                        className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center" 
+                        className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center flex-shrink-0" 
                         title="규칙 보기"
                     >
                         <QuestionMarkCircleIcon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                     </button>
+                    </div>
                 </div>
             </div>
 
