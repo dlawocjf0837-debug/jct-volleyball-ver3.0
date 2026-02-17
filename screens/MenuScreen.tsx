@@ -21,11 +21,14 @@ import {
     VideoCameraIcon,
 } from '../components/icons';
 import { useTranslation } from '../hooks/useTranslation';
+import { isAdminPasswordCorrect } from '../utils/adminPassword';
+import { LeagueStandingsDashboard } from '../components/LeagueStandingsDashboard';
 
 
 interface MenuScreenProps {
     onStartTeamBuilder: () => void;
     onStartMatch: () => void;
+    appMode?: 'CLASS' | 'CLUB';
     onStartCompetition: () => void;
     onShowHistory: (matchId?: string) => void;
     onShowPlayerRecords: () => void;
@@ -68,6 +71,7 @@ const MenuCard: React.FC<{
 const MenuScreen: React.FC<MenuScreenProps> = ({ 
     onStartTeamBuilder, 
     onStartMatch,
+    appMode = 'CLASS',
     onStartCompetition,
     onShowHistory,
     onShowPlayerRecords,
@@ -146,7 +150,7 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
 
     const handleResetConfirm = () => {
         if (resetStep === 'password') {
-            if (passwordInput === '9999') {
+            if (isAdminPasswordCorrect(passwordInput)) {
                 setResetStep('finalConfirm');
                 setPasswordError('');
             } else {
@@ -215,14 +219,16 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
         }
     };
     
+    const isClub = appMode === 'CLUB';
+
     return (
         <>
-            <div className="max-w-6xl mx-auto flex flex-col items-center gap-6 sm:gap-10 animate-fade-in py-4 sm:py-10 w-full px-4">
-                
+            <div className={`max-w-6xl mx-auto flex flex-col items-center gap-6 sm:gap-10 animate-fade-in py-4 sm:py-10 w-full px-4 ${isClub ? 'rounded-2xl border border-amber-500/20 bg-slate-900/50' : ''}`}>
+                {/* 단일 진입 버튼: 경기 시작 + 실시간 참여 */}
                 <div className="w-full max-w-4xl grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-4">
                     <button
                         onClick={onStartMatch}
-                        className="w-full group relative flex items-center justify-center gap-3 sm:gap-3 px-4 sm:px-8 py-4 sm:py-5 overflow-hidden font-bold text-white transition-all duration-300 bg-green-600 rounded-2xl shadow-lg shadow-green-900/50 hover:bg-green-700 hover:shadow-xl hover:shadow-green-700/50 transform hover:-translate-y-1 min-h-[44px]"
+                        className={`w-full group relative flex items-center justify-center gap-3 sm:gap-3 px-4 sm:px-8 py-4 sm:py-5 overflow-hidden font-bold text-white transition-all duration-300 rounded-2xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 min-h-[44px] ${isClub ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-900/50 hover:shadow-amber-700/50' : 'bg-green-600 hover:bg-green-700 shadow-green-900/50 hover:shadow-green-700/50'}`}
                     >
                         <PlayIcon className="w-6 h-6 sm:w-8 sm:h-8"/>
                         <span className="relative text-base sm:text-xl lg:text-2xl">{t('menu_start_game')}</span>
@@ -235,7 +241,7 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
                         <span className="relative text-base sm:text-xl lg:text-2xl">{t('menu_join_session_realtime')}</span>
                     </button>
                 </div>
-                
+
                 <div className="w-full max-w-4xl bg-slate-800/30 backdrop-blur-lg border border-slate-700/50 rounded-2xl p-4 sm:p-6">
                     <h2 className="text-lg sm:text-xl font-bold text-slate-300 mb-3 sm:mb-4">{t('menu_main_info')}</h2>
                     {latestMatchInfo ? (
@@ -295,6 +301,8 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
                         </div>
                     </div>
                 </div>
+
+                {isClub && <LeagueStandingsDashboard />}
 
                 <div className="w-full max-w-4xl pt-6 sm:pt-8 mt-4 border-t border-slate-700 text-center px-4">
                     <button

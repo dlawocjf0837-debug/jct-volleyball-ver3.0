@@ -12,15 +12,21 @@ interface HeaderProps {
     showUpdateNotesIcon?: boolean;
     subtitle?: string;
     brand?: string;
+    appMode?: 'CLASS' | 'CLUB';
+    onAppModeChange?: (mode: 'CLASS' | 'CLUB') => void;
+    showModeToggle?: boolean;
+    showReturnToInitial?: boolean;
+    onReturnToInitial?: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ title, showBackButton, onBack, showLanguageToggle, showUpdateNotesIcon = false, subtitle, brand = "J-IVE" }) => {
+const Header: React.FC<HeaderProps> = ({ title, showBackButton, onBack, showLanguageToggle, showUpdateNotesIcon = false, subtitle, brand = "J-IVE", appMode = 'CLASS', onAppModeChange, showModeToggle = false, showReturnToInitial = false, onReturnToInitial }) => {
     const { t } = useTranslation();
     const [showUpdateNotes, setShowUpdateNotes] = useState(false);
+    const isClub = appMode === 'CLUB';
 
     return (
         <>
-        <header className="text-center mb-8 relative flex items-center justify-center no-print">
+        <header className={`text-center mb-8 relative flex items-center justify-center no-print ${isClub ? 'text-amber-50/95' : ''}`}>
              {showBackButton && (
                 <button 
                     onClick={onBack}
@@ -30,8 +36,17 @@ const Header: React.FC<HeaderProps> = ({ title, showBackButton, onBack, showLang
                     {t('back_to_main')}
                 </button>
             )}
+            {showReturnToInitial && onReturnToInitial && (
+                <button 
+                    onClick={onReturnToInitial}
+                    className="absolute left-0 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-3 sm:px-4 rounded-lg transition duration-200 z-10 text-sm sm:text-base"
+                    aria-label="초기 화면으로"
+                >
+                    🏠 초기 화면
+                </button>
+            )}
             <div className="flex-grow flex flex-col items-center">
-                <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-[#00A3FF] tracking-wider uppercase transform -skew-x-12">
+                <h1 className={`text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-wider uppercase transform -skew-x-12 ${isClub ? 'text-amber-400' : 'text-[#00A3FF]'}`}>
                     {brand} <span className="text-white">{title}</span>
                 </h1>
                 {subtitle && (
@@ -39,9 +54,29 @@ const Header: React.FC<HeaderProps> = ({ title, showBackButton, onBack, showLang
                         {subtitle}
                     </p>
                 )}
+                {isClub && (
+                    <span className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs sm:text-sm font-bold bg-amber-500/20 text-amber-400 border border-amber-500/50">
+                        🏆 학교스포츠클럽 모드
+                    </span>
+                )}
                 <p className="text-slate-500 mt-1 text-xs tracking-[0.3em] font-light opacity-80">By JCT</p>
             </div>
-            <div className="absolute right-0 top-0 flex items-center gap-3">
+            <div className="absolute right-0 top-0 flex items-center gap-2 sm:gap-3">
+                {showModeToggle && onAppModeChange && (
+                    <div className="flex items-center gap-2 bg-slate-800/90 rounded-full p-1 border border-slate-600">
+                        <span className={`text-xs font-medium px-2 hidden sm:inline ${appMode === 'CLASS' ? 'text-sky-400' : 'text-slate-500'}`}>수업</span>
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-checked={appMode === 'CLUB'}
+                            onClick={() => onAppModeChange(appMode === 'CLASS' ? 'CLUB' : 'CLASS')}
+                            className={`relative inline-flex h-7 w-12 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-slate-900 ${appMode === 'CLUB' ? 'bg-amber-500/80' : 'bg-slate-600'}`}
+                        >
+                            <span className={`pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform ${appMode === 'CLUB' ? 'translate-x-5' : 'translate-x-0'}`} />
+                        </button>
+                        <span className={`text-xs font-medium px-2 hidden sm:inline ${appMode === 'CLUB' ? 'text-amber-400' : 'text-slate-500'}`}>클럽</span>
+                    </div>
+                )}
                 {showUpdateNotesIcon && (
                     <button
                         onClick={() => setShowUpdateNotes(true)}

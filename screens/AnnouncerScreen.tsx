@@ -290,6 +290,11 @@ const LiveGameDisplay: React.FC<{ match: MatchState; isTournamentMode?: boolean 
     const { t } = useTranslation();
     const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
     const [showGuideModal, setShowGuideModal] = useState(false);
+    const [showDetailedStats, setShowDetailedStats] = useState(false);
+
+    useEffect(() => {
+        if (!match.timeout) setShowDetailedStats(false);
+    }, [match.timeout]);
 
     if (!match || typeof match !== 'object' || !match.teamA || typeof match.teamA !== 'object' || !match.teamB || typeof match.teamB !== 'object') {
         return (
@@ -405,9 +410,53 @@ const LiveGameDisplay: React.FC<{ match: MatchState; isTournamentMode?: boolean 
                         const team = match.timeout.team === 'A' ? match.teamA : match.teamB;
                         const teamColor = team.color || (match.timeout.team === 'A' ? '#38bdf8' : '#f87171');
                         return (
-                            <div className="mt-4 bg-slate-800/80 p-3 rounded-lg border-2 animate-fade-in" style={{ borderColor: teamColor }}>
-                                <h3 className="text-lg font-bold" style={{ color: teamColor }}>{team.name} {t('timeout')}</h3>
-                                <p className="text-4xl font-mono font-extrabold text-white mt-1">{match.timeout.timeLeft}</p>
+                            <div className="mt-4 flex flex-wrap items-center justify-center gap-3 animate-fade-in">
+                                <div className="bg-slate-800/80 p-3 rounded-lg border-2" style={{ borderColor: teamColor }}>
+                                    <h3 className="text-lg font-bold" style={{ color: teamColor }}>{team.name} {t('timeout')}</h3>
+                                    <p className="text-4xl font-mono font-extrabold text-white mt-1">{match.timeout.timeLeft}</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowDetailedStats(prev => !prev)}
+                                    className="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold text-sm transition-colors"
+                                >
+                                    📊 {showDetailedStats ? '상세 기록 숨기기' : '상세 기록 보기'}
+                                </button>
+                                {showDetailedStats && (
+                                    <div className="w-full mt-2 bg-slate-800/90 rounded-xl p-4 overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead>
+                                                <tr className="text-slate-400 border-b border-slate-600">
+                                                    <th className="text-left py-2"></th>
+                                                    <th className="text-center py-2">{match.teamA.name}</th>
+                                                    <th className="text-center py-2">{match.teamB.name}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="text-slate-200">
+                                                <tr className="border-b border-slate-700">
+                                                    <td className="py-2">{t('stat_display_spike_success')}</td>
+                                                    <td className="text-center font-mono font-bold py-2">{match.teamA.spikeSuccesses}</td>
+                                                    <td className="text-center font-mono font-bold py-2">{match.teamB.spikeSuccesses}</td>
+                                                </tr>
+                                                <tr className="border-b border-slate-700">
+                                                    <td className="py-2">{t('stat_display_serve_ace')}</td>
+                                                    <td className="text-center font-mono font-bold py-2">{match.teamA.serviceAces}</td>
+                                                    <td className="text-center font-mono font-bold py-2">{match.teamB.serviceAces}</td>
+                                                </tr>
+                                                <tr className="border-b border-slate-700">
+                                                    <td className="py-2">{t('stat_display_blocking')}</td>
+                                                    <td className="text-center font-mono font-bold py-2">{match.teamA.blockingPoints}</td>
+                                                    <td className="text-center font-mono font-bold py-2">{match.teamB.blockingPoints}</td>
+                                                </tr>
+                                                <tr>
+                                                    <td className="py-2">{t('stat_display_serve_fault')}</td>
+                                                    <td className="text-center font-mono font-bold py-2">{match.teamA.serviceFaults}</td>
+                                                    <td className="text-center font-mono font-bold py-2">{match.teamB.serviceFaults}</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
                             </div>
                         )
                     })()}
@@ -494,8 +543,25 @@ const FloatingEmoji: React.FC<{ id: number; emoji: string; onEnd: () => void }> 
     );
 };
 
+const EFFECT_DURATION_MS = 2000;
+
+const EffectPopup: React.FC<{ id: number; effectType: 'SPIKE' | 'BLOCK'; onEnd: () => void }> = ({ effectType, onEnd }) => {
+    useEffect(() => {
+        const t = setTimeout(onEnd, EFFECT_DURATION_MS);
+        return () => clearTimeout(t);
+    }, [onEnd]);
+    const text = effectType === 'SPIKE' ? '🔥 SUPER SPIKE 🔥' : '🧱 MONSTER BLOCK 🧱';
+    return (
+        <div className="fixed inset-0 flex items-center justify-center z-40 pointer-events-none">
+            <span className="animate-effect-popup text-4xl sm:text-5xl md:text-6xl font-black text-white text-center drop-shadow-[0_0_20px_rgba(255,255,255,0.9)]">
+                {text}
+            </span>
+        </div>
+    );
+};
+
 const AnnouncerScreen: React.FC<AnnouncerScreenProps> = ({ onNavigateToHistory, pendingJoinCode, clearPendingJoinCode }) => {
-    const { matchState, p2p, joinSession, receivedTickerMessage, clearTicker, receivedReactions, removeReceivedReaction, sendReaction } = useData();
+    const { matchState, p2p, joinSession, receivedTickerMessage, clearTicker, receivedReactions, removeReceivedReaction, sendReaction, receivedEffects, removeReceivedEffect } = useData();
     const { t } = useTranslation();
     const hasTriedJoinRef = useRef(false);
     const isTournamentMode = p2p.clientTournamentMode ?? false;
@@ -527,7 +593,10 @@ const AnnouncerScreen: React.FC<AnnouncerScreenProps> = ({ onNavigateToHistory, 
     }, [emojiCooldownRemaining, sendReaction]);
 
     return (
-        <div className="w-full max-w-7xl mx-auto flex flex-col gap-6 flex-grow min-h-screen overflow-y-auto pb-10 px-4 relative">
+        <div className={`w-full max-w-7xl mx-auto flex flex-col gap-6 flex-grow min-h-screen overflow-y-auto pb-10 px-4 relative ${receivedEffects.length > 0 ? 'animate-shake' : ''}`}>
+            {receivedEffects.map(e => (
+                <EffectPopup key={e.id} id={e.id} effectType={e.effectType} onEnd={() => removeReceivedEffect(e.id)} />
+            ))}
             {receivedReactions.length > 0 && (
                 <div className="fixed inset-0 pointer-events-none z-30 flex items-end justify-center pb-32">
                     {receivedReactions.map(r => (

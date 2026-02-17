@@ -25,7 +25,7 @@ import AnnouncerScreen from './screens/AnnouncerScreen';
 import CameraDirectorScreen from './screens/CameraDirectorScreen';
 import CompetitionScreen from './screens/CompetitionScreen';
 import AdminLockScreen from './screens/AdminLockScreen';
-import { Player, Screen, Stats, STAT_KEYS, MatchState, SavedTeamInfo } from './types';
+import { Player, Screen, Stats, STAT_KEYS, MatchState, SavedTeamInfo, SavedOpponentTeam } from './types';
 import ConfirmationModal from './components/common/ConfirmationModal';
 import PasswordModal from './components/common/PasswordModal';
 import { useTranslation } from './hooks/useTranslation';
@@ -41,24 +41,27 @@ type LeagueInfo = {
 };
 
 
-const AppContent = () => {
-    const [view, setView] = useState<'menu' | 'teamBuilder' | 'matchSetup' | 'attendance' | 'scoreboard' | 'history' | 'referee' | 'teamManagement' | 'teamAnalysis' | 'achievements' | 'skillDrill' | 'playerRecords' | 'cheerSong' | 'settings' | 'tournament' | 'leagueLobby' | 'league' | 'announcer' | 'cameraDirector' | 'competition'>('menu');
+const getInitialViewFromUrl = (): 'menu' | 'announcer' => {
+    const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+    const liveCode = params.get('liveCode') ?? params.get('code');
+    return liveCode ? 'announcer' : 'menu';
+};
+const getInitialPendingJoinCodeFromUrl = (): string | null => {
+    const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+    const liveCode = params.get('liveCode') ?? params.get('code');
+    return liveCode ? liveCode.trim().toUpperCase() : null;
+};
+
+const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | 'CLUB'; onReturnToInitialScreen?: () => void }) => {
+    const [view, setView] = useState<'menu' | 'teamBuilder' | 'matchSetup' | 'attendance' | 'scoreboard' | 'history' | 'referee' | 'teamManagement' | 'teamAnalysis' | 'achievements' | 'skillDrill' | 'playerRecords' | 'cheerSong' | 'settings' | 'tournament' | 'leagueLobby' | 'league' | 'announcer' | 'cameraDirector' | 'competition'>(getInitialViewFromUrl);
     const [scoreboardMode, setScoreboardMode] = useState<'record' | 'referee'>('record');
+    const [entryMode, setEntryMode] = useState<'class' | 'club'>('class');
     const { 
         toast, hideToast, isLoading, exportData, saveImportedData, startMatch, resetAllData, recoveryData, handleRestoreFromBackup, dismissRecovery,
         isPasswordModalOpen, handlePasswordSuccess, handlePasswordCancel, closeSession, p2p, requestPassword
     } = useData();
-    const [pendingJoinCode, setPendingJoinCode] = useState<string | null>(null);
-    const [teamsForAttendance, setTeamsForAttendance] = useState<{ teamA: string, teamB: string, teamAKey?: string, teamBKey?: string } | null>(null);
-
-    useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        const liveCode = params.get('liveCode') ?? params.get('code');
-        if (liveCode) {
-            setView('announcer');
-            setPendingJoinCode(liveCode.trim().toUpperCase());
-        }
-    }, []);
+    const [pendingJoinCode, setPendingJoinCode] = useState<string | null>(getInitialPendingJoinCodeFromUrl);
+    const [teamsForAttendance, setTeamsForAttendance] = useState<{ teamA: string, teamB: string, teamAKey?: string, teamBKey?: string, teamBFromOpponent?: SavedOpponentTeam } | null>(null);
     const [preselectedMatchId, setPreselectedMatchId] = useState<string | null>(null);
     const [tournamentInfoForMatch, setTournamentInfoForMatch] = useState<TournamentInfo | null>(null);
     const [leagueInfoForMatch, setLeagueInfoForMatch] = useState<LeagueInfo | null>(null);
@@ -154,7 +157,7 @@ const AppContent = () => {
         setView('menu');
     }, []);
 
-    const handleGoToAttendance = (teams: { teamA: string, teamB: string, teamAKey?: string, teamBKey?: string }, tournamentInfo?: TournamentInfo, leagueInfo?: LeagueInfo) => {
+    const handleGoToAttendance = (teams: { teamA: string, teamB: string, teamAKey?: string, teamBKey?: string, teamBFromOpponent?: SavedOpponentTeam }, tournamentInfo?: TournamentInfo, leagueInfo?: LeagueInfo) => {
         setTeamsForAttendance(teams);
         setTournamentInfoForMatch(tournamentInfo || null);
         setLeagueInfoForMatch(leagueInfo || null);
@@ -235,7 +238,7 @@ const AppContent = () => {
                     return <TeamBuilderScreen initialPlayers={players} onReset={handleResetBuilder} selectedClass={currentClass} />;
                 }
             case 'matchSetup':
-                return <MatchSetupScreen onStartMatch={handleGoToAttendance} />;
+                return <MatchSetupScreen appMode={appMode} onStartMatch={handleGoToAttendance} />;
             case 'attendance':
                 if (!teamsForAttendance) {
                     setView('matchSetup');
@@ -243,7 +246,7 @@ const AppContent = () => {
                 }
                 return <AttendanceScreen teamSelection={teamsForAttendance} onStartMatch={handleStartMatchFromAttendance} />;
             case 'scoreboard':
-                return <ScoreboardScreen onBackToMenu={navigateToMenu} mode={scoreboardMode} />;
+                return <ScoreboardScreen onBackToMenu={navigateToMenu} mode={scoreboardMode} entryMode={entryMode} />;
             case 'history':
                 return <RecordScreen onContinueGame={handleContinueGame} preselectedMatchId={preselectedMatchId} onClearPreselection={() => setPreselectedMatchId(null)} />;
             case 'playerRecords':
@@ -305,7 +308,17 @@ const AppContent = () => {
                             setPlayers([]);
                             setView('teamBuilder');
                         }}
-                        onStartMatch={() => setView('matchSetup')}
+                        onStartMatch={() => {
+                            const mode = appMode === 'CLASS' ? 'class' : 'club';
+                            setEntryMode(mode);
+                            if (typeof window !== 'undefined') {
+                                const params = new URLSearchParams(window.location.search);
+                                params.set('mode', mode);
+                                window.history.replaceState(null, '', `${window.location.pathname || '/'}?${params.toString()}`);
+                            }
+                            setView('matchSetup');
+                        }}
+                        appMode={appMode}
                         onStartCompetition={() => setView('competition')}
                         onShowHistory={(matchId?: string) => {
                             if (matchId) {
@@ -365,14 +378,18 @@ const AppContent = () => {
             brand: "J-ive",
             title: t('app_title_volleyball'),
             subtitle: t('app_subtitle'),
-            showUpdateNotesIcon: true
+            showUpdateNotesIcon: true,
+            appMode,
+            showModeToggle: false,
+            showReturnToInitial: true,
+            onReturnToInitial: onReturnToInitialScreen
         }
         : {
             title: t(getHeaderTitleKey())
         };
 
     return (
-        <div className="min-h-screen font-sans p-4 sm:p-6 lg:p-8 flex flex-col">
+        <div className={`min-h-screen font-sans p-4 sm:p-6 lg:p-8 flex flex-col ${appMode === 'CLUB' ? 'bg-gradient-to-b from-slate-950 via-amber-950/12 to-slate-950' : ''}`}>
             <Header
                 {...headerProps}
                 showBackButton={view !== 'menu'}
@@ -416,21 +433,22 @@ const AppContent = () => {
 };
 
 
-/** 최상단 인증 방어막: 잠금 해제 전에는 AdminLockScreen만 표시, 메인 앱은 렌더하지 않음 */
+/** 최상단 인증 방어막: 잠금 해제 전에는 AdminLockScreen만 표시, 선택한 모드(수업/클럽)로 진입 */
 const AppWithGate = () => {
     const [isUnlocked, setIsUnlocked] = useState(false);
+    const [appMode, setAppMode] = useState<'CLASS' | 'CLUB'>('CLASS');
     if (!isUnlocked) {
-        return <AdminLockScreen onUnlock={() => setIsUnlocked(true)} />;
+        return <AdminLockScreen onUnlock={(mode) => { setAppMode(mode); setIsUnlocked(true); }} />;
     }
-    return <AppContent />;
+    return (
+        <DataProvider appMode={appMode}>
+            <AppContent appMode={appMode} onReturnToInitialScreen={() => setIsUnlocked(false)} />
+        </DataProvider>
+    );
 };
 
 const App = () => {
-    return (
-        <DataProvider>
-            <AppWithGate />
-        </DataProvider>
-    );
+    return <AppWithGate />;
 };
 
 export default App;

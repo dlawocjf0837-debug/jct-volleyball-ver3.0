@@ -13,9 +13,13 @@ import TeamEmblem from '../components/TeamEmblem';
 import { useTranslation } from '../hooks/useTranslation';
 import confetti from 'canvas-confetti';
 
+import { isAdminPasswordCorrect } from '../utils/adminPassword';
+
 interface ScoreboardProps {
     onBackToMenu: () => void;
     mode: 'record' | 'referee';
+    /** 진입 트랙: class = 교과 수업 모드, club = 학교스포츠클럽 모드 (추후 로직 분리용) */
+    entryMode?: 'class' | 'club';
 }
 
 type PendingAction = {
@@ -23,11 +27,11 @@ type PendingAction = {
     team: 'A' | 'B';
 };
 
-export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode }) => {
+export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode, entryMode = 'class' }) => {
     const { 
         matchState, matchTime, timerOn, dispatch, setTimerOn,
         matchHistory, saveMatchHistory, showToast, p2p, clearInProgressMatch,
-        settings, setHostTournamentMode, sendTicker
+        settings, setHostTournamentMode, sendTicker, sendEffect
     } = useData();
     const { t } = useTranslation();
 
@@ -61,7 +65,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
         }
     };
     const handleTournamentPasswordConfirm = () => {
-        if (tournamentPasswordInput.trim() === '9999') {
+        if (isAdminPasswordCorrect(tournamentPasswordInput)) {
             setIsTournamentMode(true);
             setShowTournamentPasswordModal(false);
             setTournamentPasswordInput('');
@@ -747,6 +751,26 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                     canUndo={!!matchState.undoStack && matchState.undoStack.length > 0} 
                 />
             </div>
+
+            {/* 스페셜 이펙트 송출 (Host 전용) - 작전 타임은 팀별 버튼으로 자동 송출 */}
+            {matchState.status === 'in_progress' && p2p.isHost && sendEffect && (
+                <div className="flex flex-wrap items-center justify-center gap-3 mb-3">
+                    <button
+                        type="button"
+                        onClick={() => sendEffect('SPIKE')}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-700 hover:bg-orange-600/80 text-slate-200 hover:text-white text-sm font-semibold transition-colors min-h-[44px]"
+                    >
+                        🔥 스파이크 득점
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => sendEffect('BLOCK')}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-700 hover:bg-sky-600/80 text-slate-200 hover:text-white text-sm font-semibold transition-colors min-h-[44px]"
+                    >
+                        🧱 블로킹
+                    </button>
+                </div>
+            )}
 
             {/* Main Scoreboard Content */}
             <div className="flex-grow flex flex-col lg:flex-row gap-4 sm:gap-4 items-stretch justify-center relative">

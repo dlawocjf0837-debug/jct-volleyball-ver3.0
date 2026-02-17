@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { TeamMatchState, Player, Action } from '../types';
 import { useTranslation } from '../hooks/useTranslation';
+import { PlayerMemoModal } from './PlayerMemoModal';
 
 interface SubstitutionModalProps {
     isOpen: boolean;
@@ -15,6 +16,7 @@ const SubstitutionModal: React.FC<SubstitutionModalProps> = ({ isOpen, onClose, 
     const [selectedTeam, setSelectedTeam] = useState<'A' | 'B'>('A');
     const [playerOut, setPlayerOut] = useState<string | null>(null);
     const [playerIn, setPlayerIn] = useState<string | null>(null);
+    const [memoPlayer, setMemoPlayer] = useState<{ team: 'A' | 'B'; player: Player } | null>(null);
 
     const team = selectedTeam === 'A' ? teamA : teamB;
 
@@ -68,7 +70,10 @@ const SubstitutionModal: React.FC<SubstitutionModalProps> = ({ isOpen, onClose, 
                             <h3 className="text-lg font-semibold text-center mb-2">{t('on_court_players')} ({t('player_to_remove')})</h3>
                             <div className="space-y-2 bg-slate-800 p-2 rounded-lg">
                                 {onCourtPlayers.map(p => (
-                                    <button key={p.id} onClick={() => setPlayerOut(p.id)} className={`w-full text-left p-3 rounded-md ${playerOut === p.id ? 'bg-red-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>{p.originalName}</button>
+                                    <div key={p.id} className="flex items-center gap-2">
+                                        <button onClick={() => setPlayerOut(p.id)} className={`flex-1 text-left p-3 rounded-md ${playerOut === p.id ? 'bg-red-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>{p.originalName}</button>
+                                        <button type="button" onClick={e => { e.stopPropagation(); setMemoPlayer({ team: selectedTeam, player: p }); }} className="p-1.5 rounded hover:bg-slate-600 text-amber-400/90 shrink-0" title="전력 분석 메모">📝</button>
+                                    </div>
                                 ))}
                             </div>
                         </div>
@@ -76,11 +81,23 @@ const SubstitutionModal: React.FC<SubstitutionModalProps> = ({ isOpen, onClose, 
                             <h3 className="text-lg font-semibold text-center mb-2">{t('bench_players')} ({t('player_to_add')})</h3>
                             <div className="space-y-2 bg-slate-800 p-2 rounded-lg">
                                 {benchPlayers.map(p => (
-                                    <button key={p.id} onClick={() => setPlayerIn(p.id)} className={`w-full text-left p-3 rounded-md ${playerIn === p.id ? 'bg-green-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>{p.originalName}</button>
+                                    <div key={p.id} className="flex items-center gap-2">
+                                        <button onClick={() => setPlayerIn(p.id)} className={`flex-1 text-left p-3 rounded-md ${playerIn === p.id ? 'bg-green-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>{p.originalName}</button>
+                                        <button type="button" onClick={e => { e.stopPropagation(); setMemoPlayer({ team: selectedTeam, player: p }); }} className="p-1.5 rounded hover:bg-slate-600 text-amber-400/90 shrink-0" title="전력 분석 메모">📝</button>
+                                    </div>
                                 ))}
                             </div>
                         </div>
                     </div>
+                    {memoPlayer && (
+                        <PlayerMemoModal
+                            isOpen={!!memoPlayer}
+                            onClose={() => setMemoPlayer(null)}
+                            playerName={memoPlayer.player.originalName}
+                            initialMemo={memoPlayer.player.memo ?? ''}
+                            onSave={memo => { dispatch({ type: 'UPDATE_PLAYER_MEMO', team: memoPlayer.team, playerId: memoPlayer.player.id, memo }); setMemoPlayer(null); }}
+                        />
+                    )}
 
                     <div className="mt-6 flex justify-end gap-4">
                         <button onClick={handleClose} className="bg-slate-600 hover:bg-slate-500 font-bold py-2 px-6 rounded-lg">{t('cancel')}</button>

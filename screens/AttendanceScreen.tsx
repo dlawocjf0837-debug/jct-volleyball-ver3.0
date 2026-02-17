@@ -1,9 +1,38 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useData } from '../contexts/DataContext';
-import { Player, SavedTeamInfo } from '../types';
+import { Player, SavedTeamInfo, SavedOpponentTeam, Stats } from '../types';
 import TeamEmblem from '../components/TeamEmblem';
+import { PlayerMemoModal } from '../components/PlayerMemoModal';
 import { useTranslation } from '../hooks/useTranslation';
+
+const defaultStats: Stats = { height: 0, shuttleRun: 0, flexibility: 0, fiftyMeterDash: 0, underhand: 0, serve: 0 };
+
+function opponentTeamToSavedInfoAndPlayers(opp: SavedOpponentTeam): { teamBInfo: SavedTeamInfo; teamBPlayers: Record<string, Player> } {
+    const playerIds = opp.players.map((_, i) => `opp_${opp.id}_${i}`);
+    const teamBInfo: SavedTeamInfo = {
+        teamName: opp.name,
+        captainId: playerIds[0] ?? '',
+        playerIds,
+    };
+    const teamBPlayers: Record<string, Player> = {};
+    opp.players.forEach((p, i) => {
+        const id = playerIds[i];
+        teamBPlayers[id] = {
+            id,
+            originalName: p.name,
+            anonymousName: p.name,
+            class: '',
+            studentNumber: p.number,
+            gender: '',
+            stats: defaultStats,
+            isCaptain: i === 0,
+            totalScore: 0,
+            memo: p.memo,
+        };
+    });
+    return { teamBInfo, teamBPlayers };
+}
 
 interface AttendanceScreenProps {
     teamSelection: {
@@ -11,6 +40,7 @@ interface AttendanceScreenProps {
         teamB: string;
         teamAKey?: string;
         teamBKey?: string;
+        teamBFromOpponent?: SavedOpponentTeam;
     };
     onStartMatch: (data: {
         attendingPlayers: { teamA: Record<string, Player>, teamB: Record<string, Player> },
@@ -40,8 +70,12 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ teamSelection, onSt
                     .reduce((acc, p) => ({...acc, [p.id]: p}), {});
             }
         }
-        
-        if (teamSelection.teamBKey) {
+
+        if (teamSelection.teamBFromOpponent) {
+            const { teamBInfo: info, teamBPlayers: players } = opponentTeamToSavedInfoAndPlayers(teamSelection.teamBFromOpponent);
+            teamBInfo = info;
+            localTeamBPlayers = players;
+        } else if (teamSelection.teamBKey) {
             const dataB = teamSetsMap.get(teamSelection.teamBKey);
             if (dataB) {
                 teamBInfo = dataB.team;
@@ -61,6 +95,8 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ teamSelection, onSt
     }, [teamSelection, teamSetsMap]);
     
     const [onCourt, setOnCourt] = useState<{ teamA: Set<string>, teamB: Set<string> }>({ teamA: new Set(), teamB: new Set() });
+    const [memoOverrides, setMemoOverrides] = useState<Record<string, string>>({});
+    const [memoModalPlayer, setMemoModalPlayer] = useState<{ playerId: string; name: string } | null>(null);
 
     useEffect(() => {
         setOnCourt({
@@ -82,10 +118,18 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ teamSelection, onSt
     };
 
     const handleStart = () => {
+        const mergeMemo = (players: Record<string, Player>) => {
+            const out: Record<string, Player> = {};
+            for (const id of Object.keys(players)) {
+                const p = players[id];
+                out[id] = { ...p, memo: memoOverrides[id] ?? p.memo };
+            }
+            return out;
+        };
         onStartMatch({
             attendingPlayers: {
-                teamA: teamAPlayers,
-                teamB: teamBPlayers,
+                teamA: mergeMemo(teamAPlayers),
+                teamB: mergeMemo(teamBPlayers),
             },
             onCourtIds: onCourt,
             teamAInfo: teamAInfo,
@@ -104,7 +148,8 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ teamSelection, onSt
         players: Player[];
         onCourtSet: Set<string>;
         onToggle: (playerId: string) => void;
-    }> = ({ players, onCourtSet, onToggle }) => (
+        onMemoClick: (playerId: string, name: string) => void;
+    }> = ({ players, onCourtSet, onToggle, onMemoClick }) => (
         <div className="space-y-2">
             {players.map(player => (
                 <label key={player.id} className="flex items-center gap-3 p-3 rounded-lg bg-slate-800 cursor-pointer hover:bg-slate-700 transition-colors">
@@ -114,7 +159,8 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ teamSelection, onSt
                         onChange={() => onToggle(player.id)}
                         className="h-6 w-6 bg-slate-700 border-slate-500 rounded text-sky-500 focus:ring-sky-500 cursor-pointer"
                     />
-                    <span className="font-semibold text-slate-200">{player.originalName}</span>
+                    <span className="font-semibold text-slate-200 flex-1">{player.originalName}</span>
+                    <button type="button" onClick={e => { e.preventDefault(); onMemoClick(player.id, player.originalName); }} className="p-1 rounded hover:bg-slate-600 text-amber-400/90 shrink-0" title="전력 분석 메모">📝</button>
                 </label>
             ))}
         </div>
@@ -136,16 +182,25 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ teamSelection, onSt
                         {teamAInfo && <TeamEmblem emblem={teamAInfo.emblem} color={teamAInfo.color || '#3b82f6'} className="w-16 h-16" />}
                         <h3 className="text-2xl font-bold" style={{ color: teamAInfo?.color || '#3b82f6' }}>{teamAInfo?.teamName || 'Team A'} ({onCourt.teamA.size}{t('attendance_count_suffix')})</h3>
                     </div>
-                    <PlayerList players={sortedTeamAPlayers} onCourtSet={onCourt.teamA} onToggle={(id) => handleToggleOnCourt(id, 'teamA')} />
+                    <PlayerList players={sortedTeamAPlayers} onCourtSet={onCourt.teamA} onToggle={(id) => handleToggleOnCourt(id, 'teamA')} onMemoClick={(id, name) => setMemoModalPlayer({ playerId: id, name })} />
                 </div>
                 <div className="bg-slate-900/50 p-4 rounded-lg border-2 border-slate-700">
                     <div className="flex flex-col items-center text-center gap-2 mb-4">
                         {teamBInfo && <TeamEmblem emblem={teamBInfo.emblem} color={teamBInfo.color || '#ef4444'} className="w-16 h-16" />}
                         <h3 className="text-2xl font-bold" style={{ color: teamBInfo?.color || '#ef4444' }}>{teamBInfo?.teamName || 'Team B'} ({onCourt.teamB.size}{t('attendance_count_suffix')})</h3>
                     </div>
-                    <PlayerList players={sortedTeamBPlayers} onCourtSet={onCourt.teamB} onToggle={(id) => handleToggleOnCourt(id, 'teamB')} />
+                    <PlayerList players={sortedTeamBPlayers} onCourtSet={onCourt.teamB} onToggle={(id) => handleToggleOnCourt(id, 'teamB')} onMemoClick={(id, name) => setMemoModalPlayer({ playerId: id, name })} />
                 </div>
             </div>
+            {memoModalPlayer && (
+                <PlayerMemoModal
+                    isOpen={!!memoModalPlayer}
+                    onClose={() => setMemoModalPlayer(null)}
+                    playerName={memoModalPlayer.name}
+                    initialMemo={memoOverrides[memoModalPlayer.playerId] ?? (teamAPlayers[memoModalPlayer.playerId] || teamBPlayers[memoModalPlayer.playerId])?.memo ?? ''}
+                    onSave={text => { setMemoOverrides(prev => ({ ...prev, [memoModalPlayer.playerId]: text })); setMemoModalPlayer(null); }}
+                />
+            )}
             <div className="flex justify-center pt-6">
                 <button
                     onClick={handleStart}

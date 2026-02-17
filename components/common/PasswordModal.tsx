@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
+import { isAdminPasswordCorrect } from '../../utils/adminPassword';
 
 interface PasswordModalProps {
     isOpen: boolean;
@@ -17,7 +18,7 @@ const PasswordModal: React.FC<PasswordModalProps> = ({ isOpen, onClose, onSucces
     }
 
     const handleConfirm = () => {
-        if (password === '9999') {
+        if (isAdminPasswordCorrect(password)) {
             onSuccess();
             setPassword('');
             setError('');

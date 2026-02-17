@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useReducer, useRef, PropsWithChildren, useMemo } from 'react';
 import Peer from 'peerjs';
-import { MatchState, TeamSet, TeamMatchState, Player, PlayerStats, Action, UserEmblem, SavedTeamInfo, ScoreEvent, PlayerAchievements, PlayerCumulativeStats, ToastState, AppSettings, Tournament, League, PlayerCoachingLogs, CoachingLog, TeamStats, DataContextType, Badge, P2PState, DataConnection, P2PMessage, Language, ScoreEventType } from '../types';
+import { MatchState, TeamSet, TeamMatchState, Player, PlayerStats, Action, UserEmblem, SavedTeamInfo, SavedOpponentTeam, LeagueStandingsData, ScoreEvent, PlayerAchievements, PlayerCumulativeStats, ToastState, AppSettings, Tournament, League, PlayerCoachingLogs, CoachingLog, TeamStats, DataContextType, Badge, P2PState, DataConnection, P2PMessage, Language, ScoreEventType } from '../types';
 import { BADGE_DEFINITIONS } from '../data/badges';
 import { translations } from '../data/translations';
 import localforage from 'localforage';
@@ -18,16 +18,24 @@ function toHostPeerId(pinOrId: string): string {
     return s.startsWith(P2P_PIN_PREFIX) ? s : P2P_PIN_PREFIX + s;
 }
 
-const TEAM_SETS_KEY = 'jct_volleyball_team_sets';
-const MATCH_HISTORY_KEY = 'jct_volleyball_match_history';
-const USER_EMBLEMS_KEY = 'jct_volleyball_user_emblems';
-const ACHIEVEMENTS_KEY = 'jct_volleyball_achievements';
 const SETTINGS_KEY = 'jct_volleyball_settings';
-const TOURNAMENTS_KEY = 'jct_volleyball_tournaments';
-const LEAGUES_KEY = 'jct_volleyball_leagues';
-const COACHING_LOGS_KEY = 'jct_volleyball_coaching_logs';
-const BACKUP_KEY = 'jct_volleyball_backup_autosave';
 const LANGUAGE_KEY = 'jct_volleyball_language';
+
+function getStorageKeys(appMode: 'CLASS' | 'CLUB') {
+    const p = appMode === 'CLUB' ? 'club_' : 'class_';
+    return {
+        TEAM_SETS_KEY: p + 'jct_volleyball_team_sets',
+        MATCH_HISTORY_KEY: p + 'jct_volleyball_match_history',
+        USER_EMBLEMS_KEY: p + 'jct_volleyball_user_emblems',
+        ACHIEVEMENTS_KEY: p + 'jct_volleyball_achievements',
+        TOURNAMENTS_KEY: p + 'jct_volleyball_tournaments',
+        LEAGUES_KEY: p + 'jct_volleyball_leagues',
+        COACHING_LOGS_KEY: p + 'jct_volleyball_coaching_logs',
+        BACKUP_KEY: p + 'jct_volleyball_backup_autosave',
+        OPPONENT_TEAMS_KEY: p + 'jct_volleyball_opponent_teams',
+        LEAGUE_STANDINGS_KEY: p + 'jct_volleyball_league_standings',
+    };
+}
 const TEAM_COLORS_PALETTE = ['#3b82f6', '#ef4444', '#22c55e', '#eab308', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#64748b', '#f472b6', '#06b6d4', '#f59e0b'];
 
 
@@ -81,7 +89,8 @@ const getInitialLanguage = (): Language => {
     return 'ko';
 };
 
-export const DataProvider = ({ children }: PropsWithChildren) => {
+export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<{ appMode?: 'CLASS' | 'CLUB' }>) => {
+    const storageKeys = useMemo(() => getStorageKeys(appMode), [appMode]);
     const [teamSets, setTeamSets] = useState<TeamSet[]>([]);
     const [matchHistory, setMatchHistory] = useState<(MatchState & { date: string; time?: number })[]>([]);
     const [userEmblems, setUserEmblems] = useState<UserEmblem[]>([]);
@@ -89,6 +98,8 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
     const [tournaments, setTournaments] = useState<Tournament[]>([]);
     const [leagues, setLeagues] = useState<League[]>([]);
     const [coachingLogs, setCoachingLogs] = useState<PlayerCoachingLogs>({});
+    const [opponentTeams, setOpponentTeams] = useState<SavedOpponentTeam[]>([]);
+    const [leagueStandings, setLeagueStandings] = useState<LeagueStandingsData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [toast, setToast] = useState<ToastState>({ message: '', type: 'success' });
     const [recoveryData, setRecoveryData] = useState<any | null>(null);
@@ -181,6 +192,24 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
 
     const sendReaction = useCallback((emoji: string) => {
         connRef.current.forEach(conn => conn.send({ type: 'REACTION', payload: { emoji } }));
+    }, []);
+
+    const sendTimeoutViewer = useCallback((active: boolean, timeLeft?: number) => {
+        broadcast({ type: 'timeout_viewer_sync', payload: { active, timeLeft: timeLeft ?? 30 } });
+    }, [broadcast]);
+
+    const sendEffect = useCallback((effectType: 'SPIKE' | 'BLOCK') => {
+        broadcast({ type: 'effect_broadcast', payload: { effectType } });
+    }, [broadcast]);
+
+    const [receivedEffects, setReceivedEffects] = useState<{ id: number; effectType: 'SPIKE' | 'BLOCK' }[]>([]);
+    const effectIdRef = useRef(0);
+    const addReceivedEffect = useCallback((effectType: 'SPIKE' | 'BLOCK') => {
+        const id = ++effectIdRef.current;
+        setReceivedEffects(prev => [...prev, { id, effectType }]);
+    }, []);
+    const removeReceivedEffect = useCallback((id: number) => {
+        setReceivedEffects(prev => prev.filter(e => e.id !== id));
     }, []);
 
     const saveSettings = async (newSettings: AppSettings) => {
@@ -475,6 +504,16 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
                         }
                         break;
                     }
+                    case 'UPDATE_PLAYER_MEMO': {
+                        const { team, playerId, memo } = action;
+                        const target = team === 'A' ? 'teamA' : 'teamB';
+                        const players = { ...newState[target].players };
+                        if (players[playerId]) {
+                            players[playerId] = { ...players[playerId], memo };
+                            newState[target].players = players;
+                        }
+                        break;
+                    }
                 }
                 if (scoreChanged) {
                     newState.scoreHistory.push({ a: newState.teamA.score, b: newState.teamB.score });
@@ -726,11 +765,11 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
             const backupData = {
                 teamSets, matchHistory, userEmblems, tournaments, leagues, coachingLogs
             };
-            await localforage.setItem(BACKUP_KEY, backupData);
+            await localforage.setItem(storageKeys.BACKUP_KEY, backupData);
         } catch (error) {
             console.error("Auto backup failed:", error);
         }
-    }, [teamSets, matchHistory, userEmblems, tournaments, leagues, coachingLogs]);
+    }, [teamSets, matchHistory, userEmblems, tournaments, leagues, coachingLogs, storageKeys.BACKUP_KEY]);
     
     // ... (badge logic is mostly unaffected unless we add badges for new stats, but keeping it as is for now to avoid complexity overload in this step)
     
@@ -739,7 +778,7 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
             const serializable = Object.fromEntries(
                 Object.entries(newAchievements).map(([playerId, data]) => [playerId, { ...data, earnedBadgeIds: Array.from(data.earnedBadgeIds) }])
             );
-            await localforage.setItem(ACHIEVEMENTS_KEY, serializable);
+            await localforage.setItem(storageKeys.ACHIEVEMENTS_KEY, serializable);
             setPlayerAchievements(newAchievements);
         } catch (error) {
             console.error("Error saving player achievements:", error);
@@ -1025,7 +1064,7 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
 
     const saveTeamSets = async (newTeamSets: TeamSet[], successMessage?: string) => {
         try {
-            await localforage.setItem(TEAM_SETS_KEY, newTeamSets);
+            await localforage.setItem(storageKeys.TEAM_SETS_KEY, newTeamSets);
             setTeamSets(newTeamSets);
             if (successMessage) {
                 showToast(successMessage, 'success');
@@ -1040,7 +1079,7 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
 
     const saveMatchHistory = async (newHistory: (MatchState & { date: string; time?: number })[], successMessage?: string) => {
         try {
-            await localforage.setItem(MATCH_HISTORY_KEY, newHistory);
+            await localforage.setItem(storageKeys.MATCH_HISTORY_KEY, newHistory);
             setMatchHistory(newHistory);
              if (successMessage) {
                 showToast(successMessage, 'success');
@@ -1062,7 +1101,7 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
     
     const saveUserEmblems = async (newUserEmblems: UserEmblem[]) => {
         try {
-            await localforage.setItem(USER_EMBLEMS_KEY, newUserEmblems);
+            await localforage.setItem(storageKeys.USER_EMBLEMS_KEY, newUserEmblems);
             setUserEmblems(newUserEmblems);
             await createBackup();
         } catch (error) {
@@ -1073,7 +1112,7 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
     
     const saveTournaments = async (newTournaments: Tournament[]) => {
         try {
-            await localforage.setItem(TOURNAMENTS_KEY, newTournaments);
+            await localforage.setItem(storageKeys.TOURNAMENTS_KEY, newTournaments);
             setTournaments(newTournaments);
             await createBackup();
         } catch (error) {
@@ -1084,7 +1123,7 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
 
     const saveLeagues = async (newLeagues: League[]) => {
         try {
-            await localforage.setItem(LEAGUES_KEY, newLeagues);
+            await localforage.setItem(storageKeys.LEAGUES_KEY, newLeagues);
             setLeagues(newLeagues);
             await createBackup();
         } catch (error) {
@@ -1102,12 +1141,62 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
         updatedLogs[playerId].push(newLog);
         
         try {
-            await localforage.setItem(COACHING_LOGS_KEY, updatedLogs);
+            await localforage.setItem(storageKeys.COACHING_LOGS_KEY, updatedLogs);
             setCoachingLogs(updatedLogs);
             showToast('코칭 로그가 저장되었습니다.', 'success');
         } catch (error) {
             console.error("Error saving coaching log:", error);
             showToast("코칭 로그 저장 중 오류가 발생했습니다.", 'error');
+        }
+    };
+
+    const saveOpponentTeam = async (team: Omit<SavedOpponentTeam, 'id' | 'savedAt'>) => {
+        const newTeam: SavedOpponentTeam = {
+            ...team,
+            id: `opp_${Date.now()}`,
+            savedAt: new Date().toISOString(),
+        };
+        const updated = [...opponentTeams, newTeam];
+        try {
+            await localforage.setItem(storageKeys.OPPONENT_TEAMS_KEY, updated);
+            setOpponentTeams(updated);
+            showToast('상대 팀이 저장되었습니다.', 'success');
+        } catch (error) {
+            console.error("Error saving opponent team:", error);
+            showToast("상대 팀 저장 중 오류가 발생했습니다.", 'error');
+        }
+    };
+
+    const updateOpponentTeam = async (id: string, team: Partial<SavedOpponentTeam>) => {
+        const updated = opponentTeams.map(t => t.id === id ? { ...t, ...team } : t);
+        try {
+            await localforage.setItem(storageKeys.OPPONENT_TEAMS_KEY, updated);
+            setOpponentTeams(updated);
+        } catch (error) {
+            console.error("Error updating opponent team:", error);
+            showToast("상대 팀 수정 중 오류가 발생했습니다.", 'error');
+        }
+    };
+
+    const deleteOpponentTeam = async (id: string) => {
+        const updated = opponentTeams.filter(t => t.id !== id);
+        try {
+            await localforage.setItem(storageKeys.OPPONENT_TEAMS_KEY, updated);
+            setOpponentTeams(updated);
+            showToast('상대 팀이 삭제되었습니다.', 'success');
+        } catch (error) {
+            console.error("Error deleting opponent team:", error);
+            showToast("상대 팀 삭제 중 오류가 발생했습니다.", 'error');
+        }
+    };
+
+    const saveLeagueStandings = async (data: LeagueStandingsData | null) => {
+        try {
+            await localforage.setItem(storageKeys.LEAGUE_STANDINGS_KEY, data);
+            setLeagueStandings(data);
+        } catch (error) {
+            console.error("Error saving league standings:", error);
+            showToast("순위표 저장 중 오류가 발생했습니다.", 'error');
         }
     };
 
@@ -1400,17 +1489,21 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
                 parsedTournaments,
                 parsedLeagues,
                 parsedCoachingLogs,
-                backupData
+                backupData,
+                parsedOpponentTeams,
+                parsedLeagueStandings
             ] = await Promise.all([
-                localforage.getItem(TEAM_SETS_KEY) as Promise<TeamSet[] | null>,
-                localforage.getItem(MATCH_HISTORY_KEY) as Promise<(MatchState & { date: string; time?: number })[] | null>,
-                localforage.getItem(USER_EMBLEMS_KEY) as Promise<UserEmblem[] | null>,
-                localforage.getItem(ACHIEVEMENTS_KEY) as Promise<any>,
+                localforage.getItem(storageKeys.TEAM_SETS_KEY) as Promise<TeamSet[] | null>,
+                localforage.getItem(storageKeys.MATCH_HISTORY_KEY) as Promise<(MatchState & { date: string; time?: number })[] | null>,
+                localforage.getItem(storageKeys.USER_EMBLEMS_KEY) as Promise<UserEmblem[] | null>,
+                localforage.getItem(storageKeys.ACHIEVEMENTS_KEY) as Promise<any>,
                 localforage.getItem(SETTINGS_KEY) as Promise<AppSettings | null>,
-                localforage.getItem(TOURNAMENTS_KEY) as Promise<Tournament[] | null>,
-                localforage.getItem(LEAGUES_KEY) as Promise<League[] | null>,
-                localforage.getItem(COACHING_LOGS_KEY) as Promise<PlayerCoachingLogs | null>,
-                localforage.getItem(BACKUP_KEY) as Promise<any>
+                localforage.getItem(storageKeys.TOURNAMENTS_KEY) as Promise<Tournament[] | null>,
+                localforage.getItem(storageKeys.LEAGUES_KEY) as Promise<League[] | null>,
+                localforage.getItem(storageKeys.COACHING_LOGS_KEY) as Promise<PlayerCoachingLogs | null>,
+                localforage.getItem(storageKeys.BACKUP_KEY) as Promise<any>,
+                localforage.getItem(storageKeys.OPPONENT_TEAMS_KEY) as Promise<SavedOpponentTeam[] | null>,
+                localforage.getItem(storageKeys.LEAGUE_STANDINGS_KEY) as Promise<LeagueStandingsData | null>
             ]);
 
             const teamSets = parsedTeamSets || [];
@@ -1460,6 +1553,10 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
             if (isValidTournaments(tournaments)) setTournaments(tournaments);
             if (isValidLeagues(leagues)) setLeagues(leagues);
             if (isValidCoachingLogs(coachingLogs)) setCoachingLogs(coachingLogs);
+            if (Array.isArray(parsedOpponentTeams)) setOpponentTeams(parsedOpponentTeams);
+            if (parsedLeagueStandings && typeof parsedLeagueStandings.tournamentName === 'string' && Array.isArray(parsedLeagueStandings.teams) && Array.isArray(parsedLeagueStandings.matches)) {
+                setLeagueStandings(parsedLeagueStandings);
+            }
             
         } catch (error: any) {
             // showToast 대신 직접 setToast 호출하여 의존성 순환 방지
@@ -1468,7 +1565,7 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
         } finally {
             setIsLoading(false);
         }
-    }, [t]); // showToast 의존성 제거, t만 유지
+    }, [t, storageKeys]);
 
     useEffect(() => {
         loadAllData();
@@ -1479,12 +1576,12 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
         try {
             const { teamSets = [], matchHistory = [], userEmblems = [], tournaments = [], leagues = [], coachingLogs = {} } = recoveryData;
             await Promise.all([
-                localforage.setItem(TEAM_SETS_KEY, teamSets),
-                localforage.setItem(MATCH_HISTORY_KEY, matchHistory),
-                localforage.setItem(USER_EMBLEMS_KEY, userEmblems),
-                localforage.setItem(TOURNAMENTS_KEY, tournaments),
-                localforage.setItem(LEAGUES_KEY, leagues),
-                localforage.setItem(COACHING_LOGS_KEY, coachingLogs)
+                localforage.setItem(storageKeys.TEAM_SETS_KEY, teamSets),
+                localforage.setItem(storageKeys.MATCH_HISTORY_KEY, matchHistory),
+                localforage.setItem(storageKeys.USER_EMBLEMS_KEY, userEmblems),
+                localforage.setItem(storageKeys.TOURNAMENTS_KEY, tournaments),
+                localforage.setItem(storageKeys.LEAGUES_KEY, leagues),
+                localforage.setItem(storageKeys.COACHING_LOGS_KEY, coachingLogs)
             ]);
             
             await loadAllData();
@@ -1512,9 +1609,10 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
         peerRef.current?.destroy();
         connRef.current = [];
         peerRef.current = null;
-        setP2p({ peerId: null, isHost: false, isConnected: false, connections: [], status: 'disconnected', error: undefined, clientTournamentMode: undefined, viewerCount: undefined });
+        setP2p({ peerId: null, isHost: false, isConnected: false, connections: [], status: 'disconnected', error: undefined, clientTournamentMode: undefined, viewerCount: undefined, timeoutViewer: undefined });
         setReceivedTickerMessage(null);
         setReceivedReactions([]);
+        setReceivedEffects([]);
         setTimeout(() => { isIntentionallyClosing.current = false; }, 500);
     }, []);
 
@@ -1653,6 +1751,10 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
                     addReceivedReaction(data.payload.emoji);
                 } else if (data.type === 'viewer_count_sync') {
                     setP2p(prev => ({ ...prev, viewerCount: data.payload }));
+                } else if (data.type === 'timeout_viewer_sync') {
+                    setP2p(prev => ({ ...prev, timeoutViewer: { active: data.payload.active, timeLeft: data.payload.timeLeft ?? 30 } }));
+                } else if (data.type === 'effect_broadcast') {
+                    addReceivedEffect(data.payload.effectType);
                 } else if (data.type === 'action') {
                     dispatch(data.payload);
                 } else if (data.type === 'settings_sync') {
@@ -1865,7 +1967,7 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
                 saveLeagues(data.leagues || []),
                 (async () => {
                     const logs = data.coachingLogs || {};
-                    await localforage.setItem(COACHING_LOGS_KEY, logs);
+                    await localforage.setItem(storageKeys.COACHING_LOGS_KEY, logs);
                     setCoachingLogs(logs);
                 })(),
                 (async () => {
@@ -1900,15 +2002,15 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
     const resetAllData = useCallback(async () => {
         try {
             await Promise.all([
-                localforage.removeItem(TEAM_SETS_KEY),
-                localforage.removeItem(MATCH_HISTORY_KEY),
-                localforage.removeItem(USER_EMBLEMS_KEY),
-                localforage.removeItem(ACHIEVEMENTS_KEY),
-                localforage.removeItem(BACKUP_KEY),
+                localforage.removeItem(storageKeys.TEAM_SETS_KEY),
+                localforage.removeItem(storageKeys.MATCH_HISTORY_KEY),
+                localforage.removeItem(storageKeys.USER_EMBLEMS_KEY),
+                localforage.removeItem(storageKeys.ACHIEVEMENTS_KEY),
+                localforage.removeItem(storageKeys.BACKUP_KEY),
                 localforage.removeItem(SETTINGS_KEY),
-                localforage.removeItem(TOURNAMENTS_KEY),
-                localforage.removeItem(LEAGUES_KEY),
-                localforage.removeItem(COACHING_LOGS_KEY),
+                localforage.removeItem(storageKeys.TOURNAMENTS_KEY),
+                localforage.removeItem(storageKeys.LEAGUES_KEY),
+                localforage.removeItem(storageKeys.COACHING_LOGS_KEY),
                 localforage.removeItem(LANGUAGE_KEY)
             ]);
 
@@ -1926,7 +2028,7 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
             console.error("Failed to reset all data:", error);
             showToast('데이터 초기화 중 오류가 발생했습니다.', 'error');
         }
-    }, [showToast, setLanguage]);
+    }, [showToast, setLanguage, storageKeys]);
 
     const value: DataContextType = {
         teamSets,
@@ -1935,6 +2037,9 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
         userEmblems,
         playerAchievements,
         coachingLogs,
+        opponentTeams,
+        leagueStandings,
+        saveLeagueStandings,
         playerCumulativeStats,
         teamPerformanceData,
         tournaments,
@@ -1942,6 +2047,9 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
         isLoading,
         toast,
         saveTeamSets,
+        saveOpponentTeam,
+        updateOpponentTeam,
+        deleteOpponentTeam,
         saveMatchHistory,
         saveUserEmblems,
         saveTournaments,
@@ -1982,11 +2090,16 @@ export const DataProvider = ({ children }: PropsWithChildren) => {
         setHostTournamentMode,
         sendTicker,
         sendReaction,
+        sendTimeoutViewer,
+        sendEffect,
         receivedTickerMessage,
         clearTicker,
         receivedReactions,
         addReceivedReaction,
         removeReceivedReaction,
+        receivedEffects,
+        addReceivedEffect,
+        removeReceivedEffect,
         startHostSession,
         joinSession,
         closeSession,

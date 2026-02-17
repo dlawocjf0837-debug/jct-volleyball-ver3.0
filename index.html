@@ -42,6 +42,23 @@
     .animate-marquee {
         animation: marquee 12s linear infinite;
     }
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        10%, 30%, 50%, 70%, 90% { transform: translateX(-6px); }
+        20%, 40%, 60%, 80% { transform: translateX(6px); }
+    }
+    .animate-shake {
+        animation: shake 0.4s ease-in-out 5;
+    }
+    @keyframes zoomInFade {
+        0% { opacity: 0; transform: scale(0.5); }
+        20% { opacity: 1; transform: scale(1.2); }
+        80% { opacity: 1; transform: scale(1); }
+        100% { opacity: 0; transform: scale(1); }
+    }
+    .animate-effect-popup {
+        animation: zoomInFade 2s ease-out forwards;
+    }
     @keyframes glow {
         0%, 100% { box-shadow: 0 0 5px #00A3FF, 0 0 10px #00A3FF, 0 0 15px #00A3FF; }
         50% { box-shadow: 0 0 10px #00A3FF, 0 0 20px #00A3FF, 0 0 30px #00A3FF; }

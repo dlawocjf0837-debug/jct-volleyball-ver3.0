@@ -33,6 +33,8 @@ export interface Player {
     totalScore: number;
     customLabel1?: string; // 언더핸드 대체 라벨
     customLabel2?: string; // 서브 대체 라벨
+    /** 전력 분석/특이사항 메모 (클럽 모드 상대 선수 등) */
+    memo?: string;
 }
 
 export enum Screen {
@@ -49,6 +51,31 @@ export interface Team {
     playerIds: string[];
     color: string;
     emblem?: string;
+}
+
+/** 클럽 모드: 저장된 상대 팀 (이름 + 선수 목록, 원클릭 불러오기용) */
+export interface SavedOpponentTeam {
+    id: string;
+    name: string;
+    players: { number: string; name: string; memo?: string }[];
+    savedAt: string;
+}
+
+/** 클럽 모드: 조별 리그 순위표용 경기 결과 (간편 입력) */
+export interface LeagueStandingsMatch {
+    teamA: string;
+    teamB: string;
+    setsA: number;
+    setsB: number;
+}
+
+/** 클럽 모드: 조별 리그 순위표 데이터 (대회명, 참가팀, 경기결과, 우리 학교) */
+export interface LeagueStandingsData {
+    tournamentName: string;
+    teams: string[];
+    matches: LeagueStandingsMatch[];
+    /** 진출 시나리오 계산 기준 팀 (우리 학교) */
+    ourSchool?: string;
 }
 
 export interface SavedTeamInfo {
@@ -168,7 +195,8 @@ export type Action =
     | { type: 'ADJUST_FAIR_PLAY'; team: 'A' | 'B'; amount: number }
     | { type: 'INCREMENT_3_HIT'; team: 'A' | 'B' }
     | { type: 'SET_SERVING_TEAM'; team: 'A' | 'B' }
-    | { type: 'SUBSTITUTE_PLAYER'; team: 'A' | 'B'; playerIn: string; playerOut: string };
+    | { type: 'SUBSTITUTE_PLAYER'; team: 'A' | 'B'; playerIn: string; playerOut: string }
+    | { type: 'UPDATE_PLAYER_MEMO'; team: 'A' | 'B'; playerId: string; memo: string };
 
 
 export interface Badge {
@@ -334,6 +362,8 @@ export interface P2PState {
     clientTournamentMode?: boolean;
     /** 시청자 수 (호스트: 실시간 계산, 클라이언트: 수신값) */
     viewerCount?: number;
+    /** 작전 타임 뷰어 오버레이 상태 */
+    timeoutViewer?: { active: boolean; timeLeft: number };
 }
 
 export type P2PMessage = {
@@ -354,6 +384,12 @@ export type P2PMessage = {
 } | {
     type: 'viewer_count_sync';
     payload: number;
+} | {
+    type: 'timeout_viewer_sync';
+    payload: { active: boolean; timeLeft?: number };
+} | {
+    type: 'effect_broadcast';
+    payload: { effectType: 'SPIKE' | 'BLOCK' };
 } | {
     type: 'action';
     payload: Action;
@@ -377,6 +413,12 @@ export interface DataContextType {
     userEmblems: UserEmblem[];
     playerAchievements: PlayerAchievements;
     coachingLogs: PlayerCoachingLogs;
+    opponentTeams: SavedOpponentTeam[];
+    leagueStandings: LeagueStandingsData | null;
+    saveLeagueStandings: (data: LeagueStandingsData | null) => Promise<void>;
+    saveOpponentTeam: (team: Omit<SavedOpponentTeam, 'id' | 'savedAt'>) => Promise<void>;
+    updateOpponentTeam: (id: string, team: Partial<SavedOpponentTeam>) => Promise<void>;
+    deleteOpponentTeam: (id: string) => Promise<void>;
     playerCumulativeStats: Record<string, Partial<PlayerCumulativeStats>>;
     teamPerformanceData: TeamStats[];
     tournaments: Tournament[];
@@ -432,11 +474,16 @@ export interface DataContextType {
     setHostTournamentMode?: (value: boolean) => void;
     sendTicker?: (message: string) => void;
     sendReaction?: (emoji: string) => void;
+    sendTimeoutViewer?: (active: boolean, timeLeft?: number) => void;
+    sendEffect?: (effectType: 'SPIKE' | 'BLOCK') => void;
     receivedTickerMessage: string | null;
     clearTicker: () => void;
     receivedReactions: { id: number; emoji: string }[];
     addReceivedReaction: (emoji: string) => void;
     removeReceivedReaction: (id: number) => void;
+    receivedEffects: { id: number; effectType: 'SPIKE' | 'BLOCK' }[];
+    addReceivedEffect: (effectType: 'SPIKE' | 'BLOCK') => void;
+    removeReceivedEffect: (id: number) => void;
     startHostSession: (initialState?: MatchState) => void;
     joinSession: (peerId: string, onSuccess: () => void) => void;
     closeSession: () => void;

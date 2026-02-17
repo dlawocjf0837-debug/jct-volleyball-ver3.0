@@ -2,15 +2,53 @@ import React, { useState, useEffect } from 'react';
 import { useData } from '../contexts/DataContext';
 import { AppSettings } from '../types';
 import { useTranslation } from '../hooks/useTranslation';
+import { isAdminPasswordCorrect, setAdminPassword } from '../utils/adminPassword';
 
 const SettingsScreen: React.FC = () => {
     const { settings, saveSettings, showToast } = useData();
     const { t } = useTranslation();
     const [currentSettings, setCurrentSettings] = useState<AppSettings>(settings);
+    const [showPasswordModal, setShowPasswordModal] = useState(false);
+    const [passwordStep, setPasswordStep] = useState<'verify' | 'change'>('verify');
+    const [verifyInput, setVerifyInput] = useState('');
+    const [verifyError, setVerifyError] = useState('');
+    const [newPasswordInput, setNewPasswordInput] = useState('');
 
     useEffect(() => {
         setCurrentSettings(settings);
     }, [settings]);
+
+    const openPasswordModal = () => {
+        setPasswordStep('verify');
+        setVerifyInput('');
+        setVerifyError('');
+        setNewPasswordInput('');
+        setShowPasswordModal(true);
+    };
+
+    const closePasswordModal = () => {
+        setShowPasswordModal(false);
+        setPasswordStep('verify');
+        setVerifyInput('');
+        setVerifyError('');
+        setNewPasswordInput('');
+    };
+
+    const handleVerifyPassword = () => {
+        if (!isAdminPasswordCorrect(verifyInput)) {
+            setVerifyError('비밀번호가 일치하지 않습니다.');
+            return;
+        }
+        setVerifyError('');
+        setPasswordStep('change');
+        setNewPasswordInput('');
+    };
+
+    const handleSaveNewPassword = () => {
+        setAdminPassword(newPasswordInput);
+        showToast('관리자 비밀번호가 저장되었습니다.', 'success');
+        closePasswordModal();
+    };
 
     const handleSave = () => {
         const score = Number(currentSettings.winningScore);
@@ -99,6 +137,20 @@ const SettingsScreen: React.FC = () => {
             </div>
 
             <div className="space-y-4 pt-6 border-t border-slate-700">
+                <h3 className="text-xl font-bold text-slate-300">비밀번호 수정</h3>
+                <p className="text-slate-400 text-sm">
+                    프로그램 전체에서 사용하는 관리자 비밀번호를 설정합니다. (환경설정 입장, 대회 전광판 모드, 코칭 로그, 데이터 초기화 등)
+                </p>
+                <button
+                    type="button"
+                    onClick={openPasswordModal}
+                    className="flex items-center gap-2 px-4 py-3 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold transition-colors"
+                >
+                    🔐 관리자 비밀번호 설정
+                </button>
+            </div>
+
+            <div className="space-y-4 pt-6 border-t border-slate-700">
                 <h3 className="text-xl font-bold text-slate-300">{t('settings_team_builder_title')}</h3>
                 <div className="bg-slate-800/50 p-4 rounded-lg space-y-2">
                     <label htmlFor="sheet-url" className="block text-sm font-medium text-slate-300 mb-1">
@@ -123,6 +175,57 @@ const SettingsScreen: React.FC = () => {
                     설정 저장
                 </button>
             </div>
+
+            {showPasswordModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={closePasswordModal} role="dialog" aria-modal="true">
+                    <div className="bg-slate-900 rounded-2xl border border-slate-600 shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+                        {passwordStep === 'verify' ? (
+                            <>
+                                <div className="p-6">
+                                    <h3 className="text-lg font-bold text-slate-200 mb-2">비밀번호 확인</h3>
+                                    <p className="text-sm text-slate-400 mb-4">비밀번호 설정을 변경하려면 현재 비밀번호를 입력하세요.</p>
+                                    <input
+                                        type="password"
+                                        value={verifyInput}
+                                        onChange={e => { setVerifyInput(e.target.value); setVerifyError(''); }}
+                                        placeholder="현재 비밀번호"
+                                        className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                        autoComplete="off"
+                                        autoFocus
+                                    />
+                                    {verifyError && <p className="text-red-500 text-sm mt-2">{verifyError}</p>}
+                                </div>
+                                <div className="flex gap-2 p-4 bg-slate-800/50 border-t border-slate-700">
+                                    <button type="button" onClick={closePasswordModal} className="flex-1 py-2 rounded-lg bg-slate-600 hover:bg-slate-500 text-white font-medium">취소</button>
+                                    <button type="button" onClick={handleVerifyPassword} className="flex-1 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-medium">확인</button>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="p-6">
+                                    <h3 className="text-lg font-bold text-slate-200 mb-2">비밀번호 수정</h3>
+                                    <p className="text-sm text-slate-400 mb-4">
+                                        프로그램 전체(환경설정, 대회 전광판 모드, 코칭 로그, 데이터 초기화 등)에서 사용하는 관리자 비밀번호입니다. 저장하지 않으면 기본값 0000으로 동작합니다.
+                                    </p>
+                                    <input
+                                        type="password"
+                                        value={newPasswordInput}
+                                        onChange={e => setNewPasswordInput(e.target.value)}
+                                        placeholder="새 비밀번호"
+                                        className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                        autoComplete="new-password"
+                                        autoFocus
+                                    />
+                                </div>
+                                <div className="flex gap-2 p-4 bg-slate-800/50 border-t border-slate-700">
+                                    <button type="button" onClick={() => setPasswordStep('verify')} className="flex-1 py-2 rounded-lg bg-slate-600 hover:bg-slate-500 text-white font-medium">뒤로</button>
+                                    <button type="button" onClick={handleSaveNewPassword} className="flex-1 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-medium">저장</button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
