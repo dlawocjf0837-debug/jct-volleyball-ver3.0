@@ -10,6 +10,8 @@ interface HeaderProps {
     onBack: () => void;
     showLanguageToggle?: boolean;
     showUpdateNotesIcon?: boolean;
+    /** 전역 잠금 버튼 클릭 시 호출 (전달 시 우측 영역에 잠금 버튼 표시, 언어 토글과 겹치지 않음) */
+    onLockClick?: () => void;
     subtitle?: string;
     brand?: string;
     appMode?: 'CLASS' | 'CLUB';
@@ -19,7 +21,7 @@ interface HeaderProps {
     onReturnToInitial?: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ title, showBackButton, onBack, showLanguageToggle, showUpdateNotesIcon = false, subtitle, brand = "J-IVE", appMode = 'CLASS', onAppModeChange, showModeToggle = false, showReturnToInitial = false, onReturnToInitial }) => {
+const Header: React.FC<HeaderProps> = ({ title, showBackButton, onBack, showLanguageToggle, showUpdateNotesIcon = false, onLockClick, subtitle, brand = "J-IVE", appMode = 'CLASS', onAppModeChange, showModeToggle = false, showReturnToInitial = false, onReturnToInitial }) => {
     const { t } = useTranslation();
     const [showUpdateNotes, setShowUpdateNotes] = useState(false);
     const isClub = appMode === 'CLUB';
@@ -62,6 +64,16 @@ const Header: React.FC<HeaderProps> = ({ title, showBackButton, onBack, showLang
                 <p className="text-slate-500 mt-1 text-xs tracking-[0.3em] font-light opacity-80">By JCT</p>
             </div>
             <div className="absolute right-0 top-0 flex items-center gap-2 sm:gap-3">
+                {onLockClick && (
+                    <button
+                        type="button"
+                        onClick={onLockClick}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-700/90 hover:bg-slate-600 border border-slate-600 text-white font-semibold text-sm transition-colors no-print shrink-0"
+                        aria-label="화면 잠금"
+                    >
+                        🔒 잠금
+                    </button>
+                )}
                 {showModeToggle && onAppModeChange && (
                     <div className="flex items-center gap-2 bg-slate-800/90 rounded-full p-1 border border-slate-600">
                         <span className={`text-xs font-medium px-2 hidden sm:inline ${appMode === 'CLASS' ? 'text-sky-400' : 'text-slate-500'}`}>수업</span>

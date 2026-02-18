@@ -29,6 +29,7 @@ interface MenuScreenProps {
     onStartTeamBuilder: () => void;
     onStartMatch: () => void;
     appMode?: 'CLASS' | 'CLUB';
+    onStartLeagueLive?: (teamA: string, teamB: string) => void;
     onStartCompetition: () => void;
     onShowHistory: (matchId?: string) => void;
     onShowPlayerRecords: () => void;
@@ -72,6 +73,7 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
     onStartTeamBuilder, 
     onStartMatch,
     appMode = 'CLASS',
+    onStartLeagueLive,
     onStartCompetition,
     onShowHistory,
     onShowPlayerRecords,
@@ -225,21 +227,23 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
         <>
             <div className={`max-w-6xl mx-auto flex flex-col items-center gap-6 sm:gap-10 animate-fade-in py-4 sm:py-10 w-full px-4 ${isClub ? 'rounded-2xl border border-amber-500/20 bg-slate-900/50' : ''}`}>
                 {/* 단일 진입 버튼: 경기 시작 + 실시간 참여 */}
-                <div className="w-full max-w-4xl grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-4">
+                <div className={`w-full max-w-4xl grid gap-4 sm:gap-4 ${isClub ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
                     <button
                         onClick={onStartMatch}
                         className={`w-full group relative flex items-center justify-center gap-3 sm:gap-3 px-4 sm:px-8 py-4 sm:py-5 overflow-hidden font-bold text-white transition-all duration-300 rounded-2xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 min-h-[44px] ${isClub ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-900/50 hover:shadow-amber-700/50' : 'bg-green-600 hover:bg-green-700 shadow-green-900/50 hover:shadow-green-700/50'}`}
                     >
                         <PlayIcon className="w-6 h-6 sm:w-8 sm:h-8"/>
-                        <span className="relative text-base sm:text-xl lg:text-2xl">{t('menu_start_game')}</span>
+                        <span className="relative text-base sm:text-xl lg:text-2xl">{isClub ? '🏐 연습 경기 시작' : t('menu_start_game')}</span>
                     </button>
-                    <button
-                        onClick={() => setIsJoinModalOpen(true)}
-                        className="w-full group relative flex items-center justify-center gap-3 sm:gap-3 px-4 sm:px-8 py-4 sm:py-5 overflow-hidden font-bold text-white transition-all duration-300 bg-green-600 rounded-2xl shadow-lg shadow-green-900/50 hover:bg-green-700 hover:shadow-xl hover:shadow-green-700/50 transform hover:-translate-y-1 min-h-[44px]"
-                    >
-                        <LinkIcon className="w-6 h-6 sm:w-8 sm:h-8"/>
-                        <span className="relative text-base sm:text-xl lg:text-2xl">{t('menu_join_session_realtime')}</span>
-                    </button>
+                    {!isClub && (
+                        <button
+                            onClick={() => setIsJoinModalOpen(true)}
+                            className="w-full group relative flex items-center justify-center gap-3 sm:gap-3 px-4 sm:px-8 py-4 sm:py-5 overflow-hidden font-bold text-white transition-all duration-300 bg-green-600 rounded-2xl shadow-lg shadow-green-900/50 hover:bg-green-700 hover:shadow-xl hover:shadow-green-700/50 transform hover:-translate-y-1 min-h-[44px]"
+                        >
+                            <LinkIcon className="w-6 h-6 sm:w-8 sm:h-8"/>
+                            <span className="relative text-base sm:text-xl lg:text-2xl">{t('menu_join_session_realtime')}</span>
+                        </button>
+                    )}
                 </div>
 
                 <div className="w-full max-w-4xl bg-slate-800/30 backdrop-blur-lg border border-slate-700/50 rounded-2xl p-4 sm:p-6">
@@ -277,7 +281,7 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
                         <h2 className="text-xl sm:text-2xl font-bold text-slate-300 mb-4 sm:mb-5 px-1">{t('menu_category_prep')}</h2>
                         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
                             <MenuCard icon={<UserGroupIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_team_builder_title')} description={t('menu_team_builder_desc')} onClick={onStartTeamBuilder} />
-                            <MenuCard icon={<RectangleGroupIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('competition_title')} description={t('menu_competition_desc')} onClick={onStartCompetition} />
+                            {!isClub && <MenuCard icon={<RectangleGroupIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('competition_title')} description={t('menu_competition_desc')} onClick={onStartCompetition} />}
                             <MenuCard icon={<UsersIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_team_management_title')} description={t('menu_team_management_desc')} onClick={onStartTeamManagement} />
                             <MenuCard icon={<FireIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_skill_drill_title')} description={t('menu_skill_drill_desc')} onClick={onStartSkillDrill} />
                         </div>
@@ -288,13 +292,13 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
                             <MenuCard icon={<BookmarkSquareIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_match_records_title')} description={t('menu_match_records_desc')} onClick={() => onShowHistory()} />
                             <MenuCard icon={<ChartBarIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_team_analysis_title')} description={t('menu_team_analysis_desc')} onClick={onStartTeamAnalysis} />
                             <MenuCard icon={<IdentificationIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_player_records_title')} description={t('menu_player_records_desc')} onClick={onShowPlayerRecords} />
-                            <MenuCard icon={<TrophyIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_achievements_title')} description={t('menu_achievements_desc')} onClick={onShowAchievements} />
+                            {!isClub && <MenuCard icon={<TrophyIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_achievements_title')} description={t('menu_achievements_desc')} onClick={onShowAchievements} />}
                         </div>
                     </div>
                      <div className="w-full">
                         <h2 className="text-xl sm:text-2xl font-bold text-slate-300 mb-4 sm:mb-5 px-1">{t('menu_category_app_management')}</h2>
                         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
-                            <MenuCard icon={<SparklesIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_cheer_song_title')} description={t('menu_cheer_song_desc')} onClick={onStartCheerSongManagement} />
+                            {!isClub && <MenuCard icon={<SparklesIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_cheer_song_title')} description={t('menu_cheer_song_desc')} onClick={onStartCheerSongManagement} />}
                             <MenuCard icon={<Cog6ToothIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_settings_title')} description={t('menu_settings_desc')} onClick={onStartSettings} />
                             <MenuCard icon={<ArrowUpIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_import_data_title')} description={t('menu_import_data_desc')} onClick={handleImportDataClick} />
                             <MenuCard icon={<ArrowDownIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_export_data_title')} description={t('menu_export_data_desc')} onClick={onExportData} />
@@ -302,7 +306,7 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
                     </div>
                 </div>
 
-                {isClub && <LeagueStandingsDashboard />}
+                {isClub && <LeagueStandingsDashboard appMode="CLUB" onStartLeagueLive={onStartLeagueLive} />}
 
                 <div className="w-full max-w-4xl pt-6 sm:pt-8 mt-4 border-t border-slate-700 text-center px-4">
                     <button

@@ -29,6 +29,7 @@ import { Player, Screen, Stats, STAT_KEYS, MatchState, SavedTeamInfo, SavedOppon
 import ConfirmationModal from './components/common/ConfirmationModal';
 import PasswordModal from './components/common/PasswordModal';
 import { useTranslation } from './hooks/useTranslation';
+import { isAdminPasswordCorrect } from './utils/adminPassword';
 
 type TournamentInfo = {
     tournamentId: string;
@@ -58,7 +59,7 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
     const [entryMode, setEntryMode] = useState<'class' | 'club'>('class');
     const { 
         toast, hideToast, isLoading, exportData, saveImportedData, startMatch, resetAllData, recoveryData, handleRestoreFromBackup, dismissRecovery,
-        isPasswordModalOpen, handlePasswordSuccess, handlePasswordCancel, closeSession, p2p, requestPassword
+        isPasswordModalOpen, handlePasswordSuccess, handlePasswordCancel, closeSession, p2p, requestPassword, leagueStandingsList, getTournamentSettingsForLive
     } = useData();
     const [pendingJoinCode, setPendingJoinCode] = useState<string | null>(getInitialPendingJoinCodeFromUrl);
     const [teamsForAttendance, setTeamsForAttendance] = useState<{ teamA: string, teamB: string, teamAKey?: string, teamBKey?: string, teamBFromOpponent?: SavedOpponentTeam } | null>(null);
@@ -66,8 +67,35 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
     const [tournamentInfoForMatch, setTournamentInfoForMatch] = useState<TournamentInfo | null>(null);
     const [leagueInfoForMatch, setLeagueInfoForMatch] = useState<LeagueInfo | null>(null);
     const [selectedLeagueId, setSelectedLeagueId] = useState<string | null>(null);
+    const [isNextMatchPractice, setIsNextMatchPractice] = useState(false);
     const { t } = useTranslation();
 
+    // 전역 화면 잠금 (앱 어디서든 잠금 버튼 노출, 잠금 시 전체 오버레이)
+    const [isAppLocked, setIsAppLocked] = useState(false);
+    const [lockUnlockPin, setLockUnlockPin] = useState('');
+    const [lockUnlockError, setLockUnlockError] = useState('');
+    const handleLockUnlock = (e: React.FormEvent) => {
+        e.preventDefault();
+        setLockUnlockError('');
+        if (isAdminPasswordCorrect(lockUnlockPin)) {
+            setLockUnlockPin('');
+            setIsAppLocked(false);
+        } else {
+            setLockUnlockError('비밀번호가 일치하지 않습니다.');
+            setLockUnlockPin('');
+        }
+    };
+
+    // 잠금 모드일 때 body 스크롤 비활성화
+    useEffect(() => {
+        if (typeof document === 'undefined') return;
+        if (isAppLocked) {
+            const prev = document.body.style.overflow;
+            document.body.style.overflow = 'hidden';
+            return () => { document.body.style.overflow = prev; };
+        }
+        document.body.style.overflow = '';
+    }, [isAppLocked]);
 
     // --- State and Logic for Team Builder ---
     const [builderScreen, setBuilderScreen] = useState<Screen>(Screen.Input);
@@ -176,7 +204,11 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
             teamAInfo: data.teamAInfo,
             teamBInfo: data.teamBInfo,
         };
-        startMatch(sessionData, undefined, data.attendingPlayers, tournamentInfoForMatch || undefined, data.onCourtIds, leagueInfoForMatch || undefined);
+        startMatch(sessionData, undefined, data.attendingPlayers, tournamentInfoForMatch || undefined, data.onCourtIds, leagueInfoForMatch || undefined, {
+            isPracticeMatch: isNextMatchPractice,
+            maxSets: appMode === 'CLUB' ? 3 : undefined,
+        });
+        setIsNextMatchPractice(false);
         setScoreboardMode('record');
         setView('scoreboard');
     };
@@ -244,7 +276,7 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
                     setView('matchSetup');
                     return null;
                 }
-                return <AttendanceScreen teamSelection={teamsForAttendance} onStartMatch={handleStartMatchFromAttendance} />;
+                return <AttendanceScreen appMode={appMode} teamSelection={teamsForAttendance} onStartMatch={handleStartMatchFromAttendance} />;
             case 'scoreboard':
                 return <ScoreboardScreen onBackToMenu={navigateToMenu} mode={scoreboardMode} entryMode={entryMode} />;
             case 'history':
@@ -254,7 +286,7 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
             case 'referee':
                  return <RefereeScreen onStartMatch={handleStartRefereeMatch} />;
             case 'teamManagement':
-                return <TeamManagementScreen />;
+                return <TeamManagementScreen appMode={appMode} />;
             case 'teamAnalysis':
                 return <TeamAnalysisScreen />;
             case 'achievements':
@@ -295,6 +327,7 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
                         onNavigateToHistory={() => setView('history')}
                         pendingJoinCode={pendingJoinCode}
                         clearPendingJoinCode={() => setPendingJoinCode(null)}
+                        appMode={appMode}
                     />
                 );
             case 'cameraDirector':
@@ -310,6 +343,7 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
                         }}
                         onStartMatch={() => {
                             const mode = appMode === 'CLASS' ? 'class' : 'club';
+                            if (appMode === 'CLUB') setIsNextMatchPractice(true);
                             setEntryMode(mode);
                             if (typeof window !== 'undefined') {
                                 const params = new URLSearchParams(window.location.search);
@@ -317,6 +351,18 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
                                 window.history.replaceState(null, '', `${window.location.pathname || '/'}?${params.toString()}`);
                             }
                             setView('matchSetup');
+                        }}
+                        onStartLeagueLive={async (teamA, teamB) => {
+                            const t = await getTournamentSettingsForLive();
+                            startMatch({ teamA, teamB }, undefined, undefined, undefined, undefined, undefined, {
+                                maxSets: t.tournamentMaxSets,
+                                tournamentTargetScore: t.tournamentTargetScore,
+                                isLeagueMatch: true,
+                                leagueStandingsId: leagueStandingsList?.selectedId ?? undefined,
+                            });
+                            setScoreboardMode('record');
+                            setEntryMode('club');
+                            setView('scoreboard');
                         }}
                         appMode={appMode}
                         onStartCompetition={() => setView('competition')}
@@ -390,12 +436,50 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
 
     return (
         <div className={`min-h-screen font-sans p-4 sm:p-6 lg:p-8 flex flex-col ${appMode === 'CLUB' ? 'bg-gradient-to-b from-slate-950 via-amber-950/12 to-slate-950' : ''}`}>
+            {/* 전역 화면 잠금 오버레이 - 잠금 해제 전까지 전체 화면 차단 */}
+            {isAppLocked && (
+                <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-6 no-print" role="dialog" aria-modal="true" aria-labelledby="app-lock-title">
+                    <div className="flex flex-col items-center justify-center max-w-sm w-full">
+                        <span className="text-6xl mb-4" aria-hidden>🔒</span>
+                        <h2 id="app-lock-title" className="text-xl sm:text-2xl font-bold text-white mb-1 tracking-tight">
+                            J-IVE 시스템 잠금 중
+                        </h2>
+                        <p className="text-slate-400 text-sm mb-6">관리자 비밀번호를 입력하여 해제하세요.</p>
+                        <form onSubmit={handleLockUnlock} className="w-full space-y-4">
+                            <input
+                                type="password"
+                                inputMode="numeric"
+                                autoComplete="off"
+                                placeholder="비밀번호 4자리"
+                                value={lockUnlockPin}
+                                onChange={(e) => setLockUnlockPin(e.target.value.replace(/\D/g, '').slice(0, 20))}
+                                className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-600 text-white text-center text-lg tracking-[0.4em] placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#00A3FF] focus:border-transparent"
+                                aria-label="잠금 해제 비밀번호"
+                                autoFocus
+                            />
+                            {lockUnlockError && (
+                                <p className="text-red-400 text-sm text-center" role="alert">
+                                    {lockUnlockError}
+                                </p>
+                            )}
+                            <button
+                                type="submit"
+                                className="w-full py-3 rounded-xl bg-[#00A3FF] hover:bg-[#0090e0] text-white font-bold text-lg transition-colors"
+                            >
+                                해제
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            )}
+
             <Header
                 {...headerProps}
                 showBackButton={view !== 'menu'}
                 onBack={navigateToMenu}
                 showLanguageToggle={showLanguageToggle}
                 showUpdateNotesIcon={view === 'menu'}
+                onLockClick={() => setIsAppLocked(true)}
             />
             <main className="flex-grow flex flex-col">
                 {renderView()}

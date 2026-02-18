@@ -35,6 +35,7 @@ function opponentTeamToSavedInfoAndPlayers(opp: SavedOpponentTeam): { teamBInfo:
 }
 
 interface AttendanceScreenProps {
+    appMode?: 'CLASS' | 'CLUB';
     teamSelection: {
         teamA: string;
         teamB: string;
@@ -50,7 +51,7 @@ interface AttendanceScreenProps {
     }) => void;
 }
 
-const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ teamSelection, onStartMatch }) => {
+const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', teamSelection, onStartMatch }) => {
     const { teamSetsMap } = useData();
     const { t } = useTranslation();
 
@@ -144,12 +145,14 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ teamSelection, onSt
     
     const isStartDisabled = onCourt.teamA.size < 1 || onCourt.teamB.size < 1;
 
+    const showPlayerMemo = appMode === 'CLUB';
     const PlayerList: React.FC<{
         players: Player[];
         onCourtSet: Set<string>;
         onToggle: (playerId: string) => void;
         onMemoClick: (playerId: string, name: string) => void;
-    }> = ({ players, onCourtSet, onToggle, onMemoClick }) => (
+        showMemoButton: boolean;
+    }> = ({ players, onCourtSet, onToggle, onMemoClick, showMemoButton }) => (
         <div className="space-y-2">
             {players.map(player => (
                 <label key={player.id} className="flex items-center gap-3 p-3 rounded-lg bg-slate-800 cursor-pointer hover:bg-slate-700 transition-colors">
@@ -160,7 +163,9 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ teamSelection, onSt
                         className="h-6 w-6 bg-slate-700 border-slate-500 rounded text-sky-500 focus:ring-sky-500 cursor-pointer"
                     />
                     <span className="font-semibold text-slate-200 flex-1">{player.originalName}</span>
-                    <button type="button" onClick={e => { e.preventDefault(); onMemoClick(player.id, player.originalName); }} className="p-1 rounded hover:bg-slate-600 text-amber-400/90 shrink-0" title="전력 분석 메모">📝</button>
+                    {showMemoButton && (
+                        <button type="button" onClick={e => { e.preventDefault(); onMemoClick(player.id, player.originalName); }} className="p-1 rounded hover:bg-slate-600 text-amber-400/90 shrink-0" title="전력 분석 메모">📝</button>
+                    )}
                 </label>
             ))}
         </div>
@@ -182,14 +187,14 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ teamSelection, onSt
                         {teamAInfo && <TeamEmblem emblem={teamAInfo.emblem} color={teamAInfo.color || '#3b82f6'} className="w-16 h-16" />}
                         <h3 className="text-2xl font-bold" style={{ color: teamAInfo?.color || '#3b82f6' }}>{teamAInfo?.teamName || 'Team A'} ({onCourt.teamA.size}{t('attendance_count_suffix')})</h3>
                     </div>
-                    <PlayerList players={sortedTeamAPlayers} onCourtSet={onCourt.teamA} onToggle={(id) => handleToggleOnCourt(id, 'teamA')} onMemoClick={(id, name) => setMemoModalPlayer({ playerId: id, name })} />
+                    <PlayerList players={sortedTeamAPlayers} onCourtSet={onCourt.teamA} onToggle={(id) => handleToggleOnCourt(id, 'teamA')} onMemoClick={(id, name) => setMemoModalPlayer({ playerId: id, name })} showMemoButton={showPlayerMemo} />
                 </div>
                 <div className="bg-slate-900/50 p-4 rounded-lg border-2 border-slate-700">
                     <div className="flex flex-col items-center text-center gap-2 mb-4">
                         {teamBInfo && <TeamEmblem emblem={teamBInfo.emblem} color={teamBInfo.color || '#ef4444'} className="w-16 h-16" />}
                         <h3 className="text-2xl font-bold" style={{ color: teamBInfo?.color || '#ef4444' }}>{teamBInfo?.teamName || 'Team B'} ({onCourt.teamB.size}{t('attendance_count_suffix')})</h3>
                     </div>
-                    <PlayerList players={sortedTeamBPlayers} onCourtSet={onCourt.teamB} onToggle={(id) => handleToggleOnCourt(id, 'teamB')} onMemoClick={(id, name) => setMemoModalPlayer({ playerId: id, name })} />
+                    <PlayerList players={sortedTeamBPlayers} onCourtSet={onCourt.teamB} onToggle={(id) => handleToggleOnCourt(id, 'teamB')} onMemoClick={(id, name) => setMemoModalPlayer({ playerId: id, name })} showMemoButton={showPlayerMemo} />
                 </div>
             </div>
             {memoModalPlayer && (

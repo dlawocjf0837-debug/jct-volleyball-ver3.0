@@ -3,7 +3,9 @@ import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 import { useData } from '../contexts/DataContext';
 import { VolleyballIcon, StopwatchIcon, QuestionMarkCircleIcon, SwitchHorizontalIcon, ShieldIcon, BoltIcon, TargetIcon, FireIcon, WallIcon, LinkIcon, HandshakeIcon, MagnifyingGlassIcon } from '../components/icons';
 import RulesModal from '../components/RulesModal';
+import { LiveChatOverlay } from '../components/LiveChatOverlay';
 import TimeoutModal from '../components/TimeoutModal';
+import { TacticalBoardModal } from '../components/TacticalBoardModal';
 import PlayerSelectionModal from '../components/PlayerSelectionModal';
 import SubstitutionModal from '../components/SubstitutionModal';
 import GameLog from '../components/GameLog';
@@ -31,7 +33,8 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
     const { 
         matchState, matchTime, timerOn, dispatch, setTimerOn,
         matchHistory, saveMatchHistory, showToast, p2p, clearInProgressMatch,
-        settings, setHostTournamentMode, sendTicker, sendEffect
+        settings, setHostTournamentMode, sendTicker, sendEffect,
+        isChatEnabled, setChatEnabled, isChatWindowVisible, setChatWindowVisible, receivedChatMessages, sendChat, banViewer
     } = useData();
     const { t } = useTranslation();
 
@@ -48,6 +51,8 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
     const [showTournamentPasswordModal, setShowTournamentPasswordModal] = useState(false);
     const [tournamentPasswordInput, setTournamentPasswordInput] = useState('');
     const [tickerInput, setTickerInput] = useState('');
+    const [isSwapped, setIsSwapped] = useState(false);
+    const courtChangeAt8DoneRef = useRef(false);
     const latestIsTournamentModeRef = useRef(false);
     useEffect(() => {
         latestIsTournamentModeRef.current = isTournamentMode;
@@ -55,6 +60,29 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
     useEffect(() => {
         if (p2p.isHost && setHostTournamentMode) setHostTournamentMode(isTournamentMode);
     }, [isTournamentMode, p2p.isHost, setHostTournamentMode]);
+
+    const maxSets = matchState?.maxSets ?? 1;
+    const showSetScore = entryMode === 'club' && maxSets >= 2;
+    const setsWonA = matchState?.teamA.setsWon ?? 0;
+    const setsWonB = matchState?.teamB.setsWon ?? 0;
+    const setScoreText = `[ ${isSwapped ? setsWonB : setsWonA} : ${isSwapped ? setsWonA : setsWonB} ]`;
+
+    useEffect(() => {
+        courtChangeAt8DoneRef.current = false;
+    }, [matchState?.currentSet]);
+
+    useEffect(() => {
+        const maxSetsCurrent = matchState?.maxSets ?? 1;
+        const isDecidingSet = maxSetsCurrent >= 2 && matchState?.currentSet === maxSetsCurrent;
+        if (entryMode !== 'club' || !matchState || matchState.gameOver || !isDecidingSet) return;
+        const { teamA, teamB } = matchState;
+        const total = teamA.score + teamB.score;
+        if (total >= 8 && (teamA.score >= 8 || teamB.score >= 8) && !courtChangeAt8DoneRef.current) {
+            courtChangeAt8DoneRef.current = true;
+            showToast('🔄 코트 체인지 (결승 세트 8점)', 'success');
+            setIsSwapped(prev => !prev);
+        }
+    }, [matchState?.teamA.score, matchState?.teamB.score, matchState?.currentSet, matchState?.maxSets, matchState?.gameOver, entryMode, showToast]);
 
     const handleTournamentModeToggle = (nextChecked: boolean) => {
         if (nextChecked) {
@@ -78,6 +106,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
     const [showQRZoomModal, setShowQRZoomModal] = useState(false);
     const [qrZoomPin, setQrZoomPin] = useState<string | null>(null);
     const qrCanvasContainerRef = useRef<HTMLDivElement>(null);
+    const [showTacticalBoard, setShowTacticalBoard] = useState(false);
 
     // UX 디테일: 소리 및 자동 저장 알림
     const [soundEnabled, setSoundEnabled] = useState(true);
@@ -569,11 +598,66 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
     return (
         <div className="flex flex-col h-full max-w-7xl mx-auto w-full px-4">
             <div className="w-full flex justify-between items-center mb-3 sm:mb-4 gap-2">
-                {/* 좌측 영역 */}
-                <div className="flex-1">
-                    <button onClick={onBackToMenu} className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-3 sm:px-4 rounded-lg text-sm sm:text-base min-h-[44px]">
-                        {t('back_to_main')}
-                    </button>
+                {/* 좌측 영역: 참여코드(PIN) + QR (데스크톱, 호스트 시) — 메인으로는 상단 Header에만 표시 */}
+                <div className="flex-1 flex items-center justify-start min-w-0">
+                    {matchState.status === 'in_progress' && p2p.isHost && p2p.peerId && (() => {
+                        const pin = p2p.peerId.replace(/^jive-/, '');
+                        const joinUrl = `${window.location.origin}${window.location.pathname || '/'}?liveCode=${encodeURIComponent(pin)}`;
+                        return (
+                            <div className="hidden md:flex items-center gap-2 bg-slate-800 border-2 border-yellow-500/50 rounded-lg px-3 py-2 flex-shrink-0">
+                                <button
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(pin);
+                                        showToast(t('toast_code_copied'));
+                                    }}
+                                    className="flex flex-col items-center justify-center cursor-pointer hover:bg-slate-700 rounded transition-all"
+                                    title={t('join_code_label')}
+                                >
+                                    <span className="text-[10px] text-slate-400 uppercase tracking-widest">{t('join_code_label')}</span>
+                                    <span className="text-2xl font-mono font-black text-yellow-400 tracking-[0.2em] leading-none">{pin}</span>
+                                </button>
+                                <div className="flex-shrink-0 w-14 h-14 bg-white p-1 rounded">
+                                    <QRCodeSVG value={joinUrl} size={48} level="M" />
+                                </div>
+                                <button
+                                    onClick={() => { setQrZoomPin(pin); setShowQRZoomModal(true); }}
+                                    className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white min-h-[44px] min-w-[44px] flex items-center justify-center"
+                                    title="QR 코드 확대"
+                                >
+                                    <MagnifyingGlassIcon className="w-5 h-5" />
+                                </button>
+                            </div>
+                        );
+                    })()}
+                    {matchState.status === 'in_progress' && p2p.isHost && p2p.peerId && (() => {
+                        const pin = p2p.peerId.replace(/^jive-/, '');
+                        const joinUrl = `${window.location.origin}${window.location.pathname || '/'}?liveCode=${encodeURIComponent(pin)}`;
+                        return (
+                            <div className="md:hidden flex items-center gap-2 bg-slate-800 border-2 border-yellow-500/50 rounded-lg p-2 flex-shrink-0">
+                                <button
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(pin);
+                                        showToast(t('toast_code_copied'));
+                                    }}
+                                    className="flex flex-col items-center justify-center min-h-[44px] min-w-[44px]"
+                                    title={`${t('join_code_label')}: ${pin}`}
+                                >
+                                    <span className="text-[10px] text-slate-400">PIN</span>
+                                    <span className="text-yellow-400 font-mono text-lg font-black tracking-wider">{pin}</span>
+                                </button>
+                                <div className="w-10 h-10 bg-white p-0.5 rounded flex-shrink-0">
+                                    <QRCodeSVG value={joinUrl} size={36} level="M" />
+                                </div>
+                                <button
+                                    onClick={() => { setQrZoomPin(pin); setShowQRZoomModal(true); }}
+                                    className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white min-h-[44px] min-w-[44px] flex items-center justify-center"
+                                    title="QR 코드 확대"
+                                >
+                                    <MagnifyingGlassIcon className="w-5 h-5" />
+                                </button>
+                            </div>
+                        );
+                    })()}
                 </div>
 
                 {/* 중앙 영역 - 타이머 */}
@@ -589,96 +673,143 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                 {/* 우측 영역 - flex-row로 가로 정렬, 여백 확보 */}
                 <div className="flex-1 flex justify-end items-center">
                     <div className="flex flex-row items-center gap-x-3 sm:gap-x-4 flex-wrap justify-end">
+                    <button
+                        type="button"
+                        onClick={() => setShowTacticalBoard(true)}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-700 hover:bg-amber-600/80 border border-slate-600 hover:border-amber-500/50 text-slate-200 hover:text-white font-semibold text-sm min-h-[44px] transition-colors flex-shrink-0"
+                        title="디지털 전술판"
+                    >
+                        <span>📋</span>
+                        <span className="hidden sm:inline">전술판</span>
+                    </button>
                     {matchState.status === 'in_progress' && p2p.isHost && p2p.peerId && (() => {
                         const pin = p2p.peerId.replace(/^jive-/, '');
                         const joinUrl = `${window.location.origin}${window.location.pathname || '/'}?liveCode=${encodeURIComponent(pin)}`;
                         return (
                             <>
-                                {/* 참여 코드(PIN) + QR - 데스크톱 */}
-                                <div className="hidden md:flex items-center gap-2 bg-slate-800 border-2 border-yellow-500/50 rounded-lg px-3 py-2 flex-shrink-0">
-                                    <button
-                                        onClick={() => {
-                                            navigator.clipboard.writeText(pin);
-                                            showToast(t('toast_code_copied'));
-                                        }}
-                                        className="flex flex-col items-center justify-center cursor-pointer hover:bg-slate-700 rounded transition-all"
-                                        title={t('join_code_label')}
-                                    >
-                                        <span className="text-[10px] text-slate-400 uppercase tracking-widest">{t('join_code_label')}</span>
-                                        <span className="text-2xl font-mono font-black text-yellow-400 tracking-[0.2em] leading-none">
-                                            {pin}
-                                        </span>
-                                    </button>
-                                    <div className="flex-shrink-0 w-14 h-14 bg-white p-1 rounded">
-                                        <QRCodeSVG value={joinUrl} size={48} level="M" />
-                                    </div>
-                                    <button
-                                        onClick={() => { setQrZoomPin(pin); setShowQRZoomModal(true); }}
-                                        className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white min-h-[44px] min-w-[44px] flex items-center justify-center"
-                                        title="QR 코드 확대"
-                                    >
-                                        <MagnifyingGlassIcon className="w-5 h-5" />
-                                    </button>
-                                </div>
-                                {/* 대회 전광판 모드 토글 스위치 */}
-                                <div className="hidden md:flex items-center gap-2 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 flex-shrink-0">
-                                    <span className="text-sm font-medium text-slate-200 whitespace-nowrap">🏆 대회 전광판 모드</span>
-                                    <button
-                                        type="button"
-                                        role="switch"
-                                        aria-checked={isTournamentMode}
-                                        onClick={() => handleTournamentModeToggle(!isTournamentMode)}
-                                        className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-slate-800 ${isTournamentMode ? 'bg-amber-500/70' : 'bg-slate-600'}`}
-                                    >
-                                        <span className={`pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform ${isTournamentMode ? 'translate-x-5' : 'translate-x-0'}`} />
-                                    </button>
-                                </div>
-                                {isTournamentMode && (
-                                    <span className="hidden md:inline-flex items-center px-3 py-1.5 rounded-lg bg-sky-500/20 border border-sky-500/50 text-sky-400 text-sm font-semibold flex-shrink-0">
-                                        👀 {p2p.viewerCount ?? 0}명 시청 중
-                                    </span>
+                                {entryMode !== 'club' && (
+                                    <>
+                                        {/* 대회 전광판 모드 토글 스위치 */}
+                                        <div className="hidden md:flex items-center gap-2 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 flex-shrink-0">
+                                            <span className="text-sm font-medium text-slate-200 whitespace-nowrap">🏆 대회 전광판 모드</span>
+                                            <button
+                                                type="button"
+                                                role="switch"
+                                                aria-checked={isTournamentMode}
+                                                onClick={() => handleTournamentModeToggle(!isTournamentMode)}
+                                                className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-slate-800 ${isTournamentMode ? 'bg-amber-500/70' : 'bg-slate-600'}`}
+                                            >
+                                                <span className={`pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform ${isTournamentMode ? 'translate-x-5' : 'translate-x-0'}`} />
+                                            </button>
+                                        </div>
+                                        {isTournamentMode && (
+                                            <span className="hidden md:inline-flex items-center px-3 py-1.5 rounded-lg bg-sky-500/20 border border-sky-500/50 text-sky-400 text-sm font-semibold flex-shrink-0">
+                                                👀 {p2p.viewerCount ?? 0}명 시청 중
+                                            </span>
+                                        )}
+                                    </>
                                 )}
-                                {/* 모바일: PIN + QR */}
-                                <div className="md:hidden flex items-center gap-2 bg-slate-800 border-2 border-yellow-500/50 rounded-lg p-2 flex-shrink-0">
-                                    <button
-                                        onClick={() => {
-                                            navigator.clipboard.writeText(pin);
-                                            showToast(t('toast_code_copied'));
-                                        }}
-                                        className="flex flex-col items-center justify-center min-h-[44px] min-w-[44px]"
-                                        title={`${t('join_code_label')}: ${pin}`}
-                                    >
-                                        <span className="text-[10px] text-slate-400">PIN</span>
-                                        <span className="text-yellow-400 font-mono text-lg font-black tracking-wider">{pin}</span>
-                                    </button>
-                                    <div className="w-10 h-10 bg-white p-0.5 rounded flex-shrink-0">
-                                        <QRCodeSVG value={joinUrl} size={36} level="M" />
+                                {p2p.isHost && p2p.peerId && (p2p.viewerCount ?? 0) > 0 && setChatEnabled && (
+                                    <div className="hidden md:flex items-center gap-4 flex-shrink-0 bg-slate-800/80 border border-slate-600 rounded-xl px-4 py-2.5">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm text-slate-400 whitespace-nowrap">채팅</span>
+                                            <button
+                                                type="button"
+                                                role="switch"
+                                                aria-checked={isChatEnabled}
+                                                onClick={() => setChatEnabled(!isChatEnabled)}
+                                                className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-slate-800 ${isChatEnabled ? 'bg-green-600' : 'bg-slate-600'}`}
+                                            >
+                                                <span className={`pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${isChatEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                                            </button>
+                                            <span className="text-sm font-medium text-slate-300 w-8">{isChatEnabled ? '열기' : '끄기'}</span>
+                                        </div>
+                                        {setChatWindowVisible && (
+                                            <div className={`flex items-center gap-2 border-l border-slate-600 pl-4 ${!isChatEnabled ? 'opacity-60' : ''}`}>
+                                                <span className="text-sm text-slate-400 whitespace-nowrap">채팅창</span>
+                                                <button
+                                                    type="button"
+                                                    role="switch"
+                                                    aria-checked={isChatEnabled ? isChatWindowVisible : false}
+                                                    aria-disabled={!isChatEnabled}
+                                                    onClick={() => isChatEnabled && setChatWindowVisible(!isChatWindowVisible)}
+                                                    className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-slate-800 ${!isChatEnabled ? 'bg-slate-600 cursor-not-allowed' : isChatWindowVisible ? 'bg-sky-600' : 'bg-slate-600'}`}
+                                                >
+                                                    <span className={`pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${isChatEnabled && isChatWindowVisible ? 'translate-x-5' : 'translate-x-0'}`} />
+                                                </button>
+                                                <span className="text-sm font-medium text-slate-300 w-10">{!isChatEnabled ? '숨기기' : isChatWindowVisible ? '보이기' : '숨기기'}</span>
+                                            </div>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => setChatEnabled(false)}
+                                            className="flex-shrink-0 px-3 py-1.5 rounded-lg text-sm font-semibold bg-amber-600/80 text-white hover:bg-amber-600 transition-colors border-l border-slate-600 pl-4"
+                                        >
+                                            🚨 전체 얼리기
+                                        </button>
                                     </div>
-                                    <button
-                                        onClick={() => { setQrZoomPin(pin); setShowQRZoomModal(true); }}
-                                        className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white min-h-[44px] min-w-[44px] flex items-center justify-center"
-                                        title="QR 코드 확대"
-                                    >
-                                        <MagnifyingGlassIcon className="w-5 h-5" />
-                                    </button>
-                                </div>
-                                {/* 모바일: 대회 전광판 모드 토글 스위치 */}
-                                <div className="md:hidden flex items-center gap-2 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 min-h-[44px] flex-shrink-0">
-                                    <span className="text-sm font-medium text-slate-200 whitespace-nowrap">🏆 대회 전광판</span>
-                                    <button
-                                        type="button"
-                                        role="switch"
-                                        aria-checked={isTournamentMode}
-                                        onClick={() => handleTournamentModeToggle(!isTournamentMode)}
-                                        className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-slate-800 ${isTournamentMode ? 'bg-amber-500/70' : 'bg-slate-600'}`}
-                                    >
-                                        <span className={`pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform ${isTournamentMode ? 'translate-x-5' : 'translate-x-0'}`} />
-                                    </button>
-                                </div>
-                                {isTournamentMode && (
-                                    <span className="md:hidden inline-flex items-center px-2 py-1 rounded-lg bg-sky-500/20 border border-sky-500/50 text-sky-400 text-xs font-semibold flex-shrink-0">
-                                        👀 {p2p.viewerCount ?? 0}명
-                                    </span>
+                                )}
+                                {entryMode !== 'club' && (
+                                    <>
+                                        {/* 모바일: 대회 전광판 모드 토글 스위치 */}
+                                        <div className="md:hidden flex items-center gap-2 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 min-h-[44px] flex-shrink-0">
+                                            <span className="text-sm font-medium text-slate-200 whitespace-nowrap">🏆 대회 전광판</span>
+                                            <button
+                                                type="button"
+                                                role="switch"
+                                                aria-checked={isTournamentMode}
+                                                onClick={() => handleTournamentModeToggle(!isTournamentMode)}
+                                                className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-slate-800 ${isTournamentMode ? 'bg-amber-500/70' : 'bg-slate-600'}`}
+                                            >
+                                                <span className={`pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform ${isTournamentMode ? 'translate-x-5' : 'translate-x-0'}`} />
+                                            </button>
+                                        </div>
+                                        {isTournamentMode && (
+                                            <span className="md:hidden inline-flex items-center px-2 py-1 rounded-lg bg-sky-500/20 border border-sky-500/50 text-sky-400 text-xs font-semibold flex-shrink-0">
+                                                👀 {p2p.viewerCount ?? 0}명
+                                            </span>
+                                        )}
+                                    </>
+                                )}
+                                {p2p.isHost && (p2p.viewerCount ?? 0) > 0 && setChatEnabled && (
+                                    <div className="md:hidden flex items-center gap-3 flex-shrink-0 flex-wrap bg-slate-800/80 border border-slate-600 rounded-xl px-3 py-2 min-h-[44px]">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-xs text-slate-400">채팅</span>
+                                            <button
+                                                type="button"
+                                                role="switch"
+                                                aria-checked={isChatEnabled}
+                                                onClick={() => setChatEnabled(!isChatEnabled)}
+                                                className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ${isChatEnabled ? 'bg-green-600' : 'bg-slate-600'}`}
+                                            >
+                                                <span className={`pointer-events-none absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${isChatEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
+                                            </button>
+                                            <span className="text-xs text-slate-300 w-6">{isChatEnabled ? '열기' : '끄기'}</span>
+                                        </div>
+                                        {setChatWindowVisible && (
+                                            <div className={`flex items-center gap-1.5 border-l border-slate-600 pl-3 ${!isChatEnabled ? 'opacity-60' : ''}`}>
+                                                <span className="text-xs text-slate-400">창</span>
+                                                <button
+                                                    type="button"
+                                                    role="switch"
+                                                    aria-checked={isChatEnabled ? isChatWindowVisible : false}
+                                                    aria-disabled={!isChatEnabled}
+                                                    onClick={() => isChatEnabled && setChatWindowVisible(!isChatWindowVisible)}
+                                                    className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ${!isChatEnabled ? 'bg-slate-600 cursor-not-allowed' : isChatWindowVisible ? 'bg-sky-600' : 'bg-slate-600'}`}
+                                                >
+                                                    <span className={`pointer-events-none absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${isChatEnabled && isChatWindowVisible ? 'translate-x-4' : 'translate-x-0'}`} />
+                                                </button>
+                                                <span className="text-xs text-slate-300 w-8">{!isChatEnabled ? '숨기기' : isChatWindowVisible ? '보이기' : '숨기기'}</span>
+                                            </div>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => setChatEnabled(false)}
+                                            className="flex-shrink-0 px-2 py-1.5 rounded-lg text-xs font-semibold bg-amber-600/80 text-white border-l border-slate-600 pl-3"
+                                        >
+                                            🚨 얼리기
+                                        </button>
+                                    </div>
                                 )}
                             </>
                         );
@@ -722,20 +853,20 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                 </div>
             </div>
 
-            {/* 대회 모드 시: 대회 공지 자막 송출 */}
-            {isTournamentMode && p2p.isHost && sendTicker && (
+            {/* 대회 모드 시: 대회 공지 자막 송출 (클럽 모드에서는 숨김) */}
+            {entryMode !== 'club' && isTournamentMode && p2p.isHost && sendTicker && (
                 <div className="flex flex-wrap items-center gap-2 mb-3 p-2 bg-slate-800/80 border border-amber-500/30 rounded-lg">
                     <input
                         type="text"
                         value={tickerInput}
                         onChange={(e) => setTickerInput(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { sendTicker(tickerInput); setTickerInput(''); } }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { sendTicker(tickerInput); setTickerInput(''); showToast('자막이 성공적으로 송출되었습니다.', 'success'); } }}
                         placeholder="대회 공지 자막 송출"
                         className="flex-1 min-w-[120px] bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
                     />
                     <button
                         type="button"
-                        onClick={() => { sendTicker(tickerInput); setTickerInput(''); }}
+                        onClick={() => { sendTicker(tickerInput); setTickerInput(''); showToast('자막이 성공적으로 송출되었습니다.', 'success'); }}
                         className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold text-sm"
                     >
                         전송
@@ -752,8 +883,8 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                 />
             </div>
 
-            {/* 스페셜 이펙트 송출 (Host 전용) - 작전 타임은 팀별 버튼으로 자동 송출 */}
-            {matchState.status === 'in_progress' && p2p.isHost && sendEffect && (
+            {/* 스페셜 이펙트 송출 (Host 전용, 클럽 모드에서는 숨김) */}
+            {entryMode !== 'club' && matchState.status === 'in_progress' && p2p.isHost && sendEffect && (
                 <div className="flex flex-wrap items-center justify-center gap-3 mb-3">
                     <button
                         type="button"
@@ -772,9 +903,18 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                 </div>
             )}
 
+            {/* 세트 스코어 (클럽/BO3) - 팀 이름 사이 위쪽 중앙 */}
+            {showSetScore && (
+                <div className="flex justify-center mb-2 sm:mb-3">
+                    <span className="text-2xl sm:text-3xl lg:text-4xl font-black text-amber-400 tracking-widest bg-slate-800/90 px-4 py-2 rounded-xl border border-amber-500/40">
+                        {setScoreText}
+                    </span>
+                </div>
+            )}
+
             {/* Main Scoreboard Content */}
             <div className="flex-grow flex flex-col lg:flex-row gap-4 sm:gap-4 items-stretch justify-center relative">
-                <TeamColumn teamKey="A" />
+                {isSwapped ? <TeamColumn teamKey="B" /> : <TeamColumn teamKey="A" />}
                 
                 {/* Center / Game Over Panel */}
                 {(matchState.gameOver) && (
@@ -785,10 +925,32 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                     </div>
                 )}
 
-                <TeamColumn teamKey="B" />
+                {isSwapped ? <TeamColumn teamKey="A" /> : <TeamColumn teamKey="B" />}
             </div>
 
+            {/* 세트 종료 모달 (다음 세트 진행 시 코트 체인지) */}
+            {matchState?.setEnded && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
+                    <div className="bg-slate-900 rounded-2xl border-2 border-amber-500/60 shadow-2xl w-full max-w-sm p-6 text-center" onClick={(e) => e.stopPropagation()}>
+                        <p className="text-xl sm:text-2xl font-bold text-amber-400 mb-2">🚨 {matchState.currentSet}세트 종료</p>
+                        <p className="text-slate-300 text-lg mb-4">
+                            {matchState.teamA.name} {matchState.completedSetScore?.a ?? 0} : {matchState.completedSetScore?.b ?? 0} {matchState.teamB.name}
+                        </p>
+                        <button
+                            onClick={() => {
+                                dispatch({ type: 'START_NEXT_SET' });
+                                setIsSwapped(prev => !prev);
+                            }}
+                            className="w-full py-4 px-6 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-lg transition-colors"
+                        >
+                            다음 세트 진행
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Modals */}
+            <TacticalBoardModal isOpen={showTacticalBoard} onClose={() => setShowTacticalBoard(false)} />
             {showRulesModal && <RulesModal onClose={() => setShowRulesModal(false)} />}
             {matchState.timeout && <TimeoutModal timeLeft={matchState.timeout.timeLeft} onClose={handleCloseTimeout} />}
             <PlayerSelectionModal
@@ -812,20 +974,32 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                 title={t('modal_select_assist')}
                 variant="grid"
             />
+            {p2p.isHost && (p2p.viewerCount ?? 0) > 0 && isChatEnabled && (
+                <LiveChatOverlay
+                    messages={receivedChatMessages}
+                    isInputEnabled={isChatEnabled}
+                    showInputSection={true}
+                    isHostInputAlwaysEnabled={true}
+                    onSend={(text) => sendChat?.(text)}
+                    onBanViewer={banViewer}
+                    isHost={true}
+                />
+            )}
             <SubstitutionModal
                 isOpen={isSubModalOpen}
                 onClose={() => setIsSubModalOpen(false)}
                 teamA={matchState.teamA}
                 teamB={matchState.teamB}
                 dispatch={dispatch}
+                showPlayerMemo={entryMode === 'club'}
             />
             <AutoSaveToast 
                 show={showAutoSaveToast} 
                 onHide={() => setShowAutoSaveToast(false)} 
             />
 
-            {/* 대회 모드 비밀번호 모달 */}
-            {showTournamentPasswordModal && (
+            {/* 대회 모드 비밀번호 모달 (클럽 모드에서는 미노출) */}
+            {entryMode !== 'club' && showTournamentPasswordModal && (
                 <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
                     <div className="bg-slate-900 rounded-2xl border border-slate-600 shadow-2xl w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
                         <h3 className="text-lg font-bold text-slate-200 mb-3">🏆 대회 전광판 모드</h3>

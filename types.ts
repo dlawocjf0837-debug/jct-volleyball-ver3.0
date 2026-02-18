@@ -61,21 +61,45 @@ export interface SavedOpponentTeam {
     savedAt: string;
 }
 
-/** 클럽 모드: 조별 리그 순위표용 경기 결과 (간편 입력) */
+/** 1세트 점수 (3판 2선승제 등) */
+export interface SetScore {
+    teamA: number;
+    teamB: number;
+}
+
+/** 클럽 모드: 조별 리그 순위표용 경기 결과 (3판 2선승제 세트 스코어 배열) */
 export interface LeagueStandingsMatch {
     teamA: string;
     teamB: string;
-    setsA: number;
-    setsB: number;
+    /** 최대 3세트 점수. [세트1, 세트2, 세트3]. 2:0 또는 2:1로 승패 판단 */
+    setScores: SetScore[];
 }
 
-/** 클럽 모드: 조별 리그 순위표 데이터 (대회명, 참가팀, 경기결과, 우리 학교) */
+/** 세트 스코어 배열에서 승/패 세트 수 계산 */
+export function getSetsWonFromMatch(m: LeagueStandingsMatch): { setsA: number; setsB: number } {
+    let setsA = 0;
+    let setsB = 0;
+    (m.setScores || []).forEach(s => {
+        if (s.teamA > s.teamB) setsA += 1;
+        else if (s.teamB > s.teamA) setsB += 1;
+    });
+    return { setsA, setsB };
+}
+
+/** 클럽 모드: 조별 리그 순위표 데이터 (대회 1개) */
 export interface LeagueStandingsData {
+    id: string;
     tournamentName: string;
     teams: string[];
     matches: LeagueStandingsMatch[];
     /** 진출 시나리오 계산 기준 팀 (우리 학교) */
     ourSchool?: string;
+}
+
+/** 클럽 모드: 대회 목록 저장 (다중 대회 관리) */
+export interface LeagueStandingsDataList {
+    list: LeagueStandingsData[];
+    selectedId: string | null;
 }
 
 export interface SavedTeamInfo {
@@ -161,10 +185,14 @@ export interface MatchState {
     teamB: TeamMatchState;
     servingTeam: 'A' | 'B' | null;
     currentSet: number;
+    /** 3판 2선승제면 3. 기본 1(단판) */
+    maxSets?: number;
     isDeuce: boolean;
     gameOver: boolean;
     winner: 'A' | 'B' | null;
     scoreHistory: { a: number, b: number }[];
+    /** 3판 2선승제 등에서 세트별 최종 스코어 (세트 종료 시마다 추가) */
+    setScores?: SetScore[];
     eventHistory: ScoreEvent[];
     scoreLocations: any[];
     status?: 'in_progress' | 'completed';
@@ -175,6 +203,12 @@ export interface MatchState {
     leagueMatchId?: string;
     time?: number;
     undoStack?: MatchState[]; // For Undo functionality
+    /** 세트 종료 후 [다음 세트 진행] 대기 중일 때 true (코트 체인지 후 다음 세트 시작용) */
+    setEnded?: boolean;
+    /** 방금 끝난 세트 스코어 (setEnded일 때만 사용) */
+    completedSetScore?: { a: number; b: number };
+    /** 대회 모드일 때 1~n-1세트 목표 점수 (21 또는 25). 결승 세트는 항상 15점 */
+    tournamentTargetScore?: number;
 }
 
 export type Action =
@@ -196,7 +230,8 @@ export type Action =
     | { type: 'INCREMENT_3_HIT'; team: 'A' | 'B' }
     | { type: 'SET_SERVING_TEAM'; team: 'A' | 'B' }
     | { type: 'SUBSTITUTE_PLAYER'; team: 'A' | 'B'; playerIn: string; playerOut: string }
-    | { type: 'UPDATE_PLAYER_MEMO'; team: 'A' | 'B'; playerId: string; memo: string };
+    | { type: 'UPDATE_PLAYER_MEMO'; team: 'A' | 'B'; playerId: string; memo: string }
+    | { type: 'START_NEXT_SET' }; // 세트 종료 모달에서 [다음 세트 진행] 클릭 시
 
 
 export interface Badge {
@@ -237,6 +272,12 @@ export interface AppSettings {
     winningScore: number;
     includeBonusPointsInWinner: boolean;
     googleSheetUrl?: string;
+    /** 스포츠클럽 대회 세트당 목표 점수 (21 또는 25, 기본 21) */
+    tournamentTargetScore?: number;
+    /** 스포츠클럽 대회 경기 세트 수 (3 = 3판2선승, 5 = 5판3선승, 기본 3) */
+    tournamentMaxSets?: number;
+    /** 배구 경기 인원 룰: 6 = 6인제(로테이션/서브), 9 = 9인제(서브 순서만), 기본 6 */
+    volleyballRuleSystem?: 6 | 9;
 }
 export type MvpResult = {
     player: Player;
@@ -364,6 +405,12 @@ export interface P2PState {
     viewerCount?: number;
     /** 작전 타임 뷰어 오버레이 상태 */
     timeoutViewer?: { active: boolean; timeLeft: number };
+    /** 클라이언트 전용: 방장의 채팅 허용 여부 (false면 채팅 입력 불가) */
+    chatEnabled?: boolean;
+    /** 클라이언트 전용: 방장이 부여한 익명 닉네임/색상 */
+    viewerLabel?: { displayName: string; color: string };
+    /** 클라이언트 전용: 채팅창 표시 여부 (false면 LiveChatOverlay 미렌더) */
+    chatWindowVisible?: boolean;
 }
 
 export type P2PMessage = {
@@ -402,6 +449,21 @@ export type P2PMessage = {
 } | {
     type: 'user_emblems_sync';
     payload: UserEmblem[];
+} | {
+    type: 'CHAT';
+    payload: { text: string; senderId: string };
+} | {
+    type: 'chat_broadcast';
+    payload: { text: string; senderId?: string; senderLabel: string; senderColor: string; isSystem?: boolean };
+} | {
+    type: 'chat_enabled_sync';
+    payload: boolean;
+} | {
+    type: 'viewer_info';
+    payload: { displayName: string; color: string };
+} | {
+    type: 'chat_visibility_sync';
+    payload: boolean;
 };
 
 export type Language = 'ko' | 'id';
@@ -415,7 +477,10 @@ export interface DataContextType {
     coachingLogs: PlayerCoachingLogs;
     opponentTeams: SavedOpponentTeam[];
     leagueStandings: LeagueStandingsData | null;
+    leagueStandingsList: LeagueStandingsDataList;
     saveLeagueStandings: (data: LeagueStandingsData | null) => Promise<void>;
+    saveLeagueStandingsList: (data: LeagueStandingsDataList) => Promise<void>;
+    leagueMatchHistory: (MatchState & { date: string; time?: number })[];
     saveOpponentTeam: (team: Omit<SavedOpponentTeam, 'id' | 'savedAt'>) => Promise<void>;
     updateOpponentTeam: (id: string, team: Partial<SavedOpponentTeam>) => Promise<void>;
     deleteOpponentTeam: (id: string) => Promise<void>;
@@ -437,7 +502,7 @@ export interface DataContextType {
     deletePlayerFromSet: (setId: string, playerId: string) => Promise<void>;
     bulkAddPlayersToTeam: (teamKey: string, playerNames: string[], overwrite: boolean) => Promise<void>;
     createTeamSet: (name: string) => Promise<void>;
-    addTeamToSet: (setId: string, teamName: string) => Promise<void>;
+    addTeamToSet: (setId: string, teamName: string, options?: { createDefaultPlayers?: boolean }) => Promise<void>;
     setTeamCaptain: (teamKey: string, playerId: string) => Promise<void>;
     reloadData: () => void;
     exportData: () => void;
@@ -458,7 +523,8 @@ export interface DataContextType {
         attendingPlayers?: { teamA: Record<string, Player>; teamB: Record<string, Player> },
         tournamentInfo?: { tournamentId: string; tournamentMatchId: string },
         onCourtIds?: { teamA: Set<string>; teamB: Set<string> },
-        leagueInfo?: { leagueId: string, leagueMatchId: string }
+        leagueInfo?: { leagueId: string, leagueMatchId: string },
+        options?: { isPracticeMatch?: boolean; maxSets?: number; tournamentTargetScore?: number; isLeagueMatch?: boolean; leagueStandingsId?: string | null }
     ) => void;
     recoveryData: any | null;
     handleRestoreFromBackup: () => void;
@@ -470,12 +536,21 @@ export interface DataContextType {
     requestPassword: (onSuccess: () => void) => void;
     settings: AppSettings;
     saveSettings: (newSettings: AppSettings) => Promise<void>;
+    /** 리그 라이브 전광판 시작 시 저장소에서 대회 룰(tournamentTargetScore, tournamentMaxSets)을 읽어옵니다. 키 없으면 21, 3 폴백 */
+    getTournamentSettingsForLive: () => Promise<{ tournamentTargetScore: number; tournamentMaxSets: number }>;
     p2p: P2PState;
     setHostTournamentMode?: (value: boolean) => void;
     sendTicker?: (message: string) => void;
     sendReaction?: (emoji: string) => void;
     sendTimeoutViewer?: (active: boolean, timeLeft?: number) => void;
     sendEffect?: (effectType: 'SPIKE' | 'BLOCK') => void;
+    isChatEnabled: boolean;
+    setChatEnabled?: (value: boolean) => void;
+    isChatWindowVisible: boolean;
+    setChatWindowVisible?: (value: boolean) => void;
+    receivedChatMessages: { id: number; text: string; sender: string; senderId?: string; senderColor?: string; isSystem?: boolean }[];
+    sendChat?: (text: string) => void;
+    banViewer?: (peerId: string) => void;
     receivedTickerMessage: string | null;
     clearTicker: () => void;
     receivedReactions: { id: number; emoji: string }[];

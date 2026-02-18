@@ -9,9 +9,11 @@ interface SubstitutionModalProps {
     teamA: TeamMatchState;
     teamB: TeamMatchState;
     dispatch: React.Dispatch<Action>;
+    /** 스포츠클럽 모드에서만 선수별 메모(📝) 버튼 표시 */
+    showPlayerMemo?: boolean;
 }
 
-const SubstitutionModal: React.FC<SubstitutionModalProps> = ({ isOpen, onClose, teamA, teamB, dispatch }) => {
+const SubstitutionModal: React.FC<SubstitutionModalProps> = ({ isOpen, onClose, teamA, teamB, dispatch, showPlayerMemo = false }) => {
     const { t } = useTranslation();
     const [selectedTeam, setSelectedTeam] = useState<'A' | 'B'>('A');
     const [playerOut, setPlayerOut] = useState<string | null>(null);
@@ -72,7 +74,9 @@ const SubstitutionModal: React.FC<SubstitutionModalProps> = ({ isOpen, onClose, 
                                 {onCourtPlayers.map(p => (
                                     <div key={p.id} className="flex items-center gap-2">
                                         <button onClick={() => setPlayerOut(p.id)} className={`flex-1 text-left p-3 rounded-md ${playerOut === p.id ? 'bg-red-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>{p.originalName}</button>
-                                        <button type="button" onClick={e => { e.stopPropagation(); setMemoPlayer({ team: selectedTeam, player: p }); }} className="p-1.5 rounded hover:bg-slate-600 text-amber-400/90 shrink-0" title="전력 분석 메모">📝</button>
+                                        {showPlayerMemo && (
+                                            <button type="button" onClick={e => { e.stopPropagation(); setMemoPlayer({ team: selectedTeam, player: p }); }} className="p-1.5 rounded hover:bg-slate-600 text-amber-400/90 shrink-0" title="전력 분석 메모">📝</button>
+                                        )}
                                     </div>
                                 ))}
                             </div>
@@ -83,7 +87,9 @@ const SubstitutionModal: React.FC<SubstitutionModalProps> = ({ isOpen, onClose, 
                                 {benchPlayers.map(p => (
                                     <div key={p.id} className="flex items-center gap-2">
                                         <button onClick={() => setPlayerIn(p.id)} className={`flex-1 text-left p-3 rounded-md ${playerIn === p.id ? 'bg-green-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>{p.originalName}</button>
-                                        <button type="button" onClick={e => { e.stopPropagation(); setMemoPlayer({ team: selectedTeam, player: p }); }} className="p-1.5 rounded hover:bg-slate-600 text-amber-400/90 shrink-0" title="전력 분석 메모">📝</button>
+                                        {showPlayerMemo && (
+                                            <button type="button" onClick={e => { e.stopPropagation(); setMemoPlayer({ team: selectedTeam, player: p }); }} className="p-1.5 rounded hover:bg-slate-600 text-amber-400/90 shrink-0" title="전력 분석 메모">📝</button>
+                                        )}
                                     </div>
                                 ))}
                             </div>

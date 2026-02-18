@@ -56,7 +56,13 @@ const SettingsScreen: React.FC = () => {
             showToast('유효한 점수를 입력해주세요.', 'error');
             return;
         }
-        saveSettings(currentSettings);
+        const toSave: AppSettings = {
+            ...currentSettings,
+            tournamentTargetScore: [21, 25].includes(Number(currentSettings.tournamentTargetScore)) ? currentSettings.tournamentTargetScore : 21,
+            tournamentMaxSets: [3, 5].includes(Number(currentSettings.tournamentMaxSets)) ? currentSettings.tournamentMaxSets : 3,
+            volleyballRuleSystem: [6, 9].includes(Number(currentSettings.volleyballRuleSystem)) ? (currentSettings.volleyballRuleSystem as 6 | 9) : 6,
+        };
+        saveSettings(toSave);
     };
     
     const handleSettingChange = (field: keyof AppSettings, value: any) => {
@@ -80,7 +86,7 @@ const SettingsScreen: React.FC = () => {
             </div>
             
             <div className="space-y-4">
-                <h3 className="text-xl font-bold text-slate-300">경기 목표 점수 설정</h3>
+                <h3 className="text-xl font-bold text-slate-300">🏐 연습 경기 / 일반 수업 목표 점수</h3>
                 <p className="text-slate-400 text-sm">
                     여기서 설정된 점수를 먼저 획득하는 팀이 세트에서 승리합니다. (듀스 제외)
                 </p>
@@ -109,6 +115,71 @@ const SettingsScreen: React.FC = () => {
                         className="w-32 bg-slate-800 border border-slate-600 rounded-md py-2 px-3 text-white text-center text-lg focus:outline-none focus:ring-2 focus:ring-[#00A3FF]"
                         min="1"
                     />
+                </div>
+            </div>
+
+            <div className="space-y-4 pt-6 border-t border-slate-700">
+                <h3 className="text-xl font-bold text-slate-300">🏆 스포츠클럽 대회 룰 설정</h3>
+                <p className="text-slate-400 text-sm">
+                    조별 리그에서 [📺 라이브 전광판 켜기]로 진행할 때 적용됩니다. 결승 세트(마지막 세트)는 항상 15점, 8점에서 코트 체인지입니다.
+                </p>
+                <div className="space-y-3">
+                    <p className="text-slate-300 font-semibold text-sm">대회 세트 당 목표 점수 (1~n-1세트)</p>
+                    <div className="flex flex-wrap gap-3">
+                        <button
+                            type="button"
+                            onClick={() => handleSettingChange('tournamentTargetScore', 21)}
+                            className={`px-5 py-2.5 rounded-lg font-semibold transition-colors ${(currentSettings.tournamentTargetScore ?? 21) === 21 ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}
+                        >
+                            21점
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleSettingChange('tournamentTargetScore', 25)}
+                            className={`px-5 py-2.5 rounded-lg font-semibold transition-colors ${(currentSettings.tournamentTargetScore ?? 21) === 25 ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}
+                        >
+                            25점
+                        </button>
+                    </div>
+                </div>
+                <div className="space-y-3 pt-2">
+                    <p className="text-slate-300 font-semibold text-sm">대회 경기 세트 수</p>
+                    <div className="flex flex-wrap gap-3">
+                        <button
+                            type="button"
+                            onClick={() => handleSettingChange('tournamentMaxSets', 3)}
+                            className={`px-5 py-2.5 rounded-lg font-semibold transition-colors ${(currentSettings.tournamentMaxSets ?? 3) === 3 ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}
+                        >
+                            3세트 (3판 2선승)
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleSettingChange('tournamentMaxSets', 5)}
+                            className={`px-5 py-2.5 rounded-lg font-semibold transition-colors ${(currentSettings.tournamentMaxSets ?? 3) === 5 ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}
+                        >
+                            5세트 (5판 3선승)
+                        </button>
+                    </div>
+                </div>
+                <div className="space-y-3 pt-4 border-t border-slate-600/50 mt-4">
+                    <p className="text-slate-300 font-semibold text-sm">🏐 배구 경기 인원 룰</p>
+                    <p className="text-slate-400 text-xs">로테이션·서브 순서 트래커 등에 사용됩니다.</p>
+                    <div className="flex flex-wrap gap-3">
+                        <button
+                            type="button"
+                            onClick={() => handleSettingChange('volleyballRuleSystem', 6)}
+                            className={`px-5 py-2.5 rounded-lg font-semibold transition-colors ${(currentSettings.volleyballRuleSystem ?? 6) === 6 ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}
+                        >
+                            6인제 (로테이션/서브)
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleSettingChange('volleyballRuleSystem', 9)}
+                            className={`px-5 py-2.5 rounded-lg font-semibold transition-colors ${(currentSettings.volleyballRuleSystem ?? 6) === 9 ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}
+                        >
+                            9인제 (서브 순서만)
+                        </button>
+                    </div>
                 </div>
             </div>
 

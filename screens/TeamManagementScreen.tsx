@@ -57,8 +57,13 @@ const convertGithubUrl = (url: string | undefined): string | undefined => {
     return url;
 };
 
-const TeamManagementScreen: React.FC = () => {
+interface TeamManagementScreenProps {
+    appMode?: 'CLASS' | 'CLUB';
+}
+
+const TeamManagementScreen: React.FC<TeamManagementScreenProps> = ({ appMode = 'CLASS' }) => {
     const { teamSets, saveTeamSets, deleteTeam, createTeamSet, addTeamToSet, teamSetsMap, removePlayerFromTeam, addPlayerToTeam, setTeamCaptain } = useData();
+    const isClub = appMode === 'CLUB';
     const { t } = useTranslation();
     const [configs, setConfigs] = useState<Record<string, Config>>({});
     const [isEmblemModalOpen, setIsEmblemModalOpen] = useState(false);
@@ -252,7 +257,7 @@ const TeamManagementScreen: React.FC = () => {
     const handleAddNewTeam = async () => {
         if (newTeamName.trim() && targetSetId) {
             const finalTeamName = newTeamName.trim() + t('roster_team_suffix');
-            await addTeamToSet(targetSetId, finalTeamName);
+            await addTeamToSet(targetSetId, finalTeamName, { createDefaultPlayers: isClub });
             setNewTeamName('');
             setTargetSetId(null);
             setIsNewTeamModalOpen(false);
@@ -470,7 +475,7 @@ const TeamManagementScreen: React.FC = () => {
                 isOpen={isNewSetModalOpen}
                 onClose={() => setIsNewSetModalOpen(false)}
                 onConfirm={handleCreateNewSet}
-                title={t('team_management_new_set_title')}
+                title={isClub ? '새 대회(조) 추가' : t('team_management_new_set_title')}
                 message=""
                 confirmText={t('add')}
             >
@@ -478,7 +483,7 @@ const TeamManagementScreen: React.FC = () => {
                     type="text"
                     value={newSetName}
                     onChange={e => setNewSetName(e.target.value)}
-                    placeholder={t('team_management_new_set_placeholder')}
+                    placeholder={isClub ? '예: 교육감배 A조' : t('team_management_new_set_placeholder')}
                     className="w-full bg-slate-800 border border-slate-600 rounded-md p-3 mt-4 text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
                     autoFocus
                 />
@@ -504,7 +509,7 @@ const TeamManagementScreen: React.FC = () => {
             <div className="max-w-4xl mx-auto bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-4 sm:p-6 rounded-lg shadow-2xl space-y-6 animate-fade-in px-4">
                 <div className="flex flex-col lg:flex-row items-stretch lg:items-center lg:justify-between gap-4">
                     <button onClick={() => setIsNewSetModalOpen(true)} className="bg-sky-600 hover:bg-sky-500 text-white font-bold py-3 px-6 rounded-lg text-base min-h-[44px] w-full lg:w-auto">
-                        {t('team_management_new_set_button')}
+                        {isClub ? '➕ 새 대회(조) 추가' : t('team_management_new_set_button')}
                     </button>
                     <div className="flex gap-2">
                         <button 
@@ -534,11 +539,11 @@ const TeamManagementScreen: React.FC = () => {
                     </div>
                 )}
 
-                {/* 필터 섹션 - 반 탭 UI */}
+                {/* 필터 섹션 - 반/대회(조) 탭 UI */}
                 <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 space-y-4">
-                    {/* 반 선택 탭 */}
+                    {/* 반 또는 대회(조) 선택 탭 */}
                     <div>
-                        <label className="block font-semibold text-sm text-slate-300 mb-2">{t('player_input_class_select_label')}</label>
+                        <label className="block font-semibold text-sm text-slate-300 mb-2">{isClub ? '대회(조) 선택' : t('player_input_class_select_label')}</label>
                         <div className="flex gap-2 flex-wrap">
                             <button 
                                 onClick={() => {
@@ -610,6 +615,7 @@ const TeamManagementScreen: React.FC = () => {
                                 <div className="flex justify-between items-center mb-4">
                                     <h3 className="text-xl font-bold text-slate-300">
                                         {set.className}
+                                        {isClub && <span className="text-sm text-slate-400 ml-2">(대회/조)</span>}
                                         {set.teamCount && (
                                             <span className="text-sm text-slate-400 ml-2">({t('record_team_format', { count: set.teamCount })})</span>
                                         )}
@@ -618,7 +624,7 @@ const TeamManagementScreen: React.FC = () => {
                                         onClick={() => { setTargetSetId(set.id); setIsNewTeamModalOpen(true); }}
                                         className="text-sm bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold py-1 px-3 rounded-md transition-colors"
                                     >
-                                        {t('team_management_add_team_button')}
+                                        {isClub ? '학교(팀) 추가' : t('team_management_add_team_button')}
                                     </button>
                                 </div>
                                 <div className="space-y-4">

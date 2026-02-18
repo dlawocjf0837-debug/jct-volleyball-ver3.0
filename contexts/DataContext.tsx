@@ -1,9 +1,11 @@
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback, useReducer, useRef, PropsWithChildren, useMemo } from 'react';
 import Peer from 'peerjs';
-import { MatchState, TeamSet, TeamMatchState, Player, PlayerStats, Action, UserEmblem, SavedTeamInfo, SavedOpponentTeam, LeagueStandingsData, ScoreEvent, PlayerAchievements, PlayerCumulativeStats, ToastState, AppSettings, Tournament, League, PlayerCoachingLogs, CoachingLog, TeamStats, DataContextType, Badge, P2PState, DataConnection, P2PMessage, Language, ScoreEventType } from '../types';
+import { MatchState, TeamSet, TeamMatchState, Player, PlayerStats, Action, UserEmblem, SavedTeamInfo, SavedOpponentTeam, LeagueStandingsData, LeagueStandingsDataList, LeagueStandingsMatch, ScoreEvent, PlayerAchievements, PlayerCumulativeStats, ToastState, AppSettings, Tournament, League, PlayerCoachingLogs, CoachingLog, TeamStats, DataContextType, Badge, P2PState, DataConnection, P2PMessage, Language, ScoreEventType } from '../types';
 import { BADGE_DEFINITIONS } from '../data/badges';
 import { translations } from '../data/translations';
 import localforage from 'localforage';
+import { filterProfanity } from '../utils/filterProfanity';
+import { hashToColor, ADMIN_CHAT_LABEL, ADMIN_CHAT_COLOR } from '../utils/chatUtils';
 
 const P2P_PIN_PREFIX = 'jive-';
 const PIN_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 영문대문자+숫자 (혼동 가능 문자 제외)
@@ -34,6 +36,9 @@ function getStorageKeys(appMode: 'CLASS' | 'CLUB') {
         BACKUP_KEY: p + 'jct_volleyball_backup_autosave',
         OPPONENT_TEAMS_KEY: p + 'jct_volleyball_opponent_teams',
         LEAGUE_STANDINGS_KEY: p + 'jct_volleyball_league_standings',
+        LEAGUE_STANDINGS_LIST_KEY: p + 'jct_volleyball_league_standings_list',
+        PRACTICE_MATCH_HISTORY_KEY: p + 'jct_volleyball_practice_match_history',
+        LEAGUE_MATCH_HISTORY_KEY: p + 'jct_volleyball_league_match_history',
     };
 }
 const TEAM_COLORS_PALETTE = ['#3b82f6', '#ef4444', '#22c55e', '#eab308', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#64748b', '#f472b6', '#06b6d4', '#f59e0b'];
@@ -82,6 +87,14 @@ const isValidLeagues = (leagues: any): leagues is League[] => {
 
 const isValidCoachingLogs = (logs: any): logs is PlayerCoachingLogs => {
     return typeof logs === 'object' && logs !== null && !Array.isArray(logs);
+};
+
+function migrateLeagueMatches(matches: any[]): LeagueStandingsMatch[] {
+    if (!Array.isArray(matches)) return [];
+    return matches.map((m: any) => {
+        if (m.setScores && Array.isArray(m.setScores)) return m as LeagueStandingsMatch;
+        return { teamA: m.teamA, teamB: m.teamB, setScores: [{ teamA: m.setsA ?? 0, teamB: m.setsB ?? 0 }] };
+    });
 }
 
 const getInitialLanguage = (): Language => {
@@ -100,11 +113,19 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
     const [coachingLogs, setCoachingLogs] = useState<PlayerCoachingLogs>({});
     const [opponentTeams, setOpponentTeams] = useState<SavedOpponentTeam[]>([]);
     const [leagueStandings, setLeagueStandings] = useState<LeagueStandingsData | null>(null);
+    const [leagueStandingsList, setLeagueStandingsList] = useState<LeagueStandingsDataList>({ list: [], selectedId: null });
+    const [practiceMatchHistory, setPracticeMatchHistory] = useState<(MatchState & { date: string; time?: number })[]>([]);
+    const practiceMatchHistoryRef = useRef<(MatchState & { date: string; time?: number })[]>([]);
+    const isPracticeMatchRef = useRef(false);
+    const [leagueMatchHistory, setLeagueMatchHistory] = useState<(MatchState & { date: string; time?: number })[]>([]);
+    const isLeagueMatchRef = useRef(false);
+    const leagueStandingsIdRef = useRef<string | null>(null);
+    useEffect(() => { practiceMatchHistoryRef.current = practiceMatchHistory; }, [practiceMatchHistory]);
     const [isLoading, setIsLoading] = useState(true);
     const [toast, setToast] = useState<ToastState>({ message: '', type: 'success' });
     const [recoveryData, setRecoveryData] = useState<any | null>(null);
     const [settings, setSettings] = useState<AppSettings>(
-        { winningScore: 11, includeBonusPointsInWinner: true, googleSheetUrl: '' }
+        { winningScore: 11, includeBonusPointsInWinner: true, googleSheetUrl: '', tournamentTargetScore: 21, tournamentMaxSets: 3, volleyballRuleSystem: 6 }
     );
     
     const [matchTime, setMatchTime] = useState(0);
@@ -133,6 +154,8 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
     const latestMatchStateRef = useRef<MatchState | null>(null);
     /** 방장 대회 모드 상태 (브로드캐스트용) */
     const latestHostTournamentModeRef = useRef<boolean>(false);
+    /** 방장 채팅 허용 상태 (브로드캐스트용, 기본 true) */
+    const latestHostChatEnabledRef = useRef<boolean>(true);
     
     const t = useCallback((key: string, replacements?: Record<string, string | number>): string => {
         let translation = translations[key]?.[language] || key;
@@ -204,10 +227,71 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
 
     const [receivedEffects, setReceivedEffects] = useState<{ id: number; effectType: 'SPIKE' | 'BLOCK' }[]>([]);
     const effectIdRef = useRef(0);
+    const MAX_CHAT_MESSAGES = 20;
+    const [receivedChatMessages, setReceivedChatMessages] = useState<{ id: number; text: string; sender: string; senderId?: string; senderColor?: string; isSystem?: boolean }[]>([]);
+    const chatIdRef = useRef(0);
+    const [viewerLabels, setViewerLabels] = useState<Record<string, { displayName: string; color: string }>>({});
+    const viewerLabelsRef = useRef<Record<string, { displayName: string; color: string }>>({});
+    const nextViewerIndexRef = useRef(1);
+    const [bannedPeers, setBannedPeers] = useState<Set<string>>(new Set());
+    const bannedPeersRef = useRef<Set<string>>(new Set());
+    useEffect(() => { viewerLabelsRef.current = viewerLabels; }, [viewerLabels]);
+    useEffect(() => { bannedPeersRef.current = bannedPeers; }, [bannedPeers]);
     const addReceivedEffect = useCallback((effectType: 'SPIKE' | 'BLOCK') => {
         const id = ++effectIdRef.current;
         setReceivedEffects(prev => [...prev, { id, effectType }]);
     }, []);
+
+    const addReceivedChatMessage = useCallback((text: string, sender: string, senderId?: string, senderColor?: string, isSystem?: boolean) => {
+        const id = ++chatIdRef.current;
+        setReceivedChatMessages(prev => {
+            const next = [...prev, { id, text, sender, senderId, senderColor, isSystem }];
+            return next.slice(-MAX_CHAT_MESSAGES);
+        });
+    }, []);
+
+    const [isChatWindowVisible, setIsChatWindowVisible] = useState(true);
+    const latestChatWindowVisibleRef = useRef(true);
+    useEffect(() => { latestChatWindowVisibleRef.current = isChatWindowVisible; }, [isChatWindowVisible]);
+    const setChatWindowVisible = useCallback((value: boolean) => {
+        latestChatWindowVisibleRef.current = value;
+        setIsChatWindowVisible(value);
+        broadcast({ type: 'chat_visibility_sync', payload: value });
+    }, [broadcast]);
+
+    const banViewer = useCallback((peerId: string) => {
+        setBannedPeers(prev => new Set(prev).add(peerId));
+        const displayName = viewerLabelsRef.current[peerId]?.displayName ?? '해당 유저';
+        const systemText = `${displayName} 채팅이 차단되었습니다.`;
+        addReceivedChatMessage(systemText, 'SYSTEM', undefined, undefined, true);
+        broadcast({ type: 'chat_broadcast', payload: { text: systemText, senderLabel: 'SYSTEM', senderColor: '#9ca3af', isSystem: true } });
+    }, [addReceivedChatMessage, broadcast]);
+
+    const [isChatEnabled, setIsChatEnabled] = useState(true);
+    const setChatEnabled = useCallback((value: boolean) => {
+        latestHostChatEnabledRef.current = value;
+        setIsChatEnabled(value);
+        broadcast({ type: 'chat_enabled_sync', payload: value });
+        if (value === false) {
+            latestChatWindowVisibleRef.current = false;
+            setIsChatWindowVisible(false);
+            broadcast({ type: 'chat_visibility_sync', payload: false });
+        }
+    }, [broadcast]);
+
+    const sendChat = useCallback((text: string) => {
+        const filtered = filterProfanity(text.trim());
+        if (!filtered) return;
+        if (p2p.isHost) {
+            addReceivedChatMessage(filtered, ADMIN_CHAT_LABEL, 'host', ADMIN_CHAT_COLOR);
+            broadcast({ type: 'chat_broadcast', payload: { text: filtered, senderLabel: ADMIN_CHAT_LABEL, senderColor: ADMIN_CHAT_COLOR } });
+            return;
+        }
+        const conn = connRef.current[0];
+        if (conn && p2p.peerId) {
+            conn.send({ type: 'CHAT', payload: { text: filtered, senderId: p2p.peerId } });
+        }
+    }, [p2p.isHost, p2p.peerId, broadcast, addReceivedChatMessage]);
     const removeReceivedEffect = useCallback((id: number) => {
         setReceivedEffects(prev => prev.filter(e => e.id !== id));
     }, []);
@@ -226,7 +310,21 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
             throw error;
         }
     };
-    
+
+    /** 리그 라이브 전광판 시작 시 저장소에서 대회 룰을 읽어옵니다. 키 없거나 NaN 방지를 위해 숫자 파싱·폴백 적용 */
+    const getTournamentSettingsForLive = useCallback(async (): Promise<{ tournamentTargetScore: number; tournamentMaxSets: number }> => {
+        try {
+            const raw = await localforage.getItem(SETTINGS_KEY) as AppSettings | null;
+            const parsedTarget = parseInt(String(raw?.tournamentTargetScore ?? 21), 10);
+            const parsedMaxSets = parseInt(String(raw?.tournamentMaxSets ?? 3), 10);
+            const tournamentTargetScore = (parsedTarget === 21 || parsedTarget === 25) ? parsedTarget : 21;
+            const tournamentMaxSets = (parsedMaxSets === 3 || parsedMaxSets === 5) ? parsedMaxSets : 3;
+            return { tournamentTargetScore, tournamentMaxSets };
+        } catch {
+            return { tournamentTargetScore: 21, tournamentMaxSets: 3 };
+        }
+    }, []);
+
     const getInitialState = useCallback((teams: {
         teamA: string;
         teamB: string;
@@ -236,7 +334,7 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
         teamBPlayers: Record<string, Player>;
         teamADetails?: Partial<TeamMatchState>;
         teamBDetails?: Partial<TeamMatchState>;
-    }, tournamentInfo?: { tournamentId: string, tournamentMatchId: string }, onCourtIds?: { teamA: Set<string>, teamB: Set<string> }, leagueInfo?: { leagueId: string, leagueMatchId: string }): MatchState => {
+    }, tournamentInfo?: { tournamentId: string, tournamentMatchId: string }, onCourtIds?: { teamA: Set<string>, teamB: Set<string> }, leagueInfo?: { leagueId: string, leagueMatchId: string }, options?: { maxSets?: number; tournamentTargetScore?: number }): MatchState => {
         const initPlayerStats = (players: Record<string, Player>): Record<string, PlayerStats> =>
             Object.keys(players).reduce((acc, playerId) => {
                 acc[playerId] = { 
@@ -256,16 +354,21 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
         const onCourtBSet = onCourtIds?.teamB ?? new Set(Object.keys(teams.teamBPlayers));
         const allTeamAPlayerIds = Object.keys(teams.teamAPlayers);
         const allTeamBPlayerIds = Object.keys(teams.teamBPlayers);
+        const maxSets = options?.maxSets ?? 1;
+        const tournamentTargetScore = options?.tournamentTargetScore;
 
         return {
             teamA: { name: teams.teamA, key: teams.teamAKey, ...teams.teamADetails, score: 0, setsWon: 0, timeouts: 2, fairPlay: 0, threeHitPlays: 0, serviceAces: 0, serviceFaults: 0, blockingPoints: 0, spikeSuccesses: 0, players: teams.teamAPlayers, playerStats: initPlayerStats(teams.teamAPlayers), onCourtPlayerIds: allTeamAPlayerIds.filter(id => onCourtASet.has(id)), benchPlayerIds: allTeamAPlayerIds.filter(id => !onCourtASet.has(id)) },
             teamB: { name: teams.teamB, key: teams.teamBKey, ...teams.teamBDetails, score: 0, setsWon: 0, timeouts: 2, fairPlay: 0, threeHitPlays: 0, serviceAces: 0, serviceFaults: 0, blockingPoints: 0, spikeSuccesses: 0, players: teams.teamBPlayers, playerStats: initPlayerStats(teams.teamBPlayers), onCourtPlayerIds: allTeamBPlayerIds.filter(id => onCourtBSet.has(id)), benchPlayerIds: allTeamBPlayerIds.filter(id => !onCourtBSet.has(id)) },
             servingTeam: null,
             currentSet: 1,
+            maxSets,
+            ...(tournamentTargetScore != null && { tournamentTargetScore }),
             isDeuce: false,
             gameOver: false,
             winner: null,
             scoreHistory: [{ a: 0, b: 0 }],
+            setScores: [],
             eventHistory: [{ score: { a: 0, b: 0 }, descriptionKey: "경기가 시작되었습니다.", time: 0, type: 'UNKNOWN' }],
             scoreLocations: [],
             status: 'in_progress',
@@ -514,25 +617,48 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                         }
                         break;
                     }
+                    case 'START_NEXT_SET': {
+                        if (!newState.setEnded) return newState;
+                        newState.currentSet += 1;
+                        newState.teamA = { ...newState.teamA, score: 0 };
+                        newState.teamB = { ...newState.teamB, score: 0 };
+                        newState.setEnded = false;
+                        newState.completedSetScore = undefined;
+                        newState.scoreHistory = [...(newState.scoreHistory || []), { a: 0, b: 0 }];
+                        newState.eventHistory.push({ score: { a: 0, b: 0 }, descriptionKey: '다음 세트 시작.', time: matchTime, type: 'UNKNOWN' });
+                        return newState;
+                    }
                 }
                 if (scoreChanged) {
                     newState.scoreHistory.push({ a: newState.teamA.score, b: newState.teamB.score });
                 }
     
-                newState.isDeuce = newState.teamA.score >= settings.winningScore - 1 && newState.teamA.score === newState.teamB.score;
+                const maxSets = newState.maxSets ?? 1;
+                const isDecidingSet = maxSets >= 2 && newState.currentSet === maxSets;
+                const winningScoreForSet = maxSets >= 2 ? (isDecidingSet ? 15 : (newState.tournamentTargetScore ?? 25)) : settings.winningScore;
+                newState.isDeuce = newState.teamA.score >= winningScoreForSet - 1 && newState.teamA.score === newState.teamB.score;
                 
                 const { teamA, teamB } = newState;
-                // FIX: Corrected typo 'a.score' to 'teamA.score' for game over condition.
-                const isGameOver = (teamA.score >= settings.winningScore && teamA.score >= teamB.score + 2) || (teamB.score >= settings.winningScore && teamB.score >= teamA.score + 2);
+                const isSetOver = (teamA.score >= winningScoreForSet && teamA.score >= teamB.score + 2) || (teamB.score >= winningScoreForSet && teamB.score >= teamA.score + 2);
     
-                if (isGameOver && !newState.gameOver) {
+                if (isSetOver && !newState.gameOver) {
                     const winner = teamA.score > teamB.score ? 'A' : 'B';
                     const winnerName = winner === 'A' ? teamA.name : teamB.name;
-                    newEventDescription = `경기 종료! ${winnerName} 팀 승리!`;
-                    newEventType = 'GAME_END';
-                    newState.winner = winner;
-                    newState.gameOver = true;
                     newState[winner === 'A' ? 'teamA' : 'teamB'].setsWon += 1;
+                    const setScoresList = newState.setScores ?? [];
+                    newState.setScores = [...setScoresList, { teamA: teamA.score, teamB: teamB.score }];
+                    const winnerSetsWon = newState[winner === 'A' ? 'teamA' : 'teamB'].setsWon;
+                    if (maxSets <= 1 || winnerSetsWon >= Math.ceil((maxSets || 3) / 2)) {
+                        newEventDescription = `경기 종료! ${winnerName} 팀 승리!`;
+                        newEventType = 'GAME_END';
+                        newState.winner = winner;
+                        newState.gameOver = true;
+                    } else {
+                        newEventDescription = `${winnerName} 팀 ${winnerSetsWon}세트 획득. 다음 세트 진행 준비.`;
+                        newEventType = 'GAME_END';
+                        newState.setEnded = true;
+                        newState.completedSetScore = { a: teamA.score, b: teamB.score };
+                    }
                 }
     
                 if (newEventDescription) {
@@ -1078,6 +1204,48 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
     };
 
     const saveMatchHistory = async (newHistory: (MatchState & { date: string; time?: number })[], successMessage?: string) => {
+        if (isPracticeMatchRef.current) {
+            try {
+                const next = [newHistory[0], ...practiceMatchHistoryRef.current];
+                await localforage.setItem(storageKeys.PRACTICE_MATCH_HISTORY_KEY, next);
+                setPracticeMatchHistory(next);
+                if (successMessage) showToast(successMessage, 'success');
+            } catch (e) {
+                console.error("Error saving practice match:", e);
+                showToast("연습 경기 저장 중 오류가 발생했습니다.", 'error');
+            }
+            isPracticeMatchRef.current = false;
+            return;
+        }
+        if (isLeagueMatchRef.current) {
+            try {
+                const completed = newHistory[0];
+                const next = [completed, ...leagueMatchHistory];
+                await localforage.setItem(storageKeys.LEAGUE_MATCH_HISTORY_KEY, next);
+                setLeagueMatchHistory(next);
+                const setId = leagueStandingsIdRef.current;
+                if (setId && completed?.setScores?.length) {
+                    const newMatch: LeagueStandingsMatch = {
+                        teamA: completed.teamA.name,
+                        teamB: completed.teamB.name,
+                        setScores: completed.setScores,
+                    };
+                    const list = leagueStandingsList.list.map(d => {
+                        if (d.id !== setId) return d;
+                        const matches = [...d.matches.filter(m => !(m.teamA === newMatch.teamA && m.teamB === newMatch.teamB)), newMatch];
+                        return { ...d, matches };
+                    });
+                    await saveLeagueStandingsList({ list, selectedId: leagueStandingsList.selectedId });
+                }
+                if (successMessage) showToast(successMessage, 'success');
+            } catch (e) {
+                console.error("Error saving league match:", e);
+                showToast("리그 경기 저장 중 오류가 발생했습니다.", 'error');
+            }
+            isLeagueMatchRef.current = false;
+            leagueStandingsIdRef.current = null;
+            return;
+        }
         try {
             await localforage.setItem(storageKeys.MATCH_HISTORY_KEY, newHistory);
             setMatchHistory(newHistory);
@@ -1196,6 +1364,18 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
             setLeagueStandings(data);
         } catch (error) {
             console.error("Error saving league standings:", error);
+            showToast("순위표 저장 중 오류가 발생했습니다.", 'error');
+        }
+    };
+
+    const saveLeagueStandingsList = async (data: LeagueStandingsDataList) => {
+        try {
+            await localforage.setItem(storageKeys.LEAGUE_STANDINGS_LIST_KEY, data);
+            setLeagueStandingsList(data);
+            const cur = data.list.find(d => d.id === data.selectedId) || null;
+            setLeagueStandings(cur);
+        } catch (error) {
+            console.error("Error saving league standings list:", error);
             showToast("순위표 저장 중 오류가 발생했습니다.", 'error');
         }
     };
@@ -1397,13 +1577,12 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
         showToast('toast_new_set_success', 'success', { name: newSet.className });
     };
 
-    const addTeamToSet = async (setId: string, teamName: string) => {
+    const addTeamToSet = async (setId: string, teamName: string, options?: { createDefaultPlayers?: boolean }) => {
         if (!teamName.trim()) {
             showToast('팀 이름을 입력해주세요.', 'error');
             return;
         }
 
-        // structuredClone 사용: 깊은 복사 최적화
         const newTeamSets = structuredClone(teamSets);
         const setIndex = newTeamSets.findIndex((s: TeamSet) => s.id === setId);
         if (setIndex === -1) {
@@ -1418,11 +1597,32 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
             return;
         }
 
-        // 주장 없이 빈 팀 생성 (사용자가 나중에 주장을 직접 임명하도록)
+        const defaultPlayerIds: string[] = [];
+        if (options?.createDefaultPlayers) {
+            const count = 12;
+            for (let i = 1; i <= count; i++) {
+                const id = `temp_${setId}_${finalTeamName}_${i}`.replace(/\s/g, '_');
+                const numStr = String(i);
+                const newPlayer: Player = {
+                    id,
+                    originalName: `${numStr}번`,
+                    anonymousName: `${numStr}번`,
+                    class: set.className,
+                    studentNumber: numStr,
+                    gender: '기타',
+                    stats: { height: 0, shuttleRun: 0, flexibility: 0, fiftyMeterDash: 0, underhand: 0, serve: 0 },
+                    isCaptain: i === 1,
+                    totalScore: 0,
+                };
+                (set.players as Record<string, Player>)[id] = newPlayer;
+                defaultPlayerIds.push(id);
+            }
+        }
+
         const newTeam: SavedTeamInfo = {
             teamName: finalTeamName,
-            captainId: '', // 주장 없음
-            playerIds: [], // 빈 팀
+            captainId: defaultPlayerIds.length > 0 ? defaultPlayerIds[0] : '',
+            playerIds: defaultPlayerIds,
             color: TEAM_COLORS_PALETTE[set.teams.length % TEAM_COLORS_PALETTE.length],
         };
 
@@ -1491,7 +1691,10 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                 parsedCoachingLogs,
                 backupData,
                 parsedOpponentTeams,
-                parsedLeagueStandings
+                parsedLeagueStandings,
+                parsedLeagueStandingsList,
+                parsedPracticeMatchHistory,
+                parsedLeagueMatchHistory
             ] = await Promise.all([
                 localforage.getItem(storageKeys.TEAM_SETS_KEY) as Promise<TeamSet[] | null>,
                 localforage.getItem(storageKeys.MATCH_HISTORY_KEY) as Promise<(MatchState & { date: string; time?: number })[] | null>,
@@ -1503,7 +1706,10 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                 localforage.getItem(storageKeys.COACHING_LOGS_KEY) as Promise<PlayerCoachingLogs | null>,
                 localforage.getItem(storageKeys.BACKUP_KEY) as Promise<any>,
                 localforage.getItem(storageKeys.OPPONENT_TEAMS_KEY) as Promise<SavedOpponentTeam[] | null>,
-                localforage.getItem(storageKeys.LEAGUE_STANDINGS_KEY) as Promise<LeagueStandingsData | null>
+                localforage.getItem(storageKeys.LEAGUE_STANDINGS_KEY) as Promise<LeagueStandingsData | null>,
+                localforage.getItem(storageKeys.LEAGUE_STANDINGS_LIST_KEY) as Promise<LeagueStandingsDataList | null>,
+                localforage.getItem(storageKeys.PRACTICE_MATCH_HISTORY_KEY) as Promise<(MatchState & { date: string; time?: number })[] | null>,
+                localforage.getItem(storageKeys.LEAGUE_MATCH_HISTORY_KEY) as Promise<(MatchState & { date: string; time?: number })[] | null>
             ]);
 
             const teamSets = parsedTeamSets || [];
@@ -1520,6 +1726,9 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                     winningScore: typeof parsedSettings.winningScore === 'number' ? parsedSettings.winningScore : 11,
                     includeBonusPointsInWinner: typeof parsedSettings.includeBonusPointsInWinner === 'boolean' ? parsedSettings.includeBonusPointsInWinner : true,
                     googleSheetUrl: typeof parsedSettings.googleSheetUrl === 'string' ? parsedSettings.googleSheetUrl : '',
+                    tournamentTargetScore: [21, 25].includes(Number(parsedSettings.tournamentTargetScore)) ? parsedSettings.tournamentTargetScore : 21,
+                    tournamentMaxSets: [3, 5].includes(Number(parsedSettings.tournamentMaxSets)) ? parsedSettings.tournamentMaxSets : 3,
+                    volleyballRuleSystem: [6, 9].includes(Number(parsedSettings.volleyballRuleSystem)) ? parsedSettings.volleyballRuleSystem : 6,
                 }));
             }
             
@@ -1554,8 +1763,22 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
             if (isValidLeagues(leagues)) setLeagues(leagues);
             if (isValidCoachingLogs(coachingLogs)) setCoachingLogs(coachingLogs);
             if (Array.isArray(parsedOpponentTeams)) setOpponentTeams(parsedOpponentTeams);
-            if (parsedLeagueStandings && typeof parsedLeagueStandings.tournamentName === 'string' && Array.isArray(parsedLeagueStandings.teams) && Array.isArray(parsedLeagueStandings.matches)) {
-                setLeagueStandings(parsedLeagueStandings);
+            if (Array.isArray(parsedPracticeMatchHistory) && parsedPracticeMatchHistory.every(m => m && typeof m.date === 'string' && isValidMatchState(m))) {
+                setPracticeMatchHistory(parsedPracticeMatchHistory);
+                practiceMatchHistoryRef.current = parsedPracticeMatchHistory;
+            }
+            if (Array.isArray(parsedLeagueMatchHistory) && parsedLeagueMatchHistory.every(m => m && typeof m.date === 'string' && isValidMatchState(m))) {
+                setLeagueMatchHistory(parsedLeagueMatchHistory);
+            }
+            if (parsedLeagueStandingsList && Array.isArray(parsedLeagueStandingsList.list)) {
+                setLeagueStandingsList({ list: parsedLeagueStandingsList.list, selectedId: parsedLeagueStandingsList.selectedId ?? null });
+                const cur = parsedLeagueStandingsList.list.find(d => d.id === parsedLeagueStandingsList.selectedId) || parsedLeagueStandingsList.list[0] || null;
+                setLeagueStandings(cur);
+            } else if (parsedLeagueStandings && typeof parsedLeagueStandings.tournamentName === 'string' && Array.isArray(parsedLeagueStandings.teams) && Array.isArray(parsedLeagueStandings.matches)) {
+                const migrated: LeagueStandingsData = { ...parsedLeagueStandings, id: parsedLeagueStandings.id || `leg_${Date.now()}`, matches: migrateLeagueMatches(parsedLeagueStandings.matches) };
+                const list = { list: [migrated], selectedId: migrated.id };
+                setLeagueStandingsList(list);
+                setLeagueStandings(migrated);
             }
             
         } catch (error: any) {
@@ -1613,6 +1836,14 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
         setReceivedTickerMessage(null);
         setReceivedReactions([]);
         setReceivedEffects([]);
+        setReceivedChatMessages([]);
+        setViewerLabels({});
+        viewerLabelsRef.current = {};
+        nextViewerIndexRef.current = 1;
+        setBannedPeers(new Set());
+        bannedPeersRef.current = new Set();
+        setIsChatWindowVisible(true);
+        latestChatWindowVisibleRef.current = true;
         setTimeout(() => { isIntentionallyClosing.current = false; }, 500);
     }, []);
 
@@ -1644,9 +1875,27 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
             conn.on('data', (data: P2PMessage) => {
                 if (data.type === 'REACTION') {
                     broadcast({ type: 'reaction_broadcast', payload: data.payload });
+                } else if (data.type === 'CHAT') {
+                    const { text, senderId } = data.payload;
+                    if (bannedPeersRef.current.has(senderId)) return;
+                    if (!latestHostChatEnabledRef.current) return;
+                    const labels = viewerLabelsRef.current[senderId];
+                    const displayName = labels?.displayName ?? '익명';
+                    const color = labels?.color ?? '#94a3b8';
+                    addReceivedChatMessage(text, displayName, senderId, color);
+                    broadcast({ type: 'chat_broadcast', payload: { text, senderId, senderLabel: displayName, senderColor: color } });
                 }
             });
             conn.on('open', () => {
+                const peerId = conn.peer;
+                const displayName = `익명 ${nextViewerIndexRef.current}`;
+                const color = hashToColor(peerId);
+                nextViewerIndexRef.current += 1;
+                const nextLabels = { ...viewerLabelsRef.current, [peerId]: { displayName, color } };
+                viewerLabelsRef.current = nextLabels;
+                setViewerLabels(nextLabels);
+                conn.send({ type: 'viewer_info', payload: { displayName, color } });
+
                 showToast('아나운서 화면이 성공적으로 연결되었습니다!', 'success');
                 const stateToSync = latestMatchStateRef.current ?? initialState ?? matchState;
                 if (stateToSync) {
@@ -1658,6 +1907,8 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                 conn.send({ type: 'settings_sync', payload: settings });
                 conn.send({ type: 'team_sets_sync', payload: teamSets });
                 conn.send({ type: 'user_emblems_sync', payload: userEmblems });
+                conn.send({ type: 'chat_enabled_sync', payload: latestHostChatEnabledRef.current });
+                conn.send({ type: 'chat_visibility_sync', payload: latestChatWindowVisibleRef.current });
                 
                 connRef.current.push(conn);
                 const viewerCount = connRef.current.length;
@@ -1763,6 +2014,15 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                     saveTeamSets(data.payload);
                 } else if (data.type === 'user_emblems_sync') {
                     saveUserEmblems(data.payload);
+                } else if (data.type === 'chat_broadcast') {
+                    const p = data.payload;
+                    addReceivedChatMessage(p.text, p.senderLabel, p.senderId, p.senderColor, p.isSystem);
+                } else if (data.type === 'chat_visibility_sync') {
+                    setP2p(prev => ({ ...prev, chatWindowVisible: data.payload }));
+                } else if (data.type === 'viewer_info') {
+                    setP2p(prev => ({ ...prev, viewerLabel: data.payload }));
+                } else if (data.type === 'chat_enabled_sync') {
+                    setP2p(prev => ({ ...prev, chatEnabled: data.payload }));
                 }
             });
 
@@ -1810,8 +2070,12 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
         attendingPlayers?: { teamA: Record<string, Player>, teamB: Record<string, Player> },
         tournamentInfo?: { tournamentId: string; tournamentMatchId: string },
         onCourtIds?: { teamA: Set<string>; teamB: Set<string> },
-        leagueInfo?: { leagueId: string, leagueMatchId: string }
+        leagueInfo?: { leagueId: string, leagueMatchId: string },
+        options?: { isPracticeMatch?: boolean; maxSets?: number; tournamentTargetScore?: number; isLeagueMatch?: boolean; leagueStandingsId?: string | null }
     ) => {
+        isPracticeMatchRef.current = options?.isPracticeMatch ?? false;
+        isLeagueMatchRef.current = options?.isLeagueMatch ?? false;
+        leagueStandingsIdRef.current = options?.leagueStandingsId ?? null;
         let stateToLoad: MatchState | null = null;
 
         if (existingState) {
@@ -1878,7 +2142,7 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                 teamBPlayers,
                 teamADetails,
                 teamBDetails,
-            }, tournamentInfo, onCourtIds, leagueInfo);
+            }, tournamentInfo, onCourtIds, leagueInfo, { maxSets: options?.maxSets, tournamentTargetScore: options?.tournamentTargetScore });
         }
 
         if (stateToLoad) {
@@ -2021,7 +2285,7 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
             setTournaments([]);
             setLeagues([]);
             setCoachingLogs({});
-            setSettings({ winningScore: 11, includeBonusPointsInWinner: true, googleSheetUrl: '' });
+            setSettings({ winningScore: 11, includeBonusPointsInWinner: true, googleSheetUrl: '', tournamentTargetScore: 21, tournamentMaxSets: 3, volleyballRuleSystem: 6 });
             await setLanguage('ko');
             showToast('모든 데이터가 초기화되었습니다.', 'success');
         } catch (error) {
@@ -2040,6 +2304,10 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
         opponentTeams,
         leagueStandings,
         saveLeagueStandings,
+        leagueStandingsList,
+        saveLeagueStandingsList,
+        practiceMatchHistory,
+        leagueMatchHistory,
         playerCumulativeStats,
         teamPerformanceData,
         tournaments,
@@ -2086,6 +2354,7 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
         requestPassword,
         settings,
         saveSettings,
+        getTournamentSettingsForLive,
         p2p,
         setHostTournamentMode,
         sendTicker,
@@ -2100,6 +2369,13 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
         receivedEffects,
         addReceivedEffect,
         removeReceivedEffect,
+        isChatEnabled,
+        setChatEnabled,
+        isChatWindowVisible,
+        setChatWindowVisible,
+        receivedChatMessages,
+        sendChat,
+        banViewer,
         startHostSession,
         joinSession,
         closeSession,

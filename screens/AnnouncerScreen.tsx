@@ -4,6 +4,7 @@ import { Player, MatchState, TeamSet } from '../types';
 import StatModal from '../components/StatModal';
 import { CrownIcon, QuestionMarkCircleIcon, VolleyballIcon } from '../components/icons';
 import CommentaryGuideModal from '../components/CommentaryGuideModal';
+import { LiveChatOverlay } from '../components/LiveChatOverlay';
 import GameLog from '../components/GameLog';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import TeamEmblem from '../components/TeamEmblem';
@@ -13,6 +14,8 @@ interface AnnouncerScreenProps {
     onNavigateToHistory: () => void;
     pendingJoinCode?: string | null;
     clearPendingJoinCode?: () => void;
+    /** CLASS = 수업 모드(응원가 패널 표시), CLUB = 스포츠클럽 모드(응원가 오디오 숨김) */
+    appMode?: 'CLASS' | 'CLUB';
 }
 
 // Helper function to convert GitHub URLs to jsDelivr CDN URLs
@@ -560,12 +563,14 @@ const EffectPopup: React.FC<{ id: number; effectType: 'SPIKE' | 'BLOCK'; onEnd: 
     );
 };
 
-const AnnouncerScreen: React.FC<AnnouncerScreenProps> = ({ onNavigateToHistory, pendingJoinCode, clearPendingJoinCode }) => {
-    const { matchState, p2p, joinSession, receivedTickerMessage, clearTicker, receivedReactions, removeReceivedReaction, sendReaction, receivedEffects, removeReceivedEffect } = useData();
+const AnnouncerScreen: React.FC<AnnouncerScreenProps> = ({ onNavigateToHistory, pendingJoinCode, clearPendingJoinCode, appMode = 'CLASS' }) => {
+    const { matchState, p2p, joinSession, receivedTickerMessage, clearTicker, receivedReactions, removeReceivedReaction, sendReaction, receivedEffects, removeReceivedEffect, receivedChatMessages, sendChat } = useData();
     const { t } = useTranslation();
     const hasTriedJoinRef = useRef(false);
     const isTournamentMode = p2p.clientTournamentMode ?? false;
     const [emojiCooldownRemaining, setEmojiCooldownRemaining] = useState(0);
+    const CHAT_COOLDOWN_SEC = 3;
+    const [chatCooldownRemaining, setChatCooldownRemaining] = useState(0);
 
     useEffect(() => {
         if (pendingJoinCode && joinSession && clearPendingJoinCode && !hasTriedJoinRef.current) {
@@ -585,6 +590,11 @@ const AnnouncerScreen: React.FC<AnnouncerScreenProps> = ({ onNavigateToHistory, 
         const interval = setInterval(() => setEmojiCooldownRemaining(prev => Math.max(0, prev - 1)), 1000);
         return () => clearInterval(interval);
     }, [emojiCooldownRemaining]);
+    useEffect(() => {
+        if (chatCooldownRemaining <= 0) return;
+        const interval = setInterval(() => setChatCooldownRemaining(prev => Math.max(0, prev - 1)), 1000);
+        return () => clearInterval(interval);
+    }, [chatCooldownRemaining]);
 
     const handleEmojiClick = useCallback((emoji: string) => {
         if (emojiCooldownRemaining > 0 || !sendReaction) return;
@@ -611,7 +621,7 @@ const AnnouncerScreen: React.FC<AnnouncerScreenProps> = ({ onNavigateToHistory, 
                     </span>
                 </div>
             )}
-            {!isTournamentMode && (
+            {appMode !== 'CLUB' && !isTournamentMode && (
                 <div className="bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-4 rounded-lg shadow-2xl flex-shrink-0">
                     <h3 className="text-xl font-bold text-center text-slate-300 mb-2">{t('sound_panel')}</h3>
                     <SoundPanel match={matchState} />
@@ -650,6 +660,22 @@ const AnnouncerScreen: React.FC<AnnouncerScreenProps> = ({ onNavigateToHistory, 
                 </div>
             )}
 
+            {p2p.isConnected && matchState && (p2p.chatWindowVisible !== false) && (p2p.chatEnabled !== false) && (
+                <LiveChatOverlay
+                    messages={receivedChatMessages}
+                    isInputEnabled={p2p.chatEnabled ?? true}
+                    showInputSection={true}
+                    myViewerLabel={p2p.viewerLabel}
+                    onSend={(text) => {
+                        if (sendChat && chatCooldownRemaining <= 0) {
+                            sendChat(text);
+                            setChatCooldownRemaining(CHAT_COOLDOWN_SEC);
+                        }
+                    }}
+                    sendCooldownRemaining={chatCooldownRemaining}
+                    maxLength={30}
+                />
+            )}
             {isTournamentMode && (
                 <div className="fixed bottom-4 left-0 right-0 z-20 flex flex-col items-center gap-2 px-4">
                     {emojiCooldownRemaining > 0 && (
