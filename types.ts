@@ -201,6 +201,8 @@ export interface MatchState {
     tournamentMatchId?: string;
     leagueId?: string;
     leagueMatchId?: string;
+    /** 연습경기(practice) / 대회·조별리그(tournament) 구분 */
+    matchType?: 'practice' | 'tournament';
     time?: number;
     undoStack?: MatchState[]; // For Undo functionality
     /** 세트 종료 후 [다음 세트 진행] 대기 중일 때 true (코트 체인지 후 다음 세트 시작용) */
@@ -492,6 +494,8 @@ export interface DataContextType {
     toast: ToastState;
     saveTeamSets: (newTeamSets: TeamSet[], successMessage?: string) => Promise<void>;
     saveMatchHistory: (newHistory: (MatchState & { date: string, time?: number })[], successMessage?: string) => Promise<void>;
+    savePracticeMatchHistory: (newList: (MatchState & { date: string; time?: number })[], successMessage?: string) => Promise<void>;
+    saveLeagueMatchHistory: (newList: (MatchState & { date: string; time?: number })[], successMessage?: string) => Promise<void>;
     saveUserEmblems: (newUserEmblems: UserEmblem[]) => Promise<void>;
     saveTournaments: (newTournaments: Tournament[]) => Promise<void>;
     saveLeagues: (newLeagues: League[]) => Promise<void>;
@@ -504,6 +508,7 @@ export interface DataContextType {
     createTeamSet: (name: string) => Promise<void>;
     addTeamToSet: (setId: string, teamName: string, options?: { createDefaultPlayers?: boolean }) => Promise<void>;
     setTeamCaptain: (teamKey: string, playerId: string) => Promise<void>;
+    updatePlayerMemoInTeamSet: (setId: string, playerId: string, memo: string) => Promise<void>;
     reloadData: () => void;
     exportData: () => void;
     saveImportedData: (data: any) => void;

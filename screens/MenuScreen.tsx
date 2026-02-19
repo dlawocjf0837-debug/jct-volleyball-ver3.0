@@ -23,6 +23,8 @@ import {
 import { useTranslation } from '../hooks/useTranslation';
 import { isAdminPasswordCorrect } from '../utils/adminPassword';
 import { LeagueStandingsDashboard } from '../components/LeagueStandingsDashboard';
+import { TacticalBoardModal } from '../components/TacticalBoardModal';
+import { AnalysisMemoModal } from '../components/AnalysisMemoModal';
 
 
 interface MenuScreenProps {
@@ -101,6 +103,8 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
     const [joinId, setJoinId] = useState('');
     const [isJoining, setIsJoining] = useState(false);
     const [joinError, setJoinError] = useState('');
+    const [showTacticalBoard, setShowTacticalBoard] = useState(false);
+    const [showAnalysisMemo, setShowAnalysisMemo] = useState(false);
 
     useEffect(() => {
         if (isJoining) {
@@ -227,7 +231,7 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
         <>
             <div className={`max-w-6xl mx-auto flex flex-col items-center gap-6 sm:gap-10 animate-fade-in py-4 sm:py-10 w-full px-4 ${isClub ? 'rounded-2xl border border-amber-500/20 bg-slate-900/50' : ''}`}>
                 {/* 단일 진입 버튼: 경기 시작 + 실시간 참여 */}
-                <div className={`w-full max-w-4xl grid gap-4 sm:gap-4 ${isClub ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
+                <div className={`w-full max-w-4xl grid gap-4 sm:gap-4 ${isClub ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'}`}>
                     <button
                         onClick={onStartMatch}
                         className={`w-full group relative flex items-center justify-center gap-3 sm:gap-3 px-4 sm:px-8 py-4 sm:py-5 overflow-hidden font-bold text-white transition-all duration-300 rounded-2xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 min-h-[44px] ${isClub ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-900/50 hover:shadow-amber-700/50' : 'bg-green-600 hover:bg-green-700 shadow-green-900/50 hover:shadow-green-700/50'}`}
@@ -235,15 +239,13 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
                         <PlayIcon className="w-6 h-6 sm:w-8 sm:h-8"/>
                         <span className="relative text-base sm:text-xl lg:text-2xl">{isClub ? '🏐 연습 경기 시작' : t('menu_start_game')}</span>
                     </button>
-                    {!isClub && (
-                        <button
-                            onClick={() => setIsJoinModalOpen(true)}
-                            className="w-full group relative flex items-center justify-center gap-3 sm:gap-3 px-4 sm:px-8 py-4 sm:py-5 overflow-hidden font-bold text-white transition-all duration-300 bg-green-600 rounded-2xl shadow-lg shadow-green-900/50 hover:bg-green-700 hover:shadow-xl hover:shadow-green-700/50 transform hover:-translate-y-1 min-h-[44px]"
-                        >
-                            <LinkIcon className="w-6 h-6 sm:w-8 sm:h-8"/>
-                            <span className="relative text-base sm:text-xl lg:text-2xl">{t('menu_join_session_realtime')}</span>
-                        </button>
-                    )}
+                    <button
+                        onClick={() => setIsJoinModalOpen(true)}
+                        className="w-full group relative flex items-center justify-center gap-3 sm:gap-3 px-4 sm:px-8 py-4 sm:py-5 overflow-hidden font-bold text-white transition-all duration-300 bg-green-600 rounded-2xl shadow-lg shadow-green-900/50 hover:bg-green-700 hover:shadow-xl hover:shadow-green-700/50 transform hover:-translate-y-1 min-h-[44px]"
+                    >
+                        <LinkIcon className="w-6 h-6 sm:w-8 sm:h-8"/>
+                        <span className="relative text-base sm:text-xl lg:text-2xl">{t('menu_join_session_realtime')}</span>
+                    </button>
                 </div>
 
                 <div className="w-full max-w-4xl bg-slate-800/30 backdrop-blur-lg border border-slate-700/50 rounded-2xl p-4 sm:p-6">
@@ -280,9 +282,11 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
                     <div className="w-full">
                         <h2 className="text-xl sm:text-2xl font-bold text-slate-300 mb-4 sm:mb-5 px-1">{t('menu_category_prep')}</h2>
                         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
-                            <MenuCard icon={<UserGroupIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_team_builder_title')} description={t('menu_team_builder_desc')} onClick={onStartTeamBuilder} />
+                            {!isClub && <MenuCard icon={<UserGroupIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_team_builder_title')} description={t('menu_team_builder_desc')} onClick={onStartTeamBuilder} />}
                             {!isClub && <MenuCard icon={<RectangleGroupIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('competition_title')} description={t('menu_competition_desc')} onClick={onStartCompetition} />}
                             <MenuCard icon={<UsersIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_team_management_title')} description={t('menu_team_management_desc')} onClick={onStartTeamManagement} />
+                            <MenuCard icon={<span className="text-xl">📋</span>} title="전술판" description="자석과 펜으로 작전을 그리세요" onClick={() => setShowTacticalBoard(true)} />
+                            {isClub && <MenuCard icon={<span className="text-xl">📊</span>} title="전력 분석 메모" description="상대 팀 전력 분석을 작성하고 공유하세요" onClick={() => setShowAnalysisMemo(true)} />}
                             <MenuCard icon={<FireIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_skill_drill_title')} description={t('menu_skill_drill_desc')} onClick={onStartSkillDrill} />
                         </div>
                     </div>
@@ -319,6 +323,9 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
                 </div>
 
             </div>
+
+            <TacticalBoardModal isOpen={showTacticalBoard} onClose={() => setShowTacticalBoard(false)} appMode={appMode} />
+                <AnalysisMemoModal isOpen={showAnalysisMemo} onClose={() => setShowAnalysisMemo(false)} />
 
             <ConfirmationModal
                 isOpen={isJoinModalOpen}

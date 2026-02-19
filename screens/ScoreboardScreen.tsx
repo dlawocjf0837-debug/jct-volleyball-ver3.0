@@ -527,7 +527,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                     </div>
                     
                      <button onClick={() => handleTimeout(teamKey)} disabled={team.timeouts === 0 || matchState.gameOver || !!matchState.timeout} className="w-full flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-3 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"><StopwatchIcon className="w-5 h-5 sm:w-6 sm:h-6" /> {t('timeout')} ({team.timeouts})</button>
-                     {settings.includeBonusPointsInWinner && (
+                     {entryMode !== 'club' && settings.includeBonusPointsInWinner && (
                         <>
                             <div className="flex justify-between items-center bg-slate-800 p-2 sm:p-3 rounded-lg">
                                 <span className="font-bold text-sm sm:text-base lg:text-lg">{t('fair_play')}</span>
@@ -553,8 +553,9 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
 
     const GameSummaryPanel = () => {
         const { teamA, teamB } = matchState;
-        const finalScoreA = settings.includeBonusPointsInWinner ? teamA.score + teamA.fairPlay + teamA.threeHitPlays : teamA.score;
-        const finalScoreB = settings.includeBonusPointsInWinner ? teamB.score + teamB.fairPlay + teamB.threeHitPlays : teamB.score;
+        const isClub = entryMode === 'club';
+        const finalScoreA = isClub ? teamA.score : (settings.includeBonusPointsInWinner ? teamA.score + teamA.fairPlay + teamA.threeHitPlays : teamA.score);
+        const finalScoreB = isClub ? teamB.score : (settings.includeBonusPointsInWinner ? teamB.score + teamB.fairPlay + teamB.threeHitPlays : teamB.score);
         let winnerMessage;
         if (finalScoreA > finalScoreB) {
             winnerMessage = `${t('record_final_winner_prefix')}: ${teamA.name}!`;
@@ -564,27 +565,22 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
             winnerMessage = t('record_final_result_tie');
         }
 
+        const breakdownA = isClub ? `${t('record_score_part_match')} ${teamA.score}` : `${t('record_score_part_match')} ${teamA.score} + ${t('record_score_part_fairplay')} ${teamA.fairPlay} + ${t('record_score_part_3hit')} ${teamA.threeHitPlays}`;
+        const breakdownB = isClub ? `${t('record_score_part_match')} ${teamB.score}` : `${t('record_score_part_match')} ${teamB.score} + ${t('record_score_part_fairplay')} ${teamB.fairPlay} + ${t('record_score_part_3hit')} ${teamB.threeHitPlays}`;
+
         return (
             <div className="bg-[#00A3FF]/10 border border-[#00A3FF] p-4 sm:p-6 rounded-lg space-y-3 sm:space-y-4 animate-fade-in no-print">
                 <div className="text-center">
                     <h3 className="text-xl sm:text-2xl lg:text-3xl font-bold text-[#00A3FF] break-words">{winnerMessage}</h3>
                     <div className="text-sm sm:text-base lg:text-xl mt-1 flex flex-col gap-1">
                          <p>
-                            <span className="font-bold break-words">{t('record_score_breakdown_format', { 
-                                teamName: teamA.name, 
-                                totalScore: finalScoreA, 
-                                breakdown: `${t('record_score_part_match')} ${teamA.score} + ${t('record_score_part_fairplay')} ${teamA.fairPlay} + ${t('record_score_part_3hit')} ${teamA.threeHitPlays}` 
-                            })}</span>
+                            <span className="font-bold break-words">{t('record_score_breakdown_format', { teamName: teamA.name, totalScore: finalScoreA, breakdown: breakdownA })}</span>
                         </p>
                         <p>
-                            <span className="font-bold break-words">{t('record_score_breakdown_format', { 
-                                teamName: teamB.name, 
-                                totalScore: finalScoreB, 
-                                breakdown: `${t('record_score_part_match')} ${teamB.score} + ${t('record_score_part_fairplay')} ${teamB.fairPlay} + ${t('record_score_part_3hit')} ${teamB.threeHitPlays}` 
-                            })}</span>
+                            <span className="font-bold break-words">{t('record_score_breakdown_format', { teamName: teamB.name, totalScore: finalScoreB, breakdown: breakdownB })}</span>
                         </p>
                     </div>
-                    {settings.includeBonusPointsInWinner && (
+                    {!isClub && settings.includeBonusPointsInWinner && (
                         <p className="text-xs sm:text-sm text-slate-400 mt-1">{t('record_score_breakdown_guide')}</p>
                     )}
                 </div>
@@ -673,15 +669,17 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                 {/* 우측 영역 - flex-row로 가로 정렬, 여백 확보 */}
                 <div className="flex-1 flex justify-end items-center">
                     <div className="flex flex-row items-center gap-x-3 sm:gap-x-4 flex-wrap justify-end">
-                    <button
-                        type="button"
-                        onClick={() => setShowTacticalBoard(true)}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-700 hover:bg-amber-600/80 border border-slate-600 hover:border-amber-500/50 text-slate-200 hover:text-white font-semibold text-sm min-h-[44px] transition-colors flex-shrink-0"
-                        title="디지털 전술판"
-                    >
-                        <span>📋</span>
-                        <span className="hidden sm:inline">전술판</span>
-                    </button>
+                    {entryMode === 'club' && (
+                        <button
+                            type="button"
+                            onClick={() => setShowTacticalBoard(true)}
+                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-700 hover:bg-amber-600/80 border border-slate-600 hover:border-amber-500/50 text-slate-200 hover:text-white font-semibold text-sm min-h-[44px] transition-colors flex-shrink-0"
+                            title="디지털 전술판"
+                        >
+                            <span>📋</span>
+                            <span className="hidden sm:inline">전술판</span>
+                        </button>
+                    )}
                     {matchState.status === 'in_progress' && p2p.isHost && p2p.peerId && (() => {
                         const pin = p2p.peerId.replace(/^jive-/, '');
                         const joinUrl = `${window.location.origin}${window.location.pathname || '/'}?liveCode=${encodeURIComponent(pin)}`;
@@ -950,7 +948,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
             )}
 
             {/* Modals */}
-            <TacticalBoardModal isOpen={showTacticalBoard} onClose={() => setShowTacticalBoard(false)} />
+            {entryMode === 'club' && <TacticalBoardModal isOpen={showTacticalBoard} onClose={() => setShowTacticalBoard(false)} appMode="CLUB" />}
             {showRulesModal && <RulesModal onClose={() => setShowRulesModal(false)} />}
             {matchState.timeout && <TimeoutModal timeLeft={matchState.timeout.timeLeft} onClose={handleCloseTimeout} />}
             <PlayerSelectionModal

@@ -17,7 +17,7 @@ const PlayerRecordsScreen: React.FC = () => {
 
     const availableClasses = useMemo(() => {
         const classSet = new Set<string>();
-        teamSets.forEach(set => {
+        (teamSets ?? []).forEach(set => {
             // Strip any non-numeric suffixes if possible, but keep original if needed.
             // Assumption: set.className usually contains "1반", "2반".
             // We want just "1", "2".
@@ -36,8 +36,9 @@ const PlayerRecordsScreen: React.FC = () => {
     const groupedPlayers = useMemo<Map<string, { player: Player; ids: string[] }>>(() => {
         const groups = new Map<string, { player: Player; ids: string[] }>();
         
-        teamSets.forEach(set => {
-            Object.values(set.players).forEach((player: Player) => {
+        (teamSets ?? []).forEach(set => {
+            const players = set?.players ?? {};
+            Object.values(players).forEach((player: Player) => {
                 // Identity key: "Class-Number-Name"
                 const identityKey = `${player.class}-${player.studentNumber}-${player.originalName}`;
                 
@@ -97,7 +98,7 @@ const PlayerRecordsScreen: React.FC = () => {
         const aggregatedBadges = new Set<string>();
 
         ids.forEach(id => {
-            const stats = playerCumulativeStats[id];
+            const stats = playerCumulativeStats?.[id];
             if (stats) {
                 aggregated.matchesPlayed = (aggregated.matchesPlayed || 0) + (stats.matchesPlayed || 0);
                 aggregated.wins = (aggregated.wins || 0) + (stats.wins || 0);
@@ -112,9 +113,9 @@ const PlayerRecordsScreen: React.FC = () => {
                 aggregated.plusMinus = (aggregated.plusMinus || 0) + (stats.plusMinus || 0);
             }
             
-            const achievements = playerAchievements[id];
-            if (achievements && achievements.earnedBadgeIds) {
-                achievements.earnedBadgeIds.forEach(badgeId => aggregatedBadges.add(badgeId));
+            const achievements = playerAchievements?.[id];
+            if (achievements?.earnedBadgeIds) {
+                achievements.earnedBadgeIds.forEach((badgeId: string) => aggregatedBadges.add(badgeId));
             }
         });
 
@@ -134,16 +135,15 @@ const PlayerRecordsScreen: React.FC = () => {
         };
         const performanceHistory: any[] = [];
     
-        const completedMatches = matchHistory
-            .filter(m => m.status === 'completed')
-            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        const completedMatches = (matchHistory ?? [])
+            .filter((m: { status?: string }) => m?.status === 'completed')
+            .sort((a: { date?: string }, b: { date?: string }) => new Date(a?.date ?? 0).getTime() - new Date(b?.date ?? 0).getTime());
     
-        completedMatches.forEach(match => {
-            // Check if ANY of the player's IDs participated in this match
+        completedMatches.forEach((match: any) => {
             let playerTeam: 'teamA' | 'teamB' | null = null;
             let matchedId: string | null = null;
 
-            if (match.teamA.players) {
+            if (match?.teamA?.players) {
                 const foundId = Object.keys(match.teamA.players).find(id => playerIds.has(id));
                 if (foundId) {
                     playerTeam = 'teamA';
@@ -151,7 +151,7 @@ const PlayerRecordsScreen: React.FC = () => {
                 }
             }
             
-            if (!playerTeam && match.teamB.players) {
+            if (!playerTeam && match?.teamB?.players) {
                 const foundId = Object.keys(match.teamB.players).find(id => playerIds.has(id));
                 if (foundId) {
                     playerTeam = 'teamB';
@@ -161,8 +161,8 @@ const PlayerRecordsScreen: React.FC = () => {
     
             if (playerTeam && matchedId) {
                 const teamState = match[playerTeam];
-                const opponentName = (playerTeam === 'teamA' ? match.teamB : match.teamA).name;
-                const playerStatsForMatch = teamState.playerStats?.[matchedId];
+                const opponentName = (playerTeam === 'teamA' ? match?.teamB : match?.teamA)?.name;
+                const playerStatsForMatch = teamState?.playerStats?.[matchedId];
     
                 if (playerStatsForMatch) {
                     cumulativeStats.matchesPlayed += 1;
@@ -226,7 +226,7 @@ const PlayerRecordsScreen: React.FC = () => {
                             className="w-full sm:w-auto bg-slate-700 border border-slate-600 rounded-md p-3 text-white focus:outline-none focus:ring-2 focus:ring-[#00A3FF]"
                         >
                             <option value="">{t('player_records_select_class_prompt')}</option>
-                            {availableClasses.map(c => (
+                            {(availableClasses ?? []).map(c => (
                                 <option key={c} value={c}>{t('class_format', { class: c })}</option>
                             ))}
                         </select>
@@ -236,7 +236,7 @@ const PlayerRecordsScreen: React.FC = () => {
                 <div className="bg-slate-900 p-4 rounded-lg border border-slate-800 min-h-[400px]">
                     {selectedClass ? (
                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 items-start">
-                            {filteredPlayers.map(player => {
+                            {(filteredPlayers ?? []).map(player => {
                                 // Use the aggregation function instead of direct lookup
                                 const { stats, badgeIds } = getAggregatedStats(player);
                                 

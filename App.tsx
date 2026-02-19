@@ -86,6 +86,11 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
         }
     };
 
+    // 클럽 모드에서는 팀 빌더 화면 진입 시 메뉴로 리다이렉트
+    useEffect(() => {
+        if (appMode === 'CLUB' && view === 'teamBuilder') setView('menu');
+    }, [appMode, view]);
+
     // 잠금 모드일 때 body 스크롤 비활성화
     useEffect(() => {
         if (typeof document === 'undefined') return;
@@ -192,7 +197,7 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
         setView('attendance');
     };
 
-    const handleStartMatchFromAttendance = (data: { 
+    const handleStartMatchFromAttendance = async (data: { 
         attendingPlayers: { teamA: Record<string, Player>, teamB: Record<string, Player> },
         onCourtIds: { teamA: Set<string>, teamB: Set<string> },
         teamAInfo: SavedTeamInfo | null,
@@ -204,9 +209,14 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
             teamAInfo: data.teamAInfo,
             teamBInfo: data.teamBInfo,
         };
+        const isLeague = !!leagueInfoForMatch;
+        const t = isLeague ? await getTournamentSettingsForLive() : { tournamentMaxSets: 3, tournamentTargetScore: 21 };
         startMatch(sessionData, undefined, data.attendingPlayers, tournamentInfoForMatch || undefined, data.onCourtIds, leagueInfoForMatch || undefined, {
             isPracticeMatch: isNextMatchPractice,
-            maxSets: appMode === 'CLUB' ? 3 : undefined,
+            maxSets: isLeague ? t.tournamentMaxSets : (isNextMatchPractice ? 1 : (appMode === 'CLUB' ? 3 : undefined)),
+            tournamentTargetScore: isLeague ? t.tournamentTargetScore : undefined,
+            isLeagueMatch: isLeague,
+            leagueStandingsId: leagueInfoForMatch?.leagueId ?? undefined,
         });
         setIsNextMatchPractice(false);
         setScoreboardMode('record');
@@ -264,6 +274,7 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
 
         switch (view) {
             case 'teamBuilder':
+                if (appMode === 'CLUB') return null;
                 if (builderScreen === Screen.Input) {
                     return <PlayerInputScreen onStart={handleStartBuilding} />;
                 } else {
@@ -280,7 +291,7 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
             case 'scoreboard':
                 return <ScoreboardScreen onBackToMenu={navigateToMenu} mode={scoreboardMode} entryMode={entryMode} />;
             case 'history':
-                return <RecordScreen onContinueGame={handleContinueGame} preselectedMatchId={preselectedMatchId} onClearPreselection={() => setPreselectedMatchId(null)} />;
+                return <RecordScreen appMode={appMode} onContinueGame={handleContinueGame} preselectedMatchId={preselectedMatchId} onClearPreselection={() => setPreselectedMatchId(null)} />;
             case 'playerRecords':
                 return <PlayerRecordsScreen />;
             case 'referee':
@@ -352,17 +363,16 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
                             }
                             setView('matchSetup');
                         }}
-                        onStartLeagueLive={async (teamA, teamB) => {
-                            const t = await getTournamentSettingsForLive();
-                            startMatch({ teamA, teamB }, undefined, undefined, undefined, undefined, undefined, {
-                                maxSets: t.tournamentMaxSets,
-                                tournamentTargetScore: t.tournamentTargetScore,
-                                isLeagueMatch: true,
-                                leagueStandingsId: leagueStandingsList?.selectedId ?? undefined,
-                            });
+                        onStartLeagueLive={(teamA, teamB, standingsId) => {
+                            const sid = standingsId ?? leagueStandingsList?.selectedId ?? undefined;
+                            const teamAKey = sid ? `${sid}___${teamA}` : undefined;
+                            const teamBKey = sid ? `${sid}___${teamB}` : undefined;
+                            setTeamsForAttendance({ teamA, teamB, teamAKey, teamBKey });
+                            setLeagueInfoForMatch(sid ? { leagueId: sid, leagueMatchId: `live-${Date.now()}` } : null);
+                            setIsNextMatchPractice(false);
                             setScoreboardMode('record');
                             setEntryMode('club');
-                            setView('scoreboard');
+                            setView('attendance');
                         }}
                         appMode={appMode}
                         onStartCompetition={() => setView('competition')}

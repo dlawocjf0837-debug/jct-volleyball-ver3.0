@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useData } from '../contexts/DataContext';
-import { LeagueStandingsData, LeagueStandingsMatch, getSetsWonFromMatch, SetScore, TeamSet } from '../types';
+import { LeagueStandingsData, LeagueStandingsMatch, getSetsWonFromMatch, SetScore, TeamSet, Player, PlayerStats, TeamMatchState } from '../types';
 
 const POINTS_WIN = 3;
 const POINTS_DRAW = 1;
@@ -54,11 +54,12 @@ function computeStandings(teams: string[], matches: LeagueStandingsMatch[]) {
 
 export interface LeagueStandingsDashboardProps {
     appMode?: 'CLASS' | 'CLUB';
-    onStartLeagueLive?: (teamA: string, teamB: string) => void;
+    /** standingsId: 조별 리그(대회) ID. 출전 선수 선택 화면으로 넘기기 위해 전달 */
+    onStartLeagueLive?: (teamA: string, teamB: string, standingsId?: string) => void;
 }
 
 export const LeagueStandingsDashboard: React.FC<LeagueStandingsDashboardProps> = ({ appMode = 'CLASS', onStartLeagueLive }) => {
-    const { leagueStandingsList, saveLeagueStandingsList, showToast, teamSets } = useData();
+    const { leagueStandingsList, saveLeagueStandingsList, showToast, teamSets, leagueMatchHistory } = useData();
     const isClub = appMode === 'CLUB';
 
     const data = useMemo(() => {
@@ -188,6 +189,58 @@ export const LeagueStandingsDashboard: React.FC<LeagueStandingsDashboardProps> =
     };
 
     const standings = useMemo(() => (data ? computeStandings(data.teams, data.matches) : []), [data?.teams, data?.matches]);
+
+    const clubRankings = useMemo(() => {
+        if (!isClub || !data?.teams?.length || !leagueMatchHistory?.length) return null;
+        const teamSet = new Set(data.teams);
+        const completed = leagueMatchHistory.filter((m: { status?: string; teamA?: { name: string }; teamB?: { name: string } }) =>
+            m?.status === 'completed' && teamSet.has(m?.teamA?.name) && teamSet.has(m?.teamB?.name)
+        );
+        if (completed.length === 0) return null;
+        const playerStats = new Map<string, { player: Player; teamName: string; points: number; serviceAces: number; blockingPoints: number; serviceFaults: number; digs: number; assists: number; spikeSuccesses: number }>();
+        const accumulate = (team: TeamMatchState) => {
+            if (!team?.players || !team?.playerStats) return;
+            Object.keys(team.playerStats).forEach((playerId) => {
+                const player = team.players[playerId];
+                const stats: PlayerStats = team.playerStats[playerId];
+                if (!player || !stats) return;
+                const key = playerId;
+                const existing = playerStats.get(key);
+                if (existing) {
+                    existing.points += stats.points || 0;
+                    existing.serviceAces += stats.serviceAces || 0;
+                    existing.blockingPoints += stats.blockingPoints || 0;
+                    existing.serviceFaults += stats.serviceFaults || 0;
+                    existing.digs += stats.digs || 0;
+                    existing.assists += stats.assists || 0;
+                    existing.spikeSuccesses += stats.spikeSuccesses || 0;
+                } else {
+                    playerStats.set(key, {
+                        player,
+                        teamName: team.name,
+                        points: stats.points || 0,
+                        serviceAces: stats.serviceAces || 0,
+                        blockingPoints: stats.blockingPoints || 0,
+                        serviceFaults: stats.serviceFaults || 0,
+                        digs: stats.digs || 0,
+                        assists: stats.assists || 0,
+                        spikeSuccesses: stats.spikeSuccesses || 0,
+                    });
+                }
+            });
+        };
+        completed.forEach((m: { teamA: TeamMatchState; teamB: TeamMatchState }) => {
+            accumulate(m.teamA);
+            accumulate(m.teamB);
+        });
+        const list = Array.from(playerStats.values());
+        const mvpScore = (e: { points: number; serviceAces: number; blockingPoints: number; serviceFaults: number; digs: number; assists: number }) =>
+            e.points + e.serviceAces * 2 + e.blockingPoints * 1.5 - e.serviceFaults + e.digs * 0.5 + e.assists * 0.5;
+        const mvp = list.length > 0 ? list.reduce((a, b) => mvpScore(a) >= mvpScore(b) ? a : b) : null;
+        const spikeKing = list.length > 0 ? list.reduce((a, b) => a.spikeSuccesses >= b.spikeSuccesses ? a : b) : null;
+        const digKing = list.length > 0 ? list.reduce((a, b) => a.digs >= b.digs ? a : b) : null;
+        return { mvp, spikeKing, digKing };
+    }, [isClub, data?.teams, data?.id, leagueMatchHistory]);
 
     const pairs = useMemo(() => {
         if (!data) return [];
@@ -428,6 +481,35 @@ export const LeagueStandingsDashboard: React.FC<LeagueStandingsDashboardProps> =
                                 </p>
                             )}
                         </div>
+
+                        {isClub && clubRankings && (clubRankings.mvp || clubRankings.spikeKing || clubRankings.digKing) && (
+                            <div className="mt-6 pt-6 border-t border-slate-600">
+                                <h3 className="text-sm font-medium text-slate-400 mb-3">대회 경기 부문별 랭킹</h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    {clubRankings.mvp && (
+                                        <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
+                                            <p className="text-amber-400 font-bold text-sm mb-1">🏆 MVP</p>
+                                            <p className="text-white font-semibold">{clubRankings.mvp.player?.originalName ?? ''}</p>
+                                            <p className="text-slate-400 text-xs">{clubRankings.mvp.teamName}</p>
+                                        </div>
+                                    )}
+                                    {clubRankings.spikeKing && clubRankings.spikeKing.spikeSuccesses > 0 && (
+                                        <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-4">
+                                            <p className="text-orange-400 font-bold text-sm mb-1">💥 스파이크 왕</p>
+                                            <p className="text-white font-semibold">{clubRankings.spikeKing.player?.originalName ?? ''}</p>
+                                            <p className="text-slate-400 text-xs">{clubRankings.spikeKing.teamName} · {clubRankings.spikeKing.spikeSuccesses}개</p>
+                                        </div>
+                                    )}
+                                    {clubRankings.digKing && clubRankings.digKing.digs > 0 && (
+                                        <div className="bg-sky-500/10 border border-sky-500/30 rounded-lg p-4">
+                                            <p className="text-sky-400 font-bold text-sm mb-1">🛡️ 디그 왕</p>
+                                            <p className="text-white font-semibold">{clubRankings.digKing.player?.originalName ?? ''}</p>
+                                            <p className="text-slate-400 text-xs">{clubRankings.digKing.teamName} · {clubRankings.digKing.digs}개</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </>
                 )}
             </div>
@@ -454,7 +536,7 @@ export const LeagueStandingsDashboard: React.FC<LeagueStandingsDashboardProps> =
                             <button
                                 type="button"
                                 onClick={() => {
-                                    onStartLeagueLive?.(inputModeModal.teamA, inputModeModal.teamB);
+                                    onStartLeagueLive?.(inputModeModal.teamA, inputModeModal.teamB, data?.id);
                                     setInputModeModal(null);
                                 }}
                                 className="w-full py-3 px-4 bg-amber-500 hover:bg-amber-600 text-slate-900 rounded-lg font-bold transition-colors"

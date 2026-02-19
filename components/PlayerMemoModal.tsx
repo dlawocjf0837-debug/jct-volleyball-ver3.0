@@ -21,8 +21,9 @@ export const PlayerMemoModal: React.FC<PlayerMemoModalProps> = ({
         if (isOpen) setMemo(initialMemo);
     }, [isOpen, initialMemo]);
 
-    const handleSave = () => {
-        onSave(memo);
+    const handleSave = async () => {
+        const result = onSave(memo);
+        if (result && typeof (result as Promise<unknown>)?.then === 'function') await (result as Promise<unknown>);
         onClose();
     };
 

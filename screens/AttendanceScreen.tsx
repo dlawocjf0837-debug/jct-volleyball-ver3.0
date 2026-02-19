@@ -52,7 +52,7 @@ interface AttendanceScreenProps {
 }
 
 const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', teamSelection, onStartMatch }) => {
-    const { teamSetsMap } = useData();
+    const { teamSetsMap, updatePlayerMemoInTeamSet, showToast } = useData();
     const { t } = useTranslation();
 
     const { teamAInfo, teamAPlayers, teamBInfo, teamBPlayers } = useMemo(() => {
@@ -97,7 +97,7 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
     
     const [onCourt, setOnCourt] = useState<{ teamA: Set<string>, teamB: Set<string> }>({ teamA: new Set(), teamB: new Set() });
     const [memoOverrides, setMemoOverrides] = useState<Record<string, string>>({});
-    const [memoModalPlayer, setMemoModalPlayer] = useState<{ playerId: string; name: string } | null>(null);
+    const [memoModalPlayer, setMemoModalPlayer] = useState<{ playerId: string; name: string; side: 'teamA' | 'teamB' } | null>(null);
 
     useEffect(() => {
         setOnCourt({
@@ -187,14 +187,14 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
                         {teamAInfo && <TeamEmblem emblem={teamAInfo.emblem} color={teamAInfo.color || '#3b82f6'} className="w-16 h-16" />}
                         <h3 className="text-2xl font-bold" style={{ color: teamAInfo?.color || '#3b82f6' }}>{teamAInfo?.teamName || 'Team A'} ({onCourt.teamA.size}{t('attendance_count_suffix')})</h3>
                     </div>
-                    <PlayerList players={sortedTeamAPlayers} onCourtSet={onCourt.teamA} onToggle={(id) => handleToggleOnCourt(id, 'teamA')} onMemoClick={(id, name) => setMemoModalPlayer({ playerId: id, name })} showMemoButton={showPlayerMemo} />
+                    <PlayerList players={sortedTeamAPlayers} onCourtSet={onCourt.teamA} onToggle={(id) => handleToggleOnCourt(id, 'teamA')} onMemoClick={(id, name) => setMemoModalPlayer({ playerId: id, name, side: 'teamA' })} showMemoButton={showPlayerMemo} />
                 </div>
                 <div className="bg-slate-900/50 p-4 rounded-lg border-2 border-slate-700">
                     <div className="flex flex-col items-center text-center gap-2 mb-4">
                         {teamBInfo && <TeamEmblem emblem={teamBInfo.emblem} color={teamBInfo.color || '#ef4444'} className="w-16 h-16" />}
                         <h3 className="text-2xl font-bold" style={{ color: teamBInfo?.color || '#ef4444' }}>{teamBInfo?.teamName || 'Team B'} ({onCourt.teamB.size}{t('attendance_count_suffix')})</h3>
                     </div>
-                    <PlayerList players={sortedTeamBPlayers} onCourtSet={onCourt.teamB} onToggle={(id) => handleToggleOnCourt(id, 'teamB')} onMemoClick={(id, name) => setMemoModalPlayer({ playerId: id, name })} showMemoButton={showPlayerMemo} />
+                    <PlayerList players={sortedTeamBPlayers} onCourtSet={onCourt.teamB} onToggle={(id) => handleToggleOnCourt(id, 'teamB')} onMemoClick={(id, name) => setMemoModalPlayer({ playerId: id, name, side: 'teamB' })} showMemoButton={showPlayerMemo} />
                 </div>
             </div>
             {memoModalPlayer && (
@@ -203,7 +203,16 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
                     onClose={() => setMemoModalPlayer(null)}
                     playerName={memoModalPlayer.name}
                     initialMemo={memoOverrides[memoModalPlayer.playerId] ?? (teamAPlayers[memoModalPlayer.playerId] || teamBPlayers[memoModalPlayer.playerId])?.memo ?? ''}
-                    onSave={text => { setMemoOverrides(prev => ({ ...prev, [memoModalPlayer.playerId]: text })); setMemoModalPlayer(null); }}
+                    onSave={async (text) => {
+                        const key = memoModalPlayer.side === 'teamA' ? teamSelection.teamAKey : teamSelection.teamBKey;
+                        const setId = key?.split('___')[0];
+                        if (setId && updatePlayerMemoInTeamSet) {
+                            await updatePlayerMemoInTeamSet(setId, memoModalPlayer.playerId, text);
+                            showToast?.('메모가 성공적으로 저장되었습니다.', 'success');
+                        }
+                        setMemoOverrides(prev => ({ ...prev, [memoModalPlayer.playerId]: text }));
+                        setMemoModalPlayer(null);
+                    }}
                 />
             )}
             <div className="flex justify-center pt-6">

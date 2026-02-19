@@ -86,8 +86,24 @@ const isValidLeagues = (leagues: any): leagues is League[] => {
 };
 
 const isValidCoachingLogs = (logs: any): logs is PlayerCoachingLogs => {
-    return typeof logs === 'object' && logs !== null && !Array.isArray(logs);
+    if (typeof logs !== 'object' || logs === null || Array.isArray(logs)) return false;
+    return Object.values(logs).every(
+        (val) => Array.isArray(val) && val.every((e: any) => e && typeof e?.date === 'string' && typeof e?.content === 'string')
+    );
 };
+
+/** localStorage에서 읽은 값을 안전한 PlayerCoachingLogs로 정규화 (크래시 방지) */
+function sanitizeCoachingLogs(raw: any): PlayerCoachingLogs {
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {};
+    const out: PlayerCoachingLogs = {};
+    Object.keys(raw).forEach((playerId) => {
+        const arr = raw[playerId];
+        if (!Array.isArray(arr)) return;
+        const safe = arr.filter((e: any) => e && typeof e?.date === 'string' && typeof e?.content === 'string');
+        if (safe.length) out[playerId] = safe;
+    });
+    return out;
+}
 
 function migrateLeagueMatches(matches: any[]): LeagueStandingsMatch[] {
     if (!Array.isArray(matches)) return [];
@@ -1206,7 +1222,8 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
     const saveMatchHistory = async (newHistory: (MatchState & { date: string; time?: number })[], successMessage?: string) => {
         if (isPracticeMatchRef.current) {
             try {
-                const next = [newHistory[0], ...practiceMatchHistoryRef.current];
+                const withType = { ...newHistory[0], matchType: 'practice' as const };
+                const next = [withType, ...practiceMatchHistoryRef.current];
                 await localforage.setItem(storageKeys.PRACTICE_MATCH_HISTORY_KEY, next);
                 setPracticeMatchHistory(next);
                 if (successMessage) showToast(successMessage, 'success');
@@ -1220,22 +1237,29 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
         if (isLeagueMatchRef.current) {
             try {
                 const completed = newHistory[0];
-                const next = [completed, ...leagueMatchHistory];
+                const withType = { ...completed, matchType: 'tournament' as const };
+                const next = [withType, ...leagueMatchHistory];
                 await localforage.setItem(storageKeys.LEAGUE_MATCH_HISTORY_KEY, next);
                 setLeagueMatchHistory(next);
                 const setId = leagueStandingsIdRef.current;
                 if (setId && completed?.setScores?.length) {
+                    // 조별 리그 순위표: matches 갱신 후 saveLeagueStandingsList 호출 → 순위표 UI에서 승점/승패/세트득실 자동 재계산
                     const newMatch: LeagueStandingsMatch = {
                         teamA: completed.teamA.name,
                         teamB: completed.teamB.name,
                         setScores: completed.setScores,
                     };
-                    const list = leagueStandingsList.list.map(d => {
-                        if (d.id !== setId) return d;
-                        const matches = [...d.matches.filter(m => !(m.teamA === newMatch.teamA && m.teamB === newMatch.teamB)), newMatch];
-                        return { ...d, matches };
-                    });
-                    await saveLeagueStandingsList({ list, selectedId: leagueStandingsList.selectedId });
+                    let list = [...(leagueStandingsList?.list ?? [])];
+                    const existing = list.find(d => d.id === setId);
+                    if (existing) {
+                        const matches = [...existing.matches.filter(m => !(m.teamA === newMatch.teamA && m.teamB === newMatch.teamB)), newMatch];
+                        const teams = [...new Set([...(existing.teams ?? []), newMatch.teamA, newMatch.teamB])];
+                        list = list.map(d => d.id !== setId ? d : { ...d, matches, teams } as LeagueStandingsData);
+                    } else {
+                        const allTeams = [...new Set([completed.teamA.name, completed.teamB.name])];
+                        list = [...list, { id: setId, tournamentName: String(setId), teams: allTeams, matches: [newMatch] }];
+                    }
+                    await saveLeagueStandingsList({ list, selectedId: leagueStandingsList?.selectedId ?? null });
                 }
                 if (successMessage) showToast(successMessage, 'success');
             } catch (e) {
@@ -1265,8 +1289,29 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
         }
     };
 
-    // ... (rest of save functions: saveUserEmblems, saveTournaments, etc. remain the same)
-    
+    const savePracticeMatchHistory = useCallback(async (newList: (MatchState & { date: string; time?: number })[], successMessage?: string) => {
+        try {
+            await localforage.setItem(storageKeys.PRACTICE_MATCH_HISTORY_KEY, newList);
+            setPracticeMatchHistory(newList);
+            practiceMatchHistoryRef.current = newList;
+            if (successMessage) showToast(successMessage, 'success');
+        } catch (e) {
+            console.error("Error saving practice match history:", e);
+            showToast("연습 경기 기록 저장 중 오류가 발생했습니다.", 'error');
+        }
+    }, [showToast, storageKeys]);
+
+    const saveLeagueMatchHistory = useCallback(async (newList: (MatchState & { date: string; time?: number })[], successMessage?: string) => {
+        try {
+            await localforage.setItem(storageKeys.LEAGUE_MATCH_HISTORY_KEY, newList);
+            setLeagueMatchHistory(newList);
+            if (successMessage) showToast(successMessage, 'success');
+        } catch (e) {
+            console.error("Error saving league match history:", e);
+            showToast("대회 경기 기록 저장 중 오류가 발생했습니다.", 'error');
+        }
+    }, [showToast, storageKeys]);
+
     const saveUserEmblems = async (newUserEmblems: UserEmblem[]) => {
         try {
             await localforage.setItem(storageKeys.USER_EMBLEMS_KEY, newUserEmblems);
@@ -1599,18 +1644,20 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
 
         const defaultPlayerIds: string[] = [];
         if (options?.createDefaultPlayers) {
-            const count = 12;
+            const count = (settings?.volleyballRuleSystem === 9) ? 9 : 6;
+            const ZERO_STATS = { height: 0, shuttleRun: 0, flexibility: 0, fiftyMeterDash: 0, underhand: 0, serve: 0 };
             for (let i = 1; i <= count; i++) {
                 const id = `temp_${setId}_${finalTeamName}_${i}`.replace(/\s/g, '_');
                 const numStr = String(i);
+                const displayName = `${finalTeamName} ${numStr}번`;
                 const newPlayer: Player = {
                     id,
-                    originalName: `${numStr}번`,
-                    anonymousName: `${numStr}번`,
+                    originalName: displayName,
+                    anonymousName: displayName,
                     class: set.className,
                     studentNumber: numStr,
                     gender: '기타',
-                    stats: { height: 0, shuttleRun: 0, flexibility: 0, fiftyMeterDash: 0, underhand: 0, serve: 0 },
+                    stats: ZERO_STATS,
                     isCaptain: i === 1,
                     totalScore: 0,
                 };
@@ -1675,6 +1722,14 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
         await saveTeamSets(newTeamSets, `'${playerName}' 학생이 주장으로 임명되었습니다.`);
     };
 
+    const updatePlayerMemoInTeamSet = async (setId: string, playerId: string, memo: string) => {
+        const newTeamSets = structuredClone(teamSets);
+        const setIndex = newTeamSets.findIndex((s: TeamSet) => s.id === setId);
+        if (setIndex === -1 || !newTeamSets[setIndex].players[playerId]) return;
+        const p = newTeamSets[setIndex].players[playerId];
+        if (p) (p as Player).memo = memo;
+        await saveTeamSets(newTeamSets);
+    };
 
     const loadAllData = useCallback(async () => {
         setIsLoading(true);
@@ -1762,6 +1817,7 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
             if (isValidTournaments(tournaments)) setTournaments(tournaments);
             if (isValidLeagues(leagues)) setLeagues(leagues);
             if (isValidCoachingLogs(coachingLogs)) setCoachingLogs(coachingLogs);
+            else setCoachingLogs(sanitizeCoachingLogs(coachingLogs));
             if (Array.isArray(parsedOpponentTeams)) setOpponentTeams(parsedOpponentTeams);
             if (Array.isArray(parsedPracticeMatchHistory) && parsedPracticeMatchHistory.every(m => m && typeof m.date === 'string' && isValidMatchState(m))) {
                 setPracticeMatchHistory(parsedPracticeMatchHistory);
@@ -1804,7 +1860,7 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                 localforage.setItem(storageKeys.USER_EMBLEMS_KEY, userEmblems),
                 localforage.setItem(storageKeys.TOURNAMENTS_KEY, tournaments),
                 localforage.setItem(storageKeys.LEAGUES_KEY, leagues),
-                localforage.setItem(storageKeys.COACHING_LOGS_KEY, coachingLogs)
+                localforage.setItem(storageKeys.COACHING_LOGS_KEY, sanitizeCoachingLogs(coachingLogs))
             ]);
             
             await loadAllData();
@@ -2275,6 +2331,10 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                 localforage.removeItem(storageKeys.TOURNAMENTS_KEY),
                 localforage.removeItem(storageKeys.LEAGUES_KEY),
                 localforage.removeItem(storageKeys.COACHING_LOGS_KEY),
+                localforage.removeItem(storageKeys.LEAGUE_STANDINGS_KEY),
+                localforage.removeItem(storageKeys.LEAGUE_STANDINGS_LIST_KEY),
+                localforage.removeItem(storageKeys.PRACTICE_MATCH_HISTORY_KEY),
+                localforage.removeItem(storageKeys.LEAGUE_MATCH_HISTORY_KEY),
                 localforage.removeItem(LANGUAGE_KEY)
             ]);
 
@@ -2285,6 +2345,11 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
             setTournaments([]);
             setLeagues([]);
             setCoachingLogs({});
+            setLeagueStandings(null);
+            setLeagueStandingsList({ list: [], selectedId: null });
+            setPracticeMatchHistory([]);
+            setLeagueMatchHistory([]);
+            practiceMatchHistoryRef.current = [];
             setSettings({ winningScore: 11, includeBonusPointsInWinner: true, googleSheetUrl: '', tournamentTargetScore: 21, tournamentMaxSets: 3, volleyballRuleSystem: 6 });
             await setLanguage('ko');
             showToast('모든 데이터가 초기화되었습니다.', 'success');
@@ -2319,6 +2384,8 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
         updateOpponentTeam,
         deleteOpponentTeam,
         saveMatchHistory,
+        savePracticeMatchHistory,
+        saveLeagueMatchHistory,
         saveUserEmblems,
         saveTournaments,
         saveLeagues,
@@ -2331,6 +2398,7 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
         createTeamSet,
         addTeamToSet,
         setTeamCaptain,
+        updatePlayerMemoInTeamSet,
         reloadData: loadAllData,
         exportData,
         saveImportedData,

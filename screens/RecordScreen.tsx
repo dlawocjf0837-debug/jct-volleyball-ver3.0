@@ -10,6 +10,7 @@ import { generateMatchResultImage } from '../utils/canvasUtils';
 import { useTranslation } from '../hooks/useTranslation';
 
 interface RecordScreenProps {
+    appMode?: 'CLASS' | 'CLUB';
     onContinueGame: (state: MatchState) => void;
     preselectedMatchId?: string | null;
     onClearPreselection?: () => void;
@@ -237,14 +238,16 @@ const ScoreTrendChart: React.FC<{ match: EnrichedMatch, t: (key: string) => stri
     );
 };
 
-const RecordScreen: React.FC<RecordScreenProps> = ({ onContinueGame, preselectedMatchId, onClearPreselection }) => {
-    const { teamSets, matchHistory, matchState, matchTime, saveMatchHistory, clearInProgressMatch, showToast, userEmblems, settings, language } = useData();
+const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContinueGame, preselectedMatchId, onClearPreselection }) => {
+    const { teamSets, matchHistory, practiceMatchHistory, leagueMatchHistory, matchState, matchTime, saveMatchHistory, savePracticeMatchHistory, saveLeagueMatchHistory, clearInProgressMatch, showToast, userEmblems, settings, language, leagueStandingsList, saveLeagueStandingsList } = useData();
     const { t } = useTranslation();
     const [selectedMatch, setSelectedMatch] = useState<EnrichedMatch | null>(null);
     const [selectedClass, setSelectedClass] = useState<string>('');
     const [teamCountFilter, setTeamCountFilter] = useState('all');
     const [pointsData, setPointsData] = useState<Record<string, { teamA: number; teamB: number }>>({});
     const [rankings, setRankings] = useState<{ rank: number | string; teamName: string; totalPoints: number }[]>([]);
+    const [matchHistoryTab, setMatchHistoryTab] = useState<'practice' | 'tournament'>('practice');
+    const [setDetailTab, setSetDetailTab] = useState<0 | 1 | 2 | 'all'>('all');
     const [showRankingsModal, setShowRankingsModal] = useState(false);
     const [showScoreTrend, setShowScoreTrend] = useState(false);
     const [playerHistoryData, setPlayerHistoryData] = useState<{
@@ -419,32 +422,34 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ onContinueGame, preselected
         );
     };
 
-    // ... (useEffect for preselection, allMatches calculation remain similar)
+    // 연습경기 탭: practiceMatchHistory / 대회경기 탭: leagueMatchHistory. 진행 중 경기는 해당 탭에만 표시.
     const allMatches = useMemo((): EnrichedMatch[] => {
-        const generalHistory = matchHistory.filter(
-            m => !m.leagueId && !m.tournamentId
-        );
+        const isPracticeTab = matchHistoryTab === 'practice';
+        const source = isPracticeTab ? practiceMatchHistory : leagueMatchHistory;
+        const prefix = isPracticeTab ? 'practice' : 'league';
 
-        const all = [
-            ...generalHistory.map((m, i) => ({
-                ...m,
-                id: `history-${i}`,
-                status: (m.status || 'completed') as 'completed' | 'in_progress',
-            }))
-        ];
+        const list = source.map((m, i) => ({
+            ...m,
+            id: `${prefix}-${i}`,
+            status: (m.status || 'completed') as 'completed' | 'in_progress',
+        }));
 
+        const isInProgressLeague = matchState?.leagueId != null;
         if (matchState && matchState.status === 'in_progress') {
-            all.push({
-                ...matchState,
-                status: 'in_progress',
-                id: 'in-progress',
-                date: new Date().toISOString(),
-                time: matchTime,
-            });
+            const showInThisTab = isPracticeTab ? !isInProgressLeague : isInProgressLeague;
+            if (showInThisTab) {
+                list.push({
+                    ...matchState,
+                    status: 'in_progress',
+                    id: 'in-progress',
+                    date: new Date().toISOString(),
+                    time: matchTime,
+                } as EnrichedMatch);
+            }
         }
-        
-        return all.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [matchHistory, matchState, matchTime]);
+
+        return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [matchHistoryTab, practiceMatchHistory, leagueMatchHistory, matchState, matchTime]);
 
     useEffect(() => {
         if (preselectedMatchId && onClearPreselection) {
@@ -459,10 +464,10 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ onContinueGame, preselected
 
     useEffect(() => {
         if (selectedMatch) {
-            setShowScoreTrend(false); // Reset when new match is selected
+            setShowScoreTrend(false);
+            setSetDetailTab('all');
         }
     }, [selectedMatch]);
-    
 
     const allTeamData = useMemo((): Record<string, FlattenedTeam> => {
         const teamData: Record<string, FlattenedTeam> = {};
@@ -483,9 +488,9 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ onContinueGame, preselected
 
     const enrichedSelectedMatch = useMemo(() => {
         if (!selectedMatch) return null;
-    
+
         const matchCopy = JSON.parse(JSON.stringify(selectedMatch)) as EnrichedMatch;
-        
+
         const updateTeamBranding = (teamState: TeamMatchState) => {
             const teamInfo = teamState.key ? allTeamData[teamState.key] : null;
             if (teamInfo) {
@@ -496,13 +501,67 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ onContinueGame, preselected
             if (!teamState.color) teamState.color = teamState === matchCopy.teamA ? '#38bdf8' : '#f87171';
             return teamState;
         };
-    
+
         matchCopy.teamA = updateTeamBranding(matchCopy.teamA);
         matchCopy.teamB = updateTeamBranding(matchCopy.teamB);
-        
+
         return matchCopy;
     }, [selectedMatch, allTeamData]);
 
+    /** 전체보기 탭: 모든 세트의 team1/team2 점수 합산 (match.sets.reduce) */
+    const totalScoreFromSets = useMemo(() => {
+        const match = enrichedSelectedMatch;
+        if (!match?.setScores?.length) return null;
+        const total = match.setScores.reduce(
+            (acc, s) => ({ teamA: acc.teamA + (s.teamA ?? 0), teamB: acc.teamB + (s.teamB ?? 0) }),
+            { teamA: 0, teamB: 0 }
+        );
+        return total;
+    }, [enrichedSelectedMatch?.setScores]);
+
+    /** 세트별 구간: scoreHistory 인덱스로 [세트0끝+1, 세트1끝+1, ...] */
+    const setBoundaries = useMemo(() => {
+        const match = enrichedSelectedMatch;
+        if (!match?.scoreHistory?.length || !match?.setScores?.length) return [];
+        const boundaries: number[] = [0];
+        let idx = 0;
+        for (let s = 0; s < match.setScores.length; s++) {
+            const target = match.setScores[s];
+            while (idx < match.scoreHistory.length) {
+                const h = match.scoreHistory[idx];
+                if (h.a === target.teamA && h.b === target.teamB) {
+                    boundaries.push(idx + 1);
+                    idx++;
+                    break;
+                }
+                idx++;
+            }
+        }
+        return boundaries;
+    }, [enrichedSelectedMatch]);
+
+    const currentSetEvents = useMemo(() => {
+        if (!enrichedSelectedMatch?.eventHistory || setDetailTab === 'all') return enrichedSelectedMatch?.eventHistory ?? [];
+        const b = setBoundaries;
+        if (b.length === 0) return enrichedSelectedMatch.eventHistory;
+        const i = setDetailTab as number;
+        const start = b[i] ?? 0;
+        const end = b[i + 1] ?? enrichedSelectedMatch.eventHistory.length;
+        return enrichedSelectedMatch.eventHistory.slice(start, end);
+    }, [enrichedSelectedMatch, setDetailTab, setBoundaries]);
+
+    const displayTimelineEvents = useMemo((): TimelineEvent[] => {
+        if (setDetailTab === 'all') return timelineEvents;
+        const raw = currentSetEvents as Array<{ type?: string; descriptionKey?: string; score?: { a: number; b: number } }>;
+        if (!raw?.length) return [];
+        return raw.map(e => ({
+            type: (e.type as ScoreEventType) || 'LOG',
+            team: null,
+            description: e.descriptionKey ?? '',
+            score: e.score ? `${e.score.a}:${e.score.b}` : '-',
+        })).reverse();
+    }, [setDetailTab, timelineEvents, currentSetEvents]);
+    
 
     const availableClasses = useMemo(() => {
         const classSet = new Set<string>();
@@ -738,9 +797,42 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ onContinueGame, preselected
             }
             return;
         }
+
+        if (matchId.startsWith('practice-')) {
+            const index = parseInt(matchId.replace('practice-', ''), 10);
+            if (window.confirm("정말로 이 연습 경기 기록을 삭제하시겠습니까?")) {
+                const newList = practiceMatchHistory.filter((_, i) => i !== index);
+                await savePracticeMatchHistory(newList, "연습 경기 기록이 삭제되었습니다.");
+                setSelectedMatch(null);
+            }
+            return;
+        }
+        if (matchId.startsWith('league-')) {
+            const index = parseInt(matchId.replace('league-', ''), 10);
+            if (window.confirm("정말로 이 대회 경기 기록을 삭제하시겠습니까?")) {
+                const deletedMatch = leagueMatchHistory[index];
+                const newList = leagueMatchHistory.filter((_, i) => i !== index);
+                await saveLeagueMatchHistory(newList, "대회 경기 기록이 삭제되었습니다.");
+                if (deletedMatch && (deletedMatch as MatchState & { leagueId?: string }).leagueId && saveLeagueStandingsList && leagueStandingsList?.list) {
+                    const leagueId = (deletedMatch as MatchState & { leagueId?: string }).leagueId;
+                    const teamA = deletedMatch.teamA?.name ?? '';
+                    const teamB = deletedMatch.teamB?.name ?? '';
+                    const list = leagueStandingsList.list.map((d) => {
+                        if (d.id !== leagueId) return d;
+                        const remainingMatches = (d.matches ?? []).filter(
+                            (m) => !((m.teamA === teamA && m.teamB === teamB) || (m.teamA === teamB && m.teamB === teamA))
+                        );
+                        return { ...d, matches: remainingMatches };
+                    });
+                    await saveLeagueStandingsList({ list, selectedId: leagueStandingsList.selectedId });
+                }
+                setSelectedMatch(null);
+            }
+            return;
+        }
         
         if (window.confirm("정말로 이 기록을 삭제하시겠습니까?")) {
-            const originalIndex = parseInt(matchId.replace('history-', ''));
+            const originalIndex = parseInt(matchId.replace('history-', ''), 10);
             const newHistory = [...matchHistory];
             newHistory.splice(originalIndex, 1);
             await saveMatchHistory(newHistory, "기록이 삭제되었습니다.");
@@ -905,8 +997,11 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ onContinueGame, preselected
     const GameSummaryPanel = () => {
         if (!enrichedSelectedMatch) return null;
         const { teamA, teamB } = enrichedSelectedMatch;
-        const finalScoreA = settings.includeBonusPointsInWinner ? teamA.score + teamA.fairPlay + teamA.threeHitPlays : teamA.score;
-        const finalScoreB = settings.includeBonusPointsInWinner ? teamB.score + teamB.fairPlay + teamB.threeHitPlays : teamB.score;
+        const isClub = appMode === 'CLUB';
+        const scoreA = (setDetailTab === 'all' && totalScoreFromSets) ? totalScoreFromSets.teamA : teamA.score;
+        const scoreB = (setDetailTab === 'all' && totalScoreFromSets) ? totalScoreFromSets.teamB : teamB.score;
+        const finalScoreA = isClub ? scoreA : (settings.includeBonusPointsInWinner ? teamA.score + teamA.fairPlay + teamA.threeHitPlays : teamA.score);
+        const finalScoreB = isClub ? scoreB : (settings.includeBonusPointsInWinner ? teamB.score + teamB.fairPlay + teamB.threeHitPlays : teamB.score);
         
         let winnerMessage;
         if (finalScoreA > finalScoreB) {
@@ -917,27 +1012,22 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ onContinueGame, preselected
             winnerMessage = t('record_final_result_tie');
         }
 
+        const breakdownA = isClub ? `${t('record_score_part_match')} ${scoreA}` : `${t('record_score_part_match')} ${teamA.score} + ${t('record_score_part_fairplay')} ${teamA.fairPlay} + ${t('record_score_part_3hit')} ${teamA.threeHitPlays}`;
+        const breakdownB = isClub ? `${t('record_score_part_match')} ${scoreB}` : `${t('record_score_part_match')} ${teamB.score} + ${t('record_score_part_fairplay')} ${teamB.fairPlay} + ${t('record_score_part_3hit')} ${teamB.threeHitPlays}`;
+
         return (
             <div className="bg-[#00A3FF]/10 border border-[#00A3FF] p-6 rounded-lg space-y-4 no-print">
                 <div className="text-center">
                     <h3 className="text-3xl font-bold text-[#00A3FF]">{winnerMessage}</h3>
                     <div className="text-xl mt-1 flex flex-col gap-1">
                         <p>
-                            <span className="font-bold">{t('record_score_breakdown_format', { 
-                                teamName: teamA.name, 
-                                totalScore: finalScoreA, 
-                                breakdown: `${t('record_score_part_match')} ${teamA.score} + ${t('record_score_part_fairplay')} ${teamA.fairPlay} + ${t('record_score_part_3hit')} ${teamA.threeHitPlays}` 
-                            })}</span>
+                            <span className="font-bold">{t('record_score_breakdown_format', { teamName: teamA.name, totalScore: finalScoreA, breakdown: breakdownA })}</span>
                         </p>
                         <p>
-                            <span className="font-bold">{t('record_score_breakdown_format', { 
-                                teamName: teamB.name, 
-                                totalScore: finalScoreB, 
-                                breakdown: `${t('record_score_part_match')} ${teamB.score} + ${t('record_score_part_fairplay')} ${teamB.fairPlay} + ${t('record_score_part_3hit')} ${teamB.threeHitPlays}` 
-                            })}</span>
+                            <span className="font-bold">{t('record_score_breakdown_format', { teamName: teamB.name, totalScore: finalScoreB, breakdown: breakdownB })}</span>
                         </p>
                     </div>
-                    {settings.includeBonusPointsInWinner && (
+                    {!isClub && settings.includeBonusPointsInWinner && (
                         <p className="text-sm text-slate-400 mt-1">{t('record_score_breakdown_guide')}</p>
                     )}
                 </div>
@@ -958,6 +1048,23 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ onContinueGame, preselected
                 />
             )}
             <div className="max-w-7xl mx-auto bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-6 rounded-lg shadow-2xl space-y-6 animate-fade-in w-full">
+                {/* 연습경기 / 대회경기 탭 */}
+                <div className="flex gap-2 border-b border-slate-600 pb-3 no-print">
+                    <button
+                        type="button"
+                        onClick={() => { setMatchHistoryTab('practice'); setSelectedMatch(null); }}
+                        className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${matchHistoryTab === 'practice' ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
+                    >
+                        🏐 연습경기
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => { setMatchHistoryTab('tournament'); setSelectedMatch(null); }}
+                        className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${matchHistoryTab === 'tournament' ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
+                    >
+                        🏆 대회경기
+                    </button>
+                </div>
                 {/* ... Header and filter controls ... */}
                 <div className="flex flex-col lg:flex-row items-center lg:justify-between mb-6 gap-4 no-print">
                     <h1 className="text-3xl lg:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 text-center lg:text-right">
@@ -1096,15 +1203,98 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ onContinueGame, preselected
                                     )}
                                  </div>
                             </div>
-                            
+
+                            {enrichedSelectedMatch.status === 'completed' && enrichedSelectedMatch.setScores && enrichedSelectedMatch.setScores.length > 0 && (
+                                <div className="bg-slate-800/70 border border-slate-600 rounded-xl p-4 no-print">
+                                    <h3 className="text-lg font-bold text-slate-200 mb-2 text-center">{t('record_final_result_banner')}</h3>
+                                    <div className="flex flex-wrap items-center justify-center gap-3">
+                                        <span className="text-2xl font-bold" style={{ color: enrichedSelectedMatch.teamA.color }}>{enrichedSelectedMatch.teamA.name}</span>
+                                        <span className="text-slate-400">vs</span>
+                                        <span className="text-2xl font-bold" style={{ color: enrichedSelectedMatch.teamB.color }}>{enrichedSelectedMatch.teamB.name}</span>
+                                    </div>
+                                    <div className="mt-2 text-center">
+                                        {setDetailTab === 'all' && totalScoreFromSets && (
+                                            <p className="text-xl font-mono font-bold text-[#00A3FF] mb-1">
+                                                총점 {totalScoreFromSets.teamA} : {totalScoreFromSets.teamB}
+                                            </p>
+                                        )}
+                                        <p className="text-xl font-mono text-slate-200">
+                                            {enrichedSelectedMatch.setScores.map((s, i) => (
+                                                <span key={i}>
+                                                    {i > 0 && ' · '}
+                                                    <span>{s.teamA}-{s.teamB}</span>
+                                                </span>
+                                            ))}
+                                        </p>
+                                        <p className="text-slate-400 text-sm mt-1">
+                                            {(setDetailTab === 'all' && totalScoreFromSets
+                                                ? totalScoreFromSets.teamA > totalScoreFromSets.teamB
+                                                : enrichedSelectedMatch.teamA.score > enrichedSelectedMatch.teamB.score)
+                                                ? `${t('record_final_winner_prefix')}: ${enrichedSelectedMatch.teamA.name}`
+                                                : (setDetailTab === 'all' && totalScoreFromSets
+                                                    ? totalScoreFromSets.teamB > totalScoreFromSets.teamA
+                                                    : enrichedSelectedMatch.teamB.score > enrichedSelectedMatch.teamA.score)
+                                                    ? `${t('record_final_winner_prefix')}: ${enrichedSelectedMatch.teamB.name}`
+                                                    : t('record_final_result_tie')}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {enrichedSelectedMatch.status === 'completed' && enrichedSelectedMatch.setScores && enrichedSelectedMatch.setScores.length > 0 && (
+                                <div className="flex flex-wrap gap-2 no-print">
+                                    {enrichedSelectedMatch.setScores.map((_, idx) => (
+                                        <button
+                                            key={idx}
+                                            type="button"
+                                            onClick={() => setSetDetailTab(idx as 0 | 1 | 2)}
+                                            className={`px-4 py-2 rounded-lg font-medium transition ${
+                                                setDetailTab === idx ? 'bg-[#00A3FF] text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                                            }`}
+                                        >
+                                            {idx + 1}{t('record_set_suffix')}
+                                        </button>
+                                    ))}
+                                    <button
+                                        type="button"
+                                        onClick={() => setSetDetailTab('all')}
+                                        className={`px-4 py-2 rounded-lg font-medium transition ${
+                                            setDetailTab === 'all' ? 'bg-[#00A3FF] text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                                        }`}
+                                    >
+                                        {t('record_overview_tab') || '전체보기'}
+                                    </button>
+                                </div>
+                            )}
+
                             {enrichedSelectedMatch.status === 'completed' && <GameSummaryPanel />}
+
+                            {enrichedSelectedMatch.status === 'completed' && setDetailTab === 'all' && enrichedSelectedMatch.setScores?.length && (
+                                <div className="bg-slate-800/50 border border-slate-600 rounded-lg p-4 no-print">
+                                    <h3 className="text-lg font-bold text-slate-200 mb-2">{t('record_overview_tab')} · 세트별 점수</h3>
+                                    <p className="text-slate-300 font-mono">
+                                        {enrichedSelectedMatch.setScores.map((s, i) => (
+                                            <span key={i}>{i + 1}{t('record_set_suffix')} {s.teamA}:{s.teamB}{i < enrichedSelectedMatch.setScores!.length - 1 ? ' · ' : ''}</span>
+                                        ))}
+                                    </p>
+                                    <p className="text-slate-400 text-sm mt-2">아래 팀 기록 비교 및 선수별 상세 기록에서 전체 누적 스탯을 확인할 수 있습니다.</p>
+                                </div>
+                            )}
 
                             {enrichedSelectedMatch.status === 'completed' && (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                                     <MvpCard mvp={mvp} />
                                     <div className="flex flex-col gap-6">
                                         <MatchLeadersCard leaders={matchLeaders} />
-                                        <Timeline events={timelineEvents} />
+                                        {setDetailTab !== 'all' && enrichedSelectedMatch.setScores?.[setDetailTab as number] && (
+                                            <div className="bg-slate-800/50 border border-slate-600 rounded-lg p-3 text-center">
+                                                <p className="text-slate-400 text-sm">{(setDetailTab as number) + 1}{t('record_set_suffix')} 스코어</p>
+                                                <p className="text-xl font-mono font-bold text-slate-200">
+                                                    {enrichedSelectedMatch.teamA.name} {enrichedSelectedMatch.setScores[setDetailTab as number].teamA} : {enrichedSelectedMatch.setScores[setDetailTab as number].teamB} {enrichedSelectedMatch.teamB.name}
+                                                </p>
+                                            </div>
+                                        )}
+                                        <Timeline events={displayTimelineEvents} />
                                     </div>
                                 </div>
                             )}
@@ -1115,13 +1305,17 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ onContinueGame, preselected
                                     <table className="w-full text-center">
                                         <thead><tr className="border-b-2 border-slate-600 text-slate-300 print-text-black"><th className="p-2 text-left">{t('record_stats_table_header')}</th><th className="p-2" style={{color: enrichedSelectedMatch.teamA.color}}>{enrichedSelectedMatch.teamA.name}</th><th className="p-2" style={{color: enrichedSelectedMatch.teamB.color}}>{enrichedSelectedMatch.teamB.name}</th></tr></thead>
                                         <tbody className="font-mono text-slate-200 print-text-black">
-                                            <tr className="border-b border-slate-700"><td className="p-2 text-left font-sans text-slate-400 print-text-black">{t('record_final_score_label')}</td><td className="p-2 text-2xl font-bold">{enrichedSelectedMatch.teamA.score}</td><td className="p-2 text-2xl font-bold">{enrichedSelectedMatch.teamB.score}</td></tr>
+                                            <tr className="border-b border-slate-700"><td className="p-2 text-left font-sans text-slate-400 print-text-black">{t('record_final_score_label')}</td><td className="p-2 text-2xl font-bold">{setDetailTab === 'all' && totalScoreFromSets ? totalScoreFromSets.teamA : enrichedSelectedMatch.teamA.score}</td><td className="p-2 text-2xl font-bold">{setDetailTab === 'all' && totalScoreFromSets ? totalScoreFromSets.teamB : enrichedSelectedMatch.teamB.score}</td></tr>
                                             <tr className="border-b border-slate-700"><td className="p-2 text-left font-sans text-slate-400 print-text-black">{t('record_serve_ace_label')}</td><td>{enrichedSelectedMatch.teamA.serviceAces}</td><td>{enrichedSelectedMatch.teamB.serviceAces}</td></tr>
                                             <tr className="border-b border-slate-700"><td className="p-2 text-left font-sans text-slate-400 print-text-black">{t('record_serve_fault_label')}</td><td>{enrichedSelectedMatch.teamA.serviceFaults}</td><td>{enrichedSelectedMatch.teamB.serviceFaults}</td></tr>
                                             <tr className="border-b border-slate-700"><td className="p-2 text-left font-sans text-slate-400 print-text-black">{t('record_blocking_label')}</td><td>{enrichedSelectedMatch.teamA.blockingPoints}</td><td>{enrichedSelectedMatch.teamB.blockingPoints}</td></tr>
                                             <tr className="border-b border-slate-700"><td className="p-2 text-left font-sans text-slate-400 print-text-black">{t('record_spike_label')}</td><td>{enrichedSelectedMatch.teamA.spikeSuccesses}</td><td>{enrichedSelectedMatch.teamB.spikeSuccesses}</td></tr>
-                                            <tr className="border-b border-slate-700"><td className="p-2 text-left font-sans text-slate-400 print-text-black">{t('record_3hit_label')}</td><td>{enrichedSelectedMatch.teamA.threeHitPlays}</td><td>{enrichedSelectedMatch.teamB.threeHitPlays}</td></tr>
-                                            <tr className="border-b border-slate-700"><td className="p-2 text-left font-sans text-slate-400 print-text-black">{t('record_fairplay_label')}</td><td>{enrichedSelectedMatch.teamA.fairPlay}</td><td>{enrichedSelectedMatch.teamB.fairPlay}</td></tr>
+                                            {appMode !== 'CLUB' && (
+                                                <>
+                                                    <tr className="border-b border-slate-700"><td className="p-2 text-left font-sans text-slate-400 print-text-black">{t('record_3hit_label')}</td><td>{enrichedSelectedMatch.teamA.threeHitPlays}</td><td>{enrichedSelectedMatch.teamB.threeHitPlays}</td></tr>
+                                                    <tr className="border-b border-slate-700"><td className="p-2 text-left font-sans text-slate-400 print-text-black">{t('record_fairplay_label')}</td><td>{enrichedSelectedMatch.teamA.fairPlay}</td><td>{enrichedSelectedMatch.teamB.fairPlay}</td></tr>
+                                                </>
+                                            )}
                                         </tbody>
                                     </table>
                                 </div>

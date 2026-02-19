@@ -37,11 +37,12 @@ const statOrder: (keyof PlayerStats | 'serveSuccessRate' | 'serveAceRate')[] = [
 ];
 
 export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, cumulativeStats, performanceHistory, onClose, teamSets }) => {
-    const { coachingLogs, saveCoachingLog, requestPassword, playerAchievements } = useData();
+    const { coachingLogs, saveCoachingLog, requestPassword, playerAchievements, updatePlayerMemoInTeamSet, showToast } = useData();
     const { t } = useTranslation();
     const [newLog, setNewLog] = useState('');
     const [isLogUnlocked, setIsLogUnlocked] = useState(false);
-    const [activeTab, setActiveTab] = useState<'analysis' | 'coaching'>('analysis');
+    const [activeTab, setActiveTab] = useState<'analysis' | 'coaching' | 'memo'>('analysis');
+    const [strategyMemo, setStrategyMemo] = useState((player as { memo?: string })?.memo ?? '');
     
     // Default chart stat to 'points' as it's the first item now
     const [chartStat, setChartStat] = useState<keyof PlayerStats | 'serveSuccessRate' | 'serveAceRate'>('points');
@@ -63,18 +64,17 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
     };
 
     const handleTeamClick = (matchData: MatchState, teamNameToShow: string) => {
-        const teamState = matchData.teamA.name === teamNameToShow ? matchData.teamA : matchData.teamB;
+        const teamState = matchData?.teamA?.name === teamNameToShow ? matchData.teamA : matchData?.teamB;
+        if (!teamState) return;
         const playerList = Object.values(teamState.players || {});
-        
         const teamKey = teamState.key;
         let captainId: string | undefined = undefined;
-        if(teamKey) {
+        if (teamKey) {
             const [setId] = teamKey.split('___');
-            const set = teamSets.find(s => s.id === setId);
-            const teamInfo = set?.teams.find(t => t.teamName === teamNameToShow);
+            const set = (teamSets || []).find(s => s?.id === setId);
+            const teamInfo = set?.teams?.find((t: { teamName?: string }) => t?.teamName === teamNameToShow);
             captainId = teamInfo?.captainId;
         }
-        
         setRosterToShow({ teamName: teamNameToShow, players: playerList, captainId });
     };
 
@@ -84,17 +84,17 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
                 <h3 className="text-xl font-bold text-sky-400 mb-4 text-center">{t('player_history_roster_title', { teamName })}</h3>
                 <div className="flex-grow overflow-y-auto pr-2 -mr-2">
                     <ul className="space-y-2">
-                        {players.sort((a,b) => {
-                            const isACaptain = a.id === captainId;
-                            const isBCaptain = b.id === captainId;
+                        {(players ?? []).slice().sort((a, b) => {
+                            const isACaptain = a?.id === captainId;
+                            const isBCaptain = b?.id === captainId;
                             if (isACaptain !== isBCaptain) return isACaptain ? -1 : 1;
-                            return parseInt(a.studentNumber) - parseInt(b.studentNumber);
-                        }).map(p => (
-                            <li key={p.id} className="bg-slate-700/50 p-3 rounded-md flex items-center gap-3">
-                                {p.id === captainId && <CrownIcon className="w-5 h-5 text-yellow-400 flex-shrink-0" />}
+                            return parseInt(String(a?.studentNumber ?? 0), 10) - parseInt(String(b?.studentNumber ?? 0), 10);
+                        }).map((p, index) => (
+                            <li key={p?.id ?? index} className="bg-slate-700/50 p-3 rounded-md flex items-center gap-3">
+                                {p?.id === captainId && <CrownIcon className="w-5 h-5 text-yellow-400 flex-shrink-0" />}
                                 <div className="flex-grow">
-                                    <p className="font-semibold text-slate-200">{p.originalName}</p>
-                                    <p className="text-xs text-slate-400">{t('player_history_subtitle', { class: p.class, number: p.studentNumber })}</p>
+                                    <p className="font-semibold text-slate-200">{p?.originalName ?? ''}</p>
+                                    <p className="text-xs text-slate-400">{t('player_history_subtitle', { class: p?.class ?? '', number: p?.studentNumber ?? '' })}</p>
                                 </div>
                             </li>
                         ))}
@@ -108,9 +108,19 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
     );
 
     const handleSaveLog = async () => {
-        if (newLog.trim()) {
+        if (newLog.trim() && player?.id) {
             await saveCoachingLog(player.id, newLog.trim());
             setNewLog('');
+        }
+    };
+
+    const setContainingPlayer = useMemo(() => teamSets?.find((s) => s.players && player?.id && s.players[player.id]), [teamSets, player?.id]);
+    const currentPlayerMemo = setContainingPlayer?.players?.[player?.id ?? ''] ? (setContainingPlayer.players[player!.id] as { memo?: string })?.memo : (player as { memo?: string })?.memo;
+    const handleSaveStrategyMemo = async () => {
+        if (!player?.id || !updatePlayerMemoInTeamSet) return;
+        if (setContainingPlayer) {
+            await updatePlayerMemoInTeamSet(setContainingPlayer.id, player.id, strategyMemo);
+            showToast?.('메모가 성공적으로 저장되었습니다.', 'success');
         }
     };
 
@@ -126,16 +136,19 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
     };
     
     const winRateStats = useMemo(() => {
+        const base = performanceHistory ?? [];
         const filteredHistory = winRateFilter === 'all' 
-            ? performanceHistory 
-            : performanceHistory.filter(p => p.teamSet && String(p.teamSet.teamCount ?? 4) === winRateFilter);
+            ? base 
+            : base.filter(p => p?.teamSet && String(p.teamSet?.teamCount ?? 4) === winRateFilter);
 
-        const matchesPlayed = filteredHistory.length;
+        const matchesPlayed = filteredHistory?.length ?? 0;
         if (matchesPlayed === 0) return { winRate: 0, wins: 0, total: 0 };
         
-        const wins = filteredHistory.filter(p => {
-            const playerTeamKey = p.teamName === p.match.teamA.name ? 'A' : 'B';
-            return p.match.winner === playerTeamKey;
+        const wins = (filteredHistory ?? []).filter(p => {
+            const m = p?.match;
+            if (!m) return false;
+            const playerTeamKey = p.teamName === m.teamA?.name ? 'A' : 'B';
+            return m.winner === playerTeamKey;
         }).length;
         
         const winRate = (wins / matchesPlayed) * 100;
@@ -144,40 +157,43 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
 
 
     const logs = useMemo(() => {
-        if (!coachingLogs[player.id]) return [];
-        return [...coachingLogs[player.id]].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [coachingLogs, player.id]);
+        const byPlayer = coachingLogs?.[player?.id];
+        if (!byPlayer || !Array.isArray(byPlayer)) return [];
+        return [...byPlayer].sort((a, b) => new Date((b?.date) || 0).getTime() - new Date((a?.date) || 0).getTime());
+    }, [coachingLogs, player?.id]);
 
     const chartData = useMemo(() => {
         // We want the chart to go from G1 -> G_Latest (left to right)
         // performanceHistory is sorted Latest -> Oldest in RecordScreen calculation, 
         // so we reverse it to be Oldest -> Latest for the chart (index 0 = first game).
-        return [...performanceHistory].reverse().map(({ stats, match, teamName, opponent }, index) => {
+        const history = performanceHistory ?? [];
+        return [...history].reverse().map(({ stats, match, teamName, opponent }, index) => {
+            const s = stats ?? {};
             let value = 0;
-            const totalServes = (stats.serviceAces || 0) + (stats.serveIn || 0) + (stats.serviceFaults || 0);
+            const totalServes = (s.serviceAces || 0) + (s.serveIn || 0) + (s.serviceFaults || 0);
 
             if (chartStat === 'serveSuccessRate') {
-                value = totalServes > 0 ? ((stats.serviceAces || 0) + (stats.serveIn || 0)) / totalServes * 100 : 0;
+                value = totalServes > 0 ? ((s.serviceAces || 0) + (s.serveIn || 0)) / totalServes * 100 : 0;
                 value = parseFloat(value.toFixed(1));
             } else if (chartStat === 'serveAceRate') {
-                value = totalServes > 0 ? ((stats.serviceAces || 0) / totalServes * 100) : 0;
+                value = totalServes > 0 ? ((s.serviceAces || 0) / totalServes * 100) : 0;
                 value = parseFloat(value.toFixed(1));
             } else {
-                value = stats[chartStat as keyof PlayerStats] || 0;
+                value = s[chartStat as keyof PlayerStats] || 0;
             }
 
-            const result = match.winner ? (match.winner === (match.teamA.name === teamName ? 'A' : 'B') ? '승' : '패') : '무';
+            const m = match ?? {};
+            const result = m.winner ? (m.winner === (m.teamA?.name === teamName ? 'A' : 'B') ? '승' : '패') : '무';
 
             return {
-                name: `G${index + 1}`, // G1, G2, ...
+                name: `G${index + 1}`,
                 label: `G${index + 1}`,
-                [statDisplayNames[chartStat]]: value,
-                // Metadata for Tooltip
-                date: new Date(match.date).toLocaleDateString(),
-                team: teamName,
-                opponent: opponent,
-                result: result,
-                score: `${match.teamA.score}:${match.teamB.score}`
+                [statDisplayNames?.[chartStat] ?? 'value']: value,
+                date: m.date ? new Date(m.date).toLocaleDateString() : '',
+                team: teamName ?? '',
+                opponent: opponent ?? '',
+                result,
+                score: `${m.teamA?.score ?? 0}:${m.teamB?.score ?? 0}`
             };
         });
     }, [performanceHistory, chartStat, statDisplayNames]);
@@ -194,15 +210,14 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
 
     // Get badges earned by this player
     const earnedBadges = useMemo(() => {
-        const playerBadges = playerAchievements[player.id];
+        const playerBadges = playerAchievements?.[player?.id];
         if (!playerBadges || !playerBadges.earnedBadgeIds) {
             return [];
         }
-        
-        return BADGE_DEFINITIONS.filter(badge => 
-            playerBadges.earnedBadgeIds.has(badge.id)
-        );
-    }, [playerAchievements, player.id]);
+        const ids = playerBadges.earnedBadgeIds;
+        const hasId = typeof ids?.has === 'function' ? (id: string) => ids.has(id) : (id: string) => (ids as unknown as string[])?.includes(id);
+        return (BADGE_DEFINITIONS || []).filter(badge => badge && hasId(badge.id));
+    }, [playerAchievements, player?.id]);
 
     // Custom Tooltip Component
     const CustomTooltip = ({ active, payload, label }: any) => {
@@ -227,9 +242,11 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
     };
 
 
+    if (!player) return null;
+
     return (
         <>
-            {rosterToShow && <RosterModal teamName={rosterToShow.teamName} players={rosterToShow.players} captainId={rosterToShow.captainId} onClose={() => setRosterToShow(null)} />}
+            {rosterToShow && <RosterModal teamName={rosterToShow.teamName} players={rosterToShow.players ?? []} captainId={rosterToShow.captainId} onClose={() => setRosterToShow(null)} />}
             {selectedBadgeDetail && (
                 <BadgeDetailModal
                     badge={selectedBadgeDetail.badge}
@@ -248,8 +265,8 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
                 >
                     <div className="flex-shrink-0 flex justify-between items-start mb-4">
                         <div>
-                            <h2 className="text-3xl font-bold text-[#00A3FF]">{t('player_history_title', { name: player.originalName })}</h2>
-                            <p className="text-slate-400">{t('player_history_subtitle', { class: player.class, number: player.studentNumber })}</p>
+                            <h2 className="text-3xl font-bold text-[#00A3FF]">{t('player_history_title', { name: player?.originalName ?? '' })}</h2>
+                            <p className="text-slate-400">{t('player_history_subtitle', { class: player?.class ?? '', number: player?.studentNumber ?? '' })}</p>
                         </div>
                         <button onClick={onClose} className="text-3xl font-bold text-slate-500 hover:text-white">&times;</button>
                     </div>
@@ -268,6 +285,12 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
                             >
                                 <LockClosedIcon className="w-4 h-4" />
                                 {t('player_history_tab_coaching')}
+                            </button>
+                            <button 
+                                onClick={() => { setActiveTab('memo'); setStrategyMemo(currentPlayerMemo ?? ''); }}
+                                className={`px-4 py-2 font-semibold ${activeTab === 'memo' ? 'border-b-2 border-sky-400 text-sky-400' : 'text-slate-400 hover:text-white'}`}
+                            >
+                                전략 메모
                             </button>
                         </div>
                     </div>
@@ -301,7 +324,7 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
                                             onChange={e => setChartStat(e.target.value as keyof PlayerStats | 'serveSuccessRate' | 'serveAceRate')} 
                                             className="bg-slate-700 text-xs p-1 rounded text-white"
                                         >
-                                            {statOrder.map(key => <option key={key} value={key}>{statDisplayNames[key]}</option>)}
+                                            {(statOrder ?? []).map(key => <option key={key} value={key}>{statDisplayNames?.[key] ?? key}</option>)}
                                         </select>
                                     </div>
                                     <div className="h-64">
@@ -313,7 +336,7 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
                                                     <YAxis allowDecimals={false} stroke="#94a3b8" />
                                                     <Tooltip content={<CustomTooltip />} />
                                                     <Legend />
-                                                    <Line type="monotone" dataKey={statDisplayNames[chartStat]} stroke="#0ea5e9" strokeWidth={2} />
+                                                    <Line type="monotone" dataKey={statDisplayNames?.[chartStat] ?? 'value'} stroke="#0ea5e9" strokeWidth={2} />
                                                 </LineChart>
                                             ) : (
                                                 <BarChart data={chartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
@@ -322,7 +345,7 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
                                                     <YAxis allowDecimals={false} stroke="#94a3b8" />
                                                     <Tooltip content={<CustomTooltip />} />
                                                     <Legend />
-                                                    <Bar dataKey={statDisplayNames[chartStat]} fill="#0ea5e9" barSize={60} />
+                                                    <Bar dataKey={statDisplayNames?.[chartStat] ?? 'value'} fill="#0ea5e9" barSize={60} />
                                                 </BarChart>
                                             )}
                                         </ResponsiveContainer>
@@ -350,38 +373,40 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
                                             <thead className="text-slate-400">
                                                 <tr className="border-b-2 border-slate-700">
                                                     <th className="p-2 text-left">{t('player_history_header_date')}</th><th className="p-2 text-left">{t('player_history_header_team')}</th><th className="p-2 text-left">{t('player_history_header_opponent')}</th>
-                                                    {statOrder.map(key => (
-                                                        <th key={key} className="p-2">{statDisplayNames[key]}</th>
+                                                    {(statOrder ?? []).map(key => (
+                                                        <th key={key} className="p-2">{statDisplayNames?.[key] ?? key}</th>
                                                     ))}
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                            {performanceHistory.map(({ match, teamName, opponent, stats }, index) => {
-                                                 const totalServes = (stats.serviceAces || 0) + (stats.serveIn || 0) + (stats.serviceFaults || 0);
+                                            {(performanceHistory ?? []).map((entry, index) => {
+                                                const { match, teamName, opponent, stats } = entry ?? {};
+                                                const s = stats ?? {};
+                                                const totalServes = (s.serviceAces || 0) + (s.serveIn || 0) + (s.serviceFaults || 0);
                                                 return (
                                                 <tr key={index} className="border-b border-slate-700 last:border-0 text-slate-300">
                                                     <td className="p-2 text-left">
-                                                        <div className="text-xs">{new Date(match.date).toLocaleDateString()}</div>
-                                                        <div className="text-[10px] text-slate-500 font-mono">(G{performanceHistory.length - index})</div>
+                                                        <div className="text-xs">{match?.date ? new Date(match.date).toLocaleDateString() : ''}</div>
+                                                        <div className="text-[10px] text-slate-500 font-mono">(G{(performanceHistory?.length ?? 0) - index})</div>
                                                     </td>
                                                     <td className="p-2 text-left font-semibold">
-                                                        <button onClick={() => handleTeamClick(match, teamName)} className="text-left hover:text-sky-400 transition-colors">
-                                                            {teamName}
+                                                        <button onClick={() => match && handleTeamClick(match, teamName ?? '')} className="text-left hover:text-sky-400 transition-colors">
+                                                            {teamName ?? ''}
                                                         </button>
                                                     </td>
                                                     <td className="p-2 text-left">
-                                                        <button onClick={() => handleTeamClick(match, opponent)} className="text-left hover:text-sky-400 transition-colors">
-                                                            {opponent}
+                                                        <button onClick={() => match && handleTeamClick(match, opponent ?? '')} className="text-left hover:text-sky-400 transition-colors">
+                                                            {opponent ?? ''}
                                                         </button>
                                                     </td>
-                                                    {statOrder.map(key => {
+                                                    {(statOrder ?? []).map(key => {
                                                         let displayValue: string | number = 0;
                                                         if (key === 'serveSuccessRate') {
-                                                            displayValue = totalServes > 0 ? (((stats.serviceAces||0) + (stats.serveIn||0)) / totalServes * 100).toFixed(1) + '%' : '-';
+                                                            displayValue = totalServes > 0 ? (((s.serviceAces||0) + (s.serveIn||0)) / totalServes * 100).toFixed(1) + '%' : '-';
                                                         } else if (key === 'serveAceRate') {
-                                                            displayValue = totalServes > 0 ? ((stats.serviceAces||0) / totalServes * 100).toFixed(1) + '%' : '-';
+                                                            displayValue = totalServes > 0 ? ((s.serviceAces||0) / totalServes * 100).toFixed(1) + '%' : '-';
                                                         } else {
-                                                            displayValue = stats[key as keyof PlayerStats] || 0;
+                                                            displayValue = s[key as keyof PlayerStats] || 0;
                                                         }
                                                         return <td key={key} className="p-2 font-mono">{displayValue}</td>
                                                     })}
@@ -395,9 +420,9 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
                                 {/* Earned Badges Section */}
                                 <div className="bg-slate-800/50 p-4 rounded-lg">
                                     <h3 className="text-lg font-bold text-slate-300 mb-4">{t('player_history_earned_badges')}</h3>
-                                    {earnedBadges.length > 0 ? (
+                                    {(earnedBadges ?? []).length > 0 ? (
                                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                                            {earnedBadges.map(badge => {
+                                            {(earnedBadges ?? []).map(badge => {
                                                 const isCompetitive = badge.isCompetitive;
                                                 return (
                                                     <button
@@ -444,10 +469,10 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
                                         </div>
                                     </div>
                                     <div className="space-y-3">
-                                        {logs.length > 0 ? logs.map((log: CoachingLog, index: number) => (
+                                        {(logs ?? []).length > 0 ? (logs ?? []).map((log: CoachingLog, index: number) => (
                                             <div key={index} className="bg-slate-800 p-3 rounded-lg">
-                                                <p className="text-xs text-slate-500 mb-1">{new Date(log.date).toLocaleString()}</p>
-                                                <p className="text-slate-300 whitespace-pre-wrap">{log.content}</p>
+                                                <p className="text-xs text-slate-500 mb-1">{log?.date ? new Date(log.date).toLocaleString() : ''}</p>
+                                                <p className="text-slate-300 whitespace-pre-wrap">{log?.content ?? ''}</p>
                                             </div>
                                         )) : (
                                             <p className="text-center text-slate-500 py-4">{t('player_history_coaching_log_none')}</p>
@@ -461,6 +486,25 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
                                     <p className="mt-2">{t('player_history_coaching_log_unlock_prompt')}</p>
                                 </div>
                             )
+                        )}
+                        {activeTab === 'memo' && (
+                            <div className="animate-fade-in space-y-4">
+                                <p className="text-slate-400 text-sm">해당 선수의 전력 분석 메모를 보고 수정할 수 있습니다. 저장 시 전역 데이터에 반영됩니다.</p>
+                                <div className="bg-slate-800 p-4 rounded-lg">
+                                    <textarea
+                                        value={strategyMemo}
+                                        onChange={(e) => setStrategyMemo(e.target.value)}
+                                        placeholder="예: 공격 에이스, 서브 리시브 약함"
+                                        className="w-full h-32 bg-slate-900 border border-slate-700 rounded-md p-3 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 resize-none"
+                                    />
+                                    <div className="flex justify-end mt-3 gap-2">
+                                        <button onClick={handleSaveStrategyMemo} className="bg-sky-600 hover:bg-sky-500 font-semibold py-2 px-4 rounded-lg text-white">
+                                            저장
+                                        </button>
+                                    </div>
+                                </div>
+                                {!setContainingPlayer && <p className="text-slate-500 text-sm">이 선수는 현재 팀 세트에 등록되어 있지 않아 메모를 저장할 수 없습니다.</p>}
+                            </div>
                         )}
                     </div>
                 </div>
