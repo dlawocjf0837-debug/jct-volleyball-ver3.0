@@ -35,7 +35,18 @@ export interface Player {
     customLabel2?: string; // 서브 대체 라벨
     /** 전력 분석/특이사항 메모 (클럽 모드 상대 선수 등) */
     memo?: string;
+    /** 수업 모드: 경기 역할 수행 이력 (아나운서, 주심, 선심 등) */
+    roleHistory?: Array<{ role: string; date: string; matchInfo: string }>;
 }
+
+/** 수업 모드: 경기 역할 배정 데이터 (MatchSetup → Scoreboard 전달) - 모든 역할 최대 4명 배열 */
+export type MatchRoles = {
+    announcers: Player[];
+    referees: Player[];
+    lineJudges: Player[];
+    cameraDirectors: Player[];
+    recorders: Player[];
+};
 
 export enum Screen {
     Input = 'INPUT',
@@ -163,6 +174,8 @@ export interface TeamMatchState {
     playerStats: Record<string, PlayerStats>;
     onCourtPlayerIds: string[];
     benchPlayerIds: string[];
+    /** 0~5: onCourtPlayerIds 내 서버 위치 (배구 로테이션) */
+    currentServerIndex?: number;
 }
 
 export type ScoreEventType = 'ACE' | 'FAULT' | 'BLOCK' | 'SPIKE' | 'SCORE' | 'TIMEOUT' | 'GAME_END' | 'SUB' | 'FAIRPLAY' | '3HIT' | 'SERVE_IN' | 'DIG' | 'ASSIST' | 'UNKNOWN';
@@ -207,10 +220,18 @@ export interface MatchState {
     undoStack?: MatchState[]; // For Undo functionality
     /** 세트 종료 후 [다음 세트 진행] 대기 중일 때 true (코트 체인지 후 다음 세트 시작용) */
     setEnded?: boolean;
+    /** 세트 종료 시점의 서브 팀 (다음 세트 첫 서브 = 상대 팀) */
+    lastServingTeamAtSetEnd?: 'A' | 'B';
     /** 방금 끝난 세트 스코어 (setEnded일 때만 사용) */
     completedSetScore?: { a: number; b: number };
     /** 대회 모드일 때 1~n-1세트 목표 점수 (21 또는 25). 결승 세트는 항상 15점 */
     tournamentTargetScore?: number;
+    /** 수업 모드 수행평가 기록 여부 */
+    isAssessment?: boolean;
+    /** 수행평가 종료 시 선정된 허슬 플레이어(노력상) ID 목록 */
+    hustlePlayerIds?: string[];
+    /** 상세 보기용: 허슬 플레이어 id, name, team 배열 */
+    hustlePlayers?: { id: string; name: string; team: 'A' | 'B' }[];
 }
 
 export type Action =
@@ -260,9 +281,11 @@ export type PlayerCumulativeStats = {
     points: number;
     badgeCount: number;
     plusMinus: number;
-    serveIn: number; // New
-    digs: number; // New
-    assists: number; // New
+    serveIn: number;
+    digs: number;
+    assists: number;
+    /** 허슬 뱃지(노력상) 획득 횟수 */
+    hustleBadges?: number;
 };
 
 export interface ToastState {
@@ -413,6 +436,8 @@ export interface P2PState {
     viewerLabel?: { displayName: string; color: string };
     /** 클라이언트 전용: 채팅창 표시 여부 (false면 LiveChatOverlay 미렌더) */
     chatWindowVisible?: boolean;
+    /** 클라이언트 전용: 호스트가 차단한 시청자 ID 목록 (해당 시청자 채팅 입력 불가) */
+    blockedViewerIds?: string[];
 }
 
 export type P2PMessage = {
@@ -466,6 +491,12 @@ export type P2PMessage = {
 } | {
     type: 'chat_visibility_sync';
     payload: boolean;
+} | {
+    type: 'chat_blocked_sync';
+    payload: string[];
+} | {
+    type: 'chat_delete_message';
+    payload: number;
 };
 
 export type Language = 'ko' | 'id';
@@ -494,6 +525,7 @@ export interface DataContextType {
     toast: ToastState;
     saveTeamSets: (newTeamSets: TeamSet[], successMessage?: string) => Promise<void>;
     saveMatchHistory: (newHistory: (MatchState & { date: string, time?: number })[], successMessage?: string) => Promise<void>;
+    saveRoleHistoryAfterMatch: (matchInfo: string, date: string) => Promise<void>;
     savePracticeMatchHistory: (newList: (MatchState & { date: string; time?: number })[], successMessage?: string) => Promise<void>;
     saveLeagueMatchHistory: (newList: (MatchState & { date: string; time?: number })[], successMessage?: string) => Promise<void>;
     saveUserEmblems: (newUserEmblems: UserEmblem[]) => Promise<void>;
@@ -507,6 +539,7 @@ export interface DataContextType {
     bulkAddPlayersToTeam: (teamKey: string, playerNames: string[], overwrite: boolean) => Promise<void>;
     createTeamSet: (name: string) => Promise<void>;
     addTeamToSet: (setId: string, teamName: string, options?: { createDefaultPlayers?: boolean }) => Promise<void>;
+    copyTeamFromOtherSet: (targetSetId: string, sourceTeamKey: string) => Promise<void>;
     setTeamCaptain: (teamKey: string, playerId: string) => Promise<void>;
     updatePlayerMemoInTeamSet: (setId: string, playerId: string, memo: string) => Promise<void>;
     reloadData: () => void;
@@ -529,7 +562,7 @@ export interface DataContextType {
         tournamentInfo?: { tournamentId: string; tournamentMatchId: string },
         onCourtIds?: { teamA: Set<string>; teamB: Set<string> },
         leagueInfo?: { leagueId: string, leagueMatchId: string },
-        options?: { isPracticeMatch?: boolean; maxSets?: number; tournamentTargetScore?: number; isLeagueMatch?: boolean; leagueStandingsId?: string | null }
+        options?: { isPracticeMatch?: boolean; maxSets?: number; tournamentTargetScore?: number; isLeagueMatch?: boolean; leagueStandingsId?: string | null; onCourtOrder?: { teamA: string[]; teamB: string[] }; matchRoles?: MatchRoles }
     ) => void;
     recoveryData: any | null;
     handleRestoreFromBackup: () => void;
@@ -555,7 +588,10 @@ export interface DataContextType {
     setChatWindowVisible?: (value: boolean) => void;
     receivedChatMessages: { id: number; text: string; sender: string; senderId?: string; senderColor?: string; isSystem?: boolean }[];
     sendChat?: (text: string) => void;
+    removeChatMessage?: (messageId: number) => void;
     banViewer?: (peerId: string) => void;
+    blockedViewerIds?: Set<string>;
+    toggleBlockViewer?: (senderId: string) => void;
     receivedTickerMessage: string | null;
     clearTicker: () => void;
     receivedReactions: { id: number; emoji: string }[];

@@ -35,6 +35,8 @@ interface MenuScreenProps {
     onStartCompetition: () => void;
     onShowHistory: (matchId?: string) => void;
     onShowPlayerRecords: () => void;
+    onShowRoleRecord?: () => void;
+    onShowAssessmentRanking?: () => void;
     onShowAchievements: () => void;
     onStartSkillDrill: () => void;
     onStartTeamAnalysis: () => void;
@@ -79,6 +81,8 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
     onStartCompetition,
     onShowHistory,
     onShowPlayerRecords,
+    onShowRoleRecord,
+    onShowAssessmentRanking,
     onShowAchievements,
     onStartSkillDrill,
     onStartTeamAnalysis,
@@ -296,7 +300,9 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
                             <MenuCard icon={<BookmarkSquareIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_match_records_title')} description={t('menu_match_records_desc')} onClick={() => onShowHistory()} />
                             <MenuCard icon={<ChartBarIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_team_analysis_title')} description={t('menu_team_analysis_desc')} onClick={onStartTeamAnalysis} />
                             <MenuCard icon={<IdentificationIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_player_records_title')} description={t('menu_player_records_desc')} onClick={onShowPlayerRecords} />
+                            {!isClub && onShowAssessmentRanking && <MenuCard icon={<span className="text-xl">🏆</span>} title="클래스 랭킹 보드" description="경기 스탯 및 참여도 기반 학생 랭킹 확인" onClick={onShowAssessmentRanking} />}
                             {!isClub && <MenuCard icon={<TrophyIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_achievements_title')} description={t('menu_achievements_desc')} onClick={onShowAchievements} />}
+                            {!isClub && onShowRoleRecord && <MenuCard icon={<span className="text-xl">📊</span>} title="학생 역할 수행 기록" description="비출전 학생의 경기 역할 수행 이력 확인" onClick={onShowRoleRecord} />}
                         </div>
                     </div>
                      <div className="w-full">

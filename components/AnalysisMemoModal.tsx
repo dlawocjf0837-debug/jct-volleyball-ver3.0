@@ -39,8 +39,11 @@ export const AnalysisMemoModal: React.FC<Props> = ({ isOpen, onClose }) => {
     const [storage, setStorage] = useState<Record<string, string>>({});
 
     const leagueItems = leagueStandingsList?.list ?? [];
-    /** CLUB 모드: '클럽 팀'을 맨 앞에 두어 teamSets 기반 팀 목록을 필터 없이 항상 표시 */
-    const cats = useMemo(() => ['클럽 팀', ...leagueItems.map((d) => d.tournamentName), ...(opponentTeams.length ? ['상대팀'] : [])], [leagueItems, opponentTeams]);
+    /** CLUB 모드: teamSets의 실제 대회명(className)을 Set으로 중복 제거 후 드롭다운에 매핑 */
+    const cats = useMemo(() => {
+        const tournamentNames = [...new Set((teamSets ?? []).map((s) => s.className))].sort();
+        return [...tournamentNames, ...leagueItems.map((d) => d.tournamentName).filter((n) => !tournamentNames.includes(n)), ...(opponentTeams.length ? ['상대팀'] : [])];
+    }, [teamSets, leagueItems, opponentTeams]);
 
     type TeamPlayer = { id: string; number: string; name: string; memo?: string };
     type TeamItem = { teamName: string; label: string; isOpp?: SavedOpponentTeam; setId?: string; players?: TeamPlayer[] };
@@ -51,17 +54,16 @@ export const AnalysisMemoModal: React.FC<Props> = ({ isOpen, onClose }) => {
             opponentTeams.forEach((opp) => out.push({ teamName: opp.name, label: opp.name, isOpp: opp }));
             return out;
         }
-        if (cat === '클럽 팀') {
-            (teamSets ?? []).forEach((set) => {
-                (set.teams ?? []).forEach((team: { teamName: string; playerIds?: string[] }) => {
-                    const players: TeamPlayer[] | undefined = team.playerIds?.length
-                        ? team.playerIds.map((pid: string) => {
-                            const p = set.players?.[pid];
-                            return { id: pid, number: (p as { studentNumber?: string })?.studentNumber ?? '', name: (p as { originalName?: string })?.originalName ?? '', memo: (p as { memo?: string })?.memo ?? '' };
-                        })
-                        : undefined;
-                    out.push({ teamName: team.teamName, label: team.teamName, setId: set.id, players });
-                });
+        const targetSet = (teamSets ?? []).find((s) => s.className === cat);
+        if (targetSet) {
+            (targetSet.teams ?? []).forEach((team: { teamName: string; playerIds?: string[] }) => {
+                const players: TeamPlayer[] | undefined = team.playerIds?.length
+                    ? team.playerIds.map((pid: string) => {
+                        const p = targetSet.players?.[pid];
+                        return { id: pid, number: (p as { studentNumber?: string })?.studentNumber ?? '', name: (p as { originalName?: string })?.originalName ?? '', memo: (p as { memo?: string })?.memo ?? '' };
+                    })
+                    : undefined;
+                out.push({ teamName: team.teamName, label: team.teamName, setId: targetSet.id, players });
             });
             return out;
         }
@@ -98,6 +100,14 @@ export const AnalysisMemoModal: React.FC<Props> = ({ isOpen, onClose }) => {
         });
     }, [teams]);
     const selectedTeam = uniqueTeams.find((t) => t.teamName === selectedTeamName) ?? teams.find((t) => t.teamName === selectedTeamName);
+
+    useEffect(() => {
+        if (isOpen) {
+            const prev = document.body.style.overflow;
+            document.body.style.overflow = 'hidden';
+            return () => { document.body.style.overflow = prev; };
+        }
+    }, [isOpen]);
 
     useEffect(() => {
         if (!isOpen) return;

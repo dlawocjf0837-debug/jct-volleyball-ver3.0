@@ -5,6 +5,7 @@ import StatModal from '../components/StatModal';
 import { CrownIcon, QuestionMarkCircleIcon, VolleyballIcon } from '../components/icons';
 import CommentaryGuideModal from '../components/CommentaryGuideModal';
 import { LiveChatOverlay } from '../components/LiveChatOverlay';
+import { EffectPopup } from '../components/EffectPopup';
 import GameLog from '../components/GameLog';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import TeamEmblem from '../components/TeamEmblem';
@@ -543,23 +544,6 @@ const FloatingEmoji: React.FC<{ id: number; emoji: string; onEnd: () => void }> 
         >
             {emoji}
         </span>
-    );
-};
-
-const EFFECT_DURATION_MS = 2000;
-
-const EffectPopup: React.FC<{ id: number; effectType: 'SPIKE' | 'BLOCK'; onEnd: () => void }> = ({ effectType, onEnd }) => {
-    useEffect(() => {
-        const t = setTimeout(onEnd, EFFECT_DURATION_MS);
-        return () => clearTimeout(t);
-    }, [onEnd]);
-    const text = effectType === 'SPIKE' ? '🔥 SUPER SPIKE 🔥' : '🧱 MONSTER BLOCK 🧱';
-    return (
-        <div className="fixed inset-0 flex items-center justify-center z-40 pointer-events-none">
-            <span className="animate-effect-popup text-4xl sm:text-5xl md:text-6xl font-black text-white text-center drop-shadow-[0_0_20px_rgba(255,255,255,0.9)]">
-                {text}
-            </span>
-        </div>
     );
 };
 

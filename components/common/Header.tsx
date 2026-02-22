@@ -32,9 +32,12 @@ const Header: React.FC<HeaderProps> = ({ title, showBackButton, onBack, showLang
              {showBackButton && (
                 <button 
                     onClick={onBack}
-                    className="absolute left-0 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg transition duration-200 z-10"
+                    className="absolute left-0 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-700/90 hover:bg-slate-600 border border-slate-600/80 text-white font-semibold text-sm sm:text-base transition-all duration-200 z-10 shadow-lg hover:shadow-sky-500/10 hover:border-sky-500/30"
                     aria-label={t('back_to_main')}
                 >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 shrink-0">
+                        <path fillRule="evenodd" d="M17 10a.75.75 0 0 1-.75.75H5.612l4.158 3.96a.75.75 0 1 1-1.04 1.08l-5.5-5.25a.75.75 0 0 1 0-1.08l5.5-5.25a.75.75 0 1 1 1.04 1.08L5.612 9.25H16.25A.75.75 0 0 1 17 10Z" clipRule="evenodd" />
+                    </svg>
                     {t('back_to_main')}
                 </button>
             )}

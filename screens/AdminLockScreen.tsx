@@ -1,14 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { isAdminPasswordCorrect } from '../utils/adminPassword';
+import { loadBackupFromFile } from '../utils/loadBackupOnLockScreen';
 
 interface AdminLockScreenProps {
     onUnlock: (mode: 'CLASS' | 'CLUB') => void;
+    onRequestStudentJoin?: () => void;
 }
 
-const AdminLockScreen: React.FC<AdminLockScreenProps> = ({ onUnlock }) => {
+const AdminLockScreen: React.FC<AdminLockScreenProps> = ({ onUnlock, onRequestStudentJoin }) => {
     const [pin, setPin] = useState('');
     const [error, setError] = useState('');
     const [appMode, setAppMode] = useState<'CLASS' | 'CLUB'>('CLASS');
+    const [loadToast, setLoadToast] = useState<string | null>(null);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -22,8 +27,36 @@ const AdminLockScreen: React.FC<AdminLockScreenProps> = ({ onUnlock }) => {
         }
     };
 
+    const handleLoadDataClick = () => {
+        setLoadToast(null);
+        setLoadError(null);
+        fileInputRef.current?.click();
+    };
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file) return;
+        setLoadError(null);
+        const result = await loadBackupFromFile(file);
+        if (result.ok) {
+            setLoadToast('🔔 데이터를 성공적으로 불러왔습니다. 비밀번호를 입력해 주세요.');
+            setTimeout(() => setLoadToast(null), 4000);
+        } else {
+            setLoadError(result.error ?? '파일 로드 실패');
+        }
+    };
+
     return (
         <div className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800 flex flex-col items-center justify-center p-6">
+            <input
+                ref={fileInputRef}
+                type="file"
+                accept=".json,application/json"
+                onChange={handleFileChange}
+                className="hidden"
+                aria-hidden="true"
+            />
             <div className="w-full max-w-sm">
                 <div className="bg-slate-800/80 rounded-2xl border border-slate-600 shadow-2xl p-8 text-center">
                     <h1 className="text-2xl font-bold text-[#00A3FF] mb-2 tracking-tight">
@@ -33,14 +66,14 @@ const AdminLockScreen: React.FC<AdminLockScreenProps> = ({ onUnlock }) => {
                         인가된 관리자만 접근할 수 있습니다.
                     </p>
 
-                    {/* 모드 선택: 상단 작은 토글 (기본 수업 모드) */}
+                    {/* 모드 선택 */}
                     <div className="flex items-center justify-center gap-2 mb-5 py-2 px-3 rounded-lg bg-slate-900/60 border border-slate-600/80">
                         <span className={`text-[11px] sm:text-xs font-medium whitespace-nowrap ${appMode === 'CLASS' ? 'text-sky-400' : 'text-slate-500'}`}>수업 모드</span>
                         <button
                             type="button"
                             role="switch"
                             aria-checked={appMode === 'CLUB'}
-                            onClick={() => setAppMode(m => m === 'CLASS' ? 'CLUB' : 'CLASS')}
+                            onClick={() => setAppMode((m) => (m === 'CLASS' ? 'CLUB' : 'CLASS'))}
                             className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:ring-offset-2 focus:ring-offset-slate-800 ${appMode === 'CLUB' ? 'bg-amber-500/80' : 'bg-slate-600'}`}
                         >
                             <span className={`pointer-events-none absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${appMode === 'CLUB' ? 'translate-x-4' : 'translate-x-0'}`} />
@@ -63,6 +96,16 @@ const AdminLockScreen: React.FC<AdminLockScreenProps> = ({ onUnlock }) => {
                                 {error}
                             </p>
                         )}
+                        {loadToast && (
+                            <p className="text-emerald-400 text-sm" role="status">
+                                {loadToast}
+                            </p>
+                        )}
+                        {loadError && (
+                            <p className="text-red-400 text-sm" role="alert">
+                                {loadError}
+                            </p>
+                        )}
                         <button
                             type="submit"
                             className="w-full py-3 rounded-xl bg-[#00A3FF] hover:bg-[#0090e0] text-white font-bold text-lg transition-colors"
@@ -70,12 +113,37 @@ const AdminLockScreen: React.FC<AdminLockScreenProps> = ({ onUnlock }) => {
                             접속하기
                         </button>
                     </form>
+
+                    {onRequestStudentJoin && (
+                        <button
+                            type="button"
+                            onClick={onRequestStudentJoin}
+                            className="mt-5 w-full py-3 rounded-xl border-2 border-emerald-500/60 text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-400 font-semibold text-base transition-colors"
+                        >
+                            👥 실시간 세션 참여 (학생용)
+                        </button>
+                    )}
                 </div>
 
-                <p className="mt-8 text-slate-500 text-xs text-center leading-relaxed">
-                    * 본 시스템은 학생 개인정보 보호 가이드라인을 준수하며,<br />
-                    인가된 관리자(교사)만 접근 가능합니다.
-                </p>
+                <div className="mt-6 flex flex-col items-center gap-4">
+                    <button
+                        type="button"
+                        onClick={handleLoadDataClick}
+                        className="text-slate-500 hover:text-slate-300 text-sm transition-colors flex items-center gap-1.5"
+                    >
+                        <span>📂</span>
+                        <span>데이터 불러오기</span>
+                    </button>
+
+                    <p className="text-slate-500 text-xs text-center leading-relaxed max-w-[280px]">
+                        * 본 시스템은 학생 개인정보 보호 가이드라인을 준수하며,
+                        <br />
+                        인가된 관리자(교사)만 접근 가능합니다.
+                    </p>
+                    <p className="text-slate-600 text-[11px] mt-1">
+                        초기 비밀번호는 0000입니다.
+                    </p>
+                </div>
             </div>
         </div>
     );

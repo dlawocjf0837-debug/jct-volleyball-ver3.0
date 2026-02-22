@@ -4,7 +4,7 @@ import { SavedTeamInfo, Player, TeamSet } from '../types';
 import EmblemModal from '../components/EmblemModal';
 import TeamEmblem from '../components/TeamEmblem';
 import { TeamProfileCardModal } from '../components/TeamProfileCardModal';
-import { IdentificationIcon, PencilIcon, TrashIcon, UsersIcon } from '../components/icons';
+import { CheckIcon, IdentificationIcon, PencilIcon, TrashIcon, UsersIcon } from '../components/icons';
 import ConfirmationModal from '../components/common/ConfirmationModal';
 import RosterManagementModal from '../components/RosterManagementModal';
 import PlayerSelectionModal from '../components/PlayerSelectionModal';
@@ -62,7 +62,7 @@ interface TeamManagementScreenProps {
 }
 
 const TeamManagementScreen: React.FC<TeamManagementScreenProps> = ({ appMode = 'CLASS' }) => {
-    const { teamSets, saveTeamSets, deleteTeam, createTeamSet, addTeamToSet, teamSetsMap, removePlayerFromTeam, addPlayerToTeam, setTeamCaptain } = useData();
+    const { teamSets, saveTeamSets, deleteTeam, createTeamSet, addTeamToSet, copyTeamFromOtherSet, teamSetsMap, removePlayerFromTeam, addPlayerToTeam, setTeamCaptain } = useData();
     const isClub = appMode === 'CLUB';
     const { t } = useTranslation();
     const [configs, setConfigs] = useState<Record<string, Config>>({});
@@ -86,6 +86,9 @@ const TeamManagementScreen: React.FC<TeamManagementScreenProps> = ({ appMode = '
     const [selectedClassFilter, setSelectedClassFilter] = useState<string>('all');
     const [selectedFormatFilter, setSelectedFormatFilter] = useState<string>('all');
 
+    // 이름 편집 모드: true면 탭 클릭 시 이름 수정(Prompt), false면 탭 이동
+    const [isEditingName, setIsEditingName] = useState(false);
+
     // Trade mode states
     const [isTradeMode, setIsTradeMode] = useState(false);
     const [tradeSource, setTradeSource] = useState<{ player: Player; teamKey: string } | null>(null);
@@ -93,6 +96,20 @@ const TeamManagementScreen: React.FC<TeamManagementScreenProps> = ({ appMode = '
     // Player selection modal states
     const [isPlayerSelectionModalOpen, setIsPlayerSelectionModalOpen] = useState(false);
     const [selectingForTeamKey, setSelectingForTeamKey] = useState<string | null>(null);
+    const [isLoadTeamModalOpen, setIsLoadTeamModalOpen] = useState(false);
+    const [loadTeamTargetSetId, setLoadTeamTargetSetId] = useState<string | null>(null);
+
+    /** 탭 이름 변경: 전역 teamSets 업데이트 (useData → saveTeamSets 사용) */
+    const handleRenameTab = (currentName: string) => {
+        const newName = prompt('새 이름을 입력하세요.', currentName);
+        if (!newName || newName.trim() === '' || newName.trim() === currentName) return;
+
+        const trimmed = newName.trim();
+        const next = teamSets.map(set =>
+            set.className === currentName ? { ...set, className: trimmed } : set
+        );
+        saveTeamSets(next, isClub ? '대회(조) 이름이 변경되었습니다.' : '반 이름이 변경되었습니다.');
+    };
 
 
     React.useEffect(() => {
@@ -506,25 +523,65 @@ const TeamManagementScreen: React.FC<TeamManagementScreenProps> = ({ appMode = '
                 />
             </ConfirmationModal>
 
+            {isLoadTeamModalOpen && loadTeamTargetSetId && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => { setIsLoadTeamModalOpen(false); setLoadTeamTargetSetId(null); }}>
+                    <div className="bg-slate-800 border border-slate-600 rounded-xl shadow-2xl w-full max-w-md max-h-[70vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+                        <div className="p-4 border-b border-slate-600 font-bold text-slate-200">기존 팀 불러오기</div>
+                        <div className="p-4 overflow-auto max-h-[50vh] space-y-2">
+                            {(() => {
+                                const targetSet = teamSets.find(s => s.id === loadTeamTargetSetId);
+                                const targetClassName = targetSet?.className ?? '';
+                                const otherSetsTeams = teamSets
+                                    .filter(s => s.className !== targetClassName)
+                                    .flatMap(s => s.teams.map(t => ({ set: s, team: t, key: `${s.id}___${t.teamName}` })));
+                                if (otherSetsTeams.length === 0) {
+                                    return <p className="text-slate-400 text-sm">다른 대회(조)에 등록된 팀이 없습니다.</p>;
+                                }
+                                return otherSetsTeams.map(({ set, team, key }) => (
+                                    <button
+                                        key={key}
+                                        type="button"
+                                        onClick={async () => {
+                                            await copyTeamFromOtherSet(loadTeamTargetSetId!, key);
+                                            setIsLoadTeamModalOpen(false);
+                                            setLoadTeamTargetSetId(null);
+                                        }}
+                                        className="w-full text-left p-3 rounded-lg bg-slate-700 hover:bg-slate-600 text-white font-medium"
+                                    >
+                                        <span className="font-semibold">{team.teamName}</span>
+                                        <span className="text-slate-400 text-sm ml-2">({set.className}, {team.playerIds?.length ?? 0}명)</span>
+                                    </button>
+                                ));
+                            })()}
+                        </div>
+                        <div className="p-4 border-t border-slate-600">
+                            <button type="button" onClick={() => { setIsLoadTeamModalOpen(false); setLoadTeamTargetSetId(null); }} className="w-full py-2 bg-slate-600 hover:bg-slate-500 rounded-lg text-white text-sm">닫기</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="max-w-4xl mx-auto bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-4 sm:p-6 rounded-lg shadow-2xl space-y-6 animate-fade-in px-4">
                 <div className="flex flex-col lg:flex-row items-stretch lg:items-center lg:justify-between gap-4">
                     <button onClick={() => setIsNewSetModalOpen(true)} className="bg-sky-600 hover:bg-sky-500 text-white font-bold py-3 px-6 rounded-lg text-base min-h-[44px] w-full lg:w-auto">
                         {isClub ? '➕ 새 대회(조) 추가' : t('team_management_new_set_button')}
                     </button>
                     <div className="flex gap-2">
-                        <button 
-                            onClick={() => {
-                                setIsTradeMode(!isTradeMode);
-                                setTradeSource(null);
-                            }}
-                            className={`font-bold py-3 px-6 rounded-lg text-base min-h-[44px] transition-all ${
-                                isTradeMode 
-                                    ? 'bg-green-600 hover:bg-green-500 text-white animate-pulse' 
-                                    : 'bg-slate-600 hover:bg-slate-500 text-white'
-                            }`}
-                        >
-                            {isTradeMode ? '✅ 교체 중...' : '🔄 트레이드 모드'}
-                        </button>
+                        {!isClub && (
+                            <button 
+                                onClick={() => {
+                                    setIsTradeMode(!isTradeMode);
+                                    setTradeSource(null);
+                                }}
+                                className={`font-bold py-3 px-6 rounded-lg text-base min-h-[44px] transition-all ${
+                                    isTradeMode 
+                                        ? 'bg-green-600 hover:bg-green-500 text-white animate-pulse' 
+                                        : 'bg-slate-600 hover:bg-slate-500 text-white'
+                                }`}
+                            >
+                                {isTradeMode ? '교체 중...' : '트레이드 모드'}
+                            </button>
+                        )}
                         <button onClick={handleSave} className="bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-6 rounded-lg text-base min-h-[44px] w-full lg:w-auto">{t('team_management_save_all')}</button>
                     </div>
                 </div>
@@ -541,71 +598,120 @@ const TeamManagementScreen: React.FC<TeamManagementScreenProps> = ({ appMode = '
 
                 {/* 필터 섹션 - 반/대회(조) 탭 UI */}
                 <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 space-y-4">
-                    {/* 반 또는 대회(조) 선택 탭 */}
+                    {/* 반 또는 대회(조) 선택 탭 + 이름 편집 모드 토글 */}
                     <div>
-                        <label className="block font-semibold text-sm text-slate-300 mb-2">{isClub ? '대회(조) 선택' : t('player_input_class_select_label')}</label>
+                        <div className="flex items-center gap-2 mb-2">
+                            <label className="font-semibold text-sm text-slate-300">
+                                {isClub ? '대회(조) 선택' : t('player_input_class_select_label')}
+                            </label>
+                            <button
+                                type="button"
+                                onClick={() => setIsEditingName(prev => !prev)}
+                                className={
+                                    isEditingName
+                                        ? 'flex items-center gap-1 text-sm text-green-400 hover:text-green-300 transition-colors font-bold'
+                                        : 'flex items-center gap-1 text-sm text-gray-400 hover:text-white transition-colors'
+                                }
+                                title={isEditingName ? '수정 완료' : '이름 수정'}
+                                aria-label={isEditingName ? '수정 완료' : '이름 수정'}
+                            >
+                                {isEditingName ? (
+                                    <>
+                                        <CheckIcon className="w-3.5 h-3.5" />
+                                        수정 완료
+                                    </>
+                                ) : (
+                                    <>
+                                        <PencilIcon className="w-3.5 h-3.5" />
+                                        이름 수정
+                                    </>
+                                )}
+                            </button>
+                        </div>
                         <div className="flex gap-2 flex-wrap">
-                            <button 
+                            <button
                                 onClick={() => {
                                     setSelectedClassFilter('all');
                                     setSelectedFormatFilter('all');
                                 }}
                                 className={`px-4 py-2 text-sm rounded-md transition-colors min-h-[44px] font-semibold ${
-                                    selectedClassFilter === 'all' 
-                                        ? 'bg-[#00A3FF] text-white' 
+                                    selectedClassFilter === 'all'
+                                        ? 'bg-[#00A3FF] text-white'
                                         : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
                                 }`}
                             >
                                 {t('player_input_class_all')}
                             </button>
                             {availableClasses.map(className => (
-                                <button 
-                                    key={className}
-                                    onClick={() => {
-                                        setSelectedClassFilter(className);
-                                        setSelectedFormatFilter('all'); // 반 변경 시 포맷 필터 초기화
-                                    }}
-                                    className={`px-4 py-2 text-sm rounded-md transition-colors min-h-[44px] font-semibold ${
-                                        selectedClassFilter === className 
-                                            ? 'bg-[#00A3FF] text-white' 
-                                            : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
-                                    }`}
-                                >
-                                    {className}
-                                </button>
+                                <span key={className} className="inline-flex items-center gap-1">
+                                    <button
+                                        onClick={() => {
+                                            if (!isEditingName) {
+                                                setSelectedClassFilter(className);
+                                                setSelectedFormatFilter('all');
+                                            }
+                                        }}
+                                        className={`px-4 py-2 text-sm rounded-md transition-all min-h-[44px] font-semibold inline-flex items-center ${
+                                            isEditingName
+                                                ? 'border-2 border-dashed border-blue-400 bg-slate-800 text-slate-200'
+                                                : selectedClassFilter === className
+                                                    ? 'bg-[#00A3FF] text-white'
+                                                    : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                                        }`}
+                                    >
+                                        {className}
+                                    </button>
+                                    {isEditingName && (
+                                        <button
+                                            type="button"
+                                            className="ml-1 p-2 rounded-md hover:bg-white/20 text-blue-400 hover:text-white bg-blue-900/60 border border-blue-400 z-10"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                e.preventDefault();
+                                                handleRenameTab(className);
+                                            }}
+                                            title="이름 수정"
+                                            aria-label="이름 수정"
+                                        >
+                                            <PencilIcon className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                </span>
                             ))}
                         </div>
                     </div>
                     
-                    {/* 포맷 필터 (항상 표시, 선택된 반 내에서 필터링) */}
-                    <div>
-                        <label className="block font-semibold text-sm text-slate-300 mb-2">{t('record_all_formats')}</label>
-                        <div className="flex gap-2 flex-wrap">
-                            <button 
-                                onClick={() => setSelectedFormatFilter('all')} 
-                                className={`px-3 py-2 text-xs rounded transition-colors min-h-[44px] ${
-                                    selectedFormatFilter === 'all' 
-                                        ? 'bg-[#00A3FF] text-white font-bold' 
-                                        : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
-                                }`}
-                            >
-                                {t('record_all_formats')}
-                            </button>
-                            {availableFormats.map(format => (
+                    {/* 팀 구성 필터: 수업 모드에서만 표시 */}
+                    {appMode === 'CLASS' && (
+                        <div>
+                            <label className="block font-semibold text-sm text-slate-300 mb-2">{t('record_all_formats')}</label>
+                            <div className="flex gap-2 flex-wrap">
                                 <button 
-                                    key={format}
-                                    onClick={() => setSelectedFormatFilter(String(format))} 
+                                    onClick={() => setSelectedFormatFilter('all')} 
                                     className={`px-3 py-2 text-xs rounded transition-colors min-h-[44px] ${
-                                        selectedFormatFilter === String(format) 
+                                        selectedFormatFilter === 'all' 
                                             ? 'bg-[#00A3FF] text-white font-bold' 
                                             : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
                                     }`}
                                 >
-                                    {t('record_team_format', { count: format })}
+                                    {t('record_all_formats')}
                                 </button>
-                            ))}
+                                {availableFormats.map(format => (
+                                    <button 
+                                        key={format}
+                                        onClick={() => setSelectedFormatFilter(String(format))} 
+                                        className={`px-3 py-2 text-xs rounded transition-colors min-h-[44px] ${
+                                            selectedFormatFilter === String(format) 
+                                                ? 'bg-[#00A3FF] text-white font-bold' 
+                                                : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                                        }`}
+                                    >
+                                        {t('record_team_format', { count: format })}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
 
                 {groupedTeams.length > 0 ? (
@@ -620,12 +726,22 @@ const TeamManagementScreen: React.FC<TeamManagementScreenProps> = ({ appMode = '
                                             <span className="text-sm text-slate-400 ml-2">({t('record_team_format', { count: set.teamCount })})</span>
                                         )}
                                     </h3>
-                                    <button
-                                        onClick={() => { setTargetSetId(set.id); setIsNewTeamModalOpen(true); }}
-                                        className="text-sm bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold py-1 px-3 rounded-md transition-colors"
-                                    >
-                                        {isClub ? '학교(팀) 추가' : t('team_management_add_team_button')}
-                                    </button>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => { setTargetSetId(set.id); setIsNewTeamModalOpen(true); }}
+                                            className="text-sm bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold py-1 px-3 rounded-md transition-colors"
+                                        >
+                                            {isClub ? '학교(팀) 추가' : t('team_management_add_team_button')}
+                                        </button>
+                                        {isClub && (
+                                            <button
+                                                onClick={() => { setLoadTeamTargetSetId(set.id); setIsLoadTeamModalOpen(true); }}
+                                                className="text-sm bg-amber-700 hover:bg-amber-600 text-amber-100 font-semibold py-1 px-3 rounded-md transition-colors"
+                                            >
+                                                기존 팀 불러오기
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="space-y-4">
                                 {teams.map((team) => {
@@ -649,12 +765,14 @@ const TeamManagementScreen: React.FC<TeamManagementScreenProps> = ({ appMode = '
                                                          <UsersIcon className="w-4 h-4" />
                                                          {t('team_management_roster_button')}
                                                      </button>
-                                                     <button 
-                                                        onClick={() => handleOpenPlayerSelection(team.key)} 
-                                                        className="flex-1 flex items-center justify-center gap-1 text-xs bg-blue-600 hover:bg-blue-500 text-white font-semibold py-1 px-2 rounded-md"
-                                                    >
-                                                        + {t('team_management_add_from_roster')}
-                                                    </button>
+                                                     {!isClub && (
+                                                        <button 
+                                                            onClick={() => handleOpenPlayerSelection(team.key)} 
+                                                            className="flex-1 flex items-center justify-center gap-1 text-xs bg-blue-600 hover:bg-blue-500 text-white font-semibold py-1 px-2 rounded-md"
+                                                        >
+                                                            + {t('team_management_add_from_roster')}
+                                                        </button>
+                                                     )}
                                                     <button onClick={() => handleDeleteClick(team.key)} className="flex-shrink-0 flex items-center justify-center gap-1 text-xs bg-red-800 hover:bg-red-700 text-white font-semibold p-1 rounded-md">
                                                         <TrashIcon className="w-4 h-4" />
                                                     </button>

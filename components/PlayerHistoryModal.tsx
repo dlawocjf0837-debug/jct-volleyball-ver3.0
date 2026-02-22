@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Player, PlayerStats, MatchState, TeamSet, PlayerCumulativeStats, CoachingLog, Badge } from '../types';
 import { useData } from '../contexts/DataContext';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -9,11 +9,12 @@ import { BADGE_DEFINITIONS } from '../data/badges';
 import { BadgeDetailModal } from './BadgeDetailModal';
 
 type MatchPerformance = {
-    match: MatchState & { date: string };
+    match: MatchState & { date: string; _matchType?: 'regular' | 'practice' | 'tournament' };
     teamName: string;
     opponent: string;
     stats: PlayerStats;
     teamSet: TeamSet | undefined;
+    matchType: 'regular' | 'practice' | 'tournament';
 };
 
 interface PlayerHistoryModalProps {
@@ -22,6 +23,44 @@ interface PlayerHistoryModalProps {
     performanceHistory: MatchPerformance[];
     onClose: () => void;
     teamSets: TeamSet[];
+    appMode?: 'CLASS' | 'CLUB';
+    /** 경기 중 스코어보드에서 열었을 때 현재 경기 정보 (예: "A팀 vs B팀") */
+    currentMatchInfo?: string;
+}
+
+/** 전략 메모 개별 기록 타입 */
+export type MemoEntry = { id: string; createdAt: string; content: string; matchInfo?: string };
+
+/** 기존 string 메모를 배열로 변환 (하위 호환) */
+function parseMemoEntries(raw: string | undefined): MemoEntry[] {
+    if (raw == null || raw === '') return [];
+    try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.filter((e: unknown) => e && typeof e === 'object' && 'id' in e && 'content' in e)
+                .map((e: { id?: string; createdAt?: string; content?: string; matchInfo?: string }) => ({
+                    id: String(e?.id ?? genMemoId()),
+                    createdAt: String(e?.createdAt ?? '이전 기록'),
+                    content: String(e?.content ?? ''),
+                    matchInfo: e?.matchInfo ? String(e.matchInfo) : undefined
+                }));
+        }
+    } catch (_) {}
+    return [{ id: 'legacy', createdAt: '이전 기록', content: String(raw) }];
+}
+
+function genMemoId(): string {
+    return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `memo-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+/** 날짜 포맷 YYYY.MM.DD HH:mm */
+function formatMemoDate(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const h = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return `${y}.${m}.${day} ${h}:${min}`;
 }
 
 // Updated Order: Points -> Serve Ace Rate -> Serve Success Rate -> Serve Faults -> Spike -> Assist -> Block -> Dig
@@ -36,13 +75,18 @@ const statOrder: (keyof PlayerStats | 'serveSuccessRate' | 'serveAceRate')[] = [
     'digs'               // 디그
 ];
 
-export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, cumulativeStats, performanceHistory, onClose, teamSets }) => {
-    const { coachingLogs, saveCoachingLog, requestPassword, playerAchievements, updatePlayerMemoInTeamSet, showToast } = useData();
+export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, cumulativeStats, performanceHistory, onClose, teamSets, appMode = 'CLASS', currentMatchInfo }) => {
+    const { coachingLogs, saveCoachingLog, requestPassword, playerAchievements, updatePlayerMemoInTeamSet, showToast, matchHistory, practiceMatchHistory, leagueMatchHistory } = useData();
     const { t } = useTranslation();
     const [newLog, setNewLog] = useState('');
     const [isLogUnlocked, setIsLogUnlocked] = useState(false);
     const [activeTab, setActiveTab] = useState<'analysis' | 'coaching' | 'memo'>('analysis');
-    const [strategyMemo, setStrategyMemo] = useState((player as { memo?: string })?.memo ?? '');
+    const [categoryFilter, setCategoryFilter] = useState<'all' | 'practice' | 'tournament'>('all');
+    const [selectedModalCompetition, setSelectedModalCompetition] = useState<string>('전체');
+    const [memoEntries, setMemoEntries] = useState<MemoEntry[]>([]);
+    const [newMemoContent, setNewMemoContent] = useState('');
+    const [editingMemoId, setEditingMemoId] = useState<string | null>(null);
+    const [editingContent, setEditingContent] = useState('');
     
     // Default chart stat to 'points' as it's the first item now
     const [chartStat, setChartStat] = useState<keyof PlayerStats | 'serveSuccessRate' | 'serveAceRate'>('points');
@@ -116,13 +160,63 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
 
     const setContainingPlayer = useMemo(() => teamSets?.find((s) => s.players && player?.id && s.players[player.id]), [teamSets, player?.id]);
     const currentPlayerMemo = setContainingPlayer?.players?.[player?.id ?? ''] ? (setContainingPlayer.players[player!.id] as { memo?: string })?.memo : (player as { memo?: string })?.memo;
-    const handleSaveStrategyMemo = async () => {
-        if (!player?.id || !updatePlayerMemoInTeamSet) return;
-        if (setContainingPlayer) {
-            await updatePlayerMemoInTeamSet(setContainingPlayer.id, player.id, strategyMemo);
-            showToast?.('메모가 성공적으로 저장되었습니다.', 'success');
+
+    useEffect(() => {
+        if (activeTab === 'memo') setMemoEntries(parseMemoEntries(currentPlayerMemo));
+    }, [activeTab, currentPlayerMemo]);
+
+    const persistMemoEntries = useCallback(async (entries: MemoEntry[]) => {
+        if (!player?.id || !updatePlayerMemoInTeamSet || !setContainingPlayer) return;
+        const payload = entries.length === 0 ? '' : JSON.stringify(entries);
+        await updatePlayerMemoInTeamSet(setContainingPlayer.id, player.id, payload);
+        showToast?.('메모가 저장되었습니다.', 'success');
+    }, [player?.id, updatePlayerMemoInTeamSet, setContainingPlayer, showToast]);
+
+    const handleAddMemo = useCallback(async () => {
+        const content = newMemoContent.trim();
+        if (!content) return;
+        const entry: MemoEntry = {
+            id: genMemoId(),
+            createdAt: formatMemoDate(new Date()),
+            content,
+            ...(currentMatchInfo?.trim() ? { matchInfo: currentMatchInfo.trim() } : {})
+        };
+        const next = [entry, ...memoEntries];
+        setMemoEntries(next);
+        setNewMemoContent('');
+        await persistMemoEntries(next);
+    }, [newMemoContent, memoEntries, persistMemoEntries, currentMatchInfo]);
+
+    const handleEditMemo = useCallback((entry: MemoEntry) => {
+        setEditingMemoId(entry.id);
+        setEditingContent(entry.content);
+    }, []);
+
+    const handleSaveEditMemo = useCallback(async () => {
+        if (!editingMemoId) return;
+        const content = editingContent.trim();
+        if (!content) return;
+        const next = memoEntries.map(e => e.id === editingMemoId ? { ...e, content } : e);
+        setMemoEntries(next);
+        setEditingMemoId(null);
+        setEditingContent('');
+        await persistMemoEntries(next);
+    }, [editingMemoId, editingContent, memoEntries, persistMemoEntries]);
+
+    const handleCancelEditMemo = useCallback(() => {
+        setEditingMemoId(null);
+        setEditingContent('');
+    }, []);
+
+    const handleDeleteMemo = useCallback(async (id: string) => {
+        const next = memoEntries.filter(e => e.id !== id);
+        setMemoEntries(next);
+        if (editingMemoId === id) {
+            setEditingMemoId(null);
+            setEditingContent('');
         }
-    };
+        await persistMemoEntries(next);
+    }, [memoEntries, editingMemoId, persistMemoEntries]);
 
     const handleUnlockLogs = () => {
         if (!isLogUnlocked) {
@@ -135,8 +229,135 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
         }
     };
     
+    const availableCompetitions = useMemo(() => {
+        if (appMode !== 'CLUB') return [];
+        return [...new Set((teamSets ?? []).map((s: TeamSet) => s.className).filter(Boolean))].sort();
+    }, [appMode, teamSets]);
+
+    const collectedPlayers = useMemo(() => {
+        const name = player?.originalName ?? '';
+        const number = String(player?.studentNumber ?? '');
+        const out: { player: Player; teamSet: TeamSet; team: { teamName: string } }[] = [];
+        (teamSets ?? []).forEach((set: TeamSet) => {
+            (set.teams ?? []).forEach((team: { teamName: string; playerIds?: string[] }) => {
+                (team.playerIds ?? []).forEach((pid: string) => {
+                    const p = set.players?.[pid];
+                    if (p && p.originalName === name && String(p.studentNumber ?? '') === number) {
+                        out.push({ player: p, teamSet: set, team });
+                    }
+                });
+            });
+        });
+        return out;
+    }, [teamSets, player?.originalName, player?.studentNumber]);
+
+    const allPlayerIds = useMemo(() => {
+        const ids = new Set(collectedPlayers.map(c => c.player.id));
+        if (ids.size === 0 && player?.id) ids.add(player.id);
+        return ids;
+    }, [collectedPlayers, player?.id]);
+
+    const unifiedPerformanceHistory = useMemo((): MatchPerformance[] => {
+        const regular = (matchHistory ?? []).filter((m: any) => m?.status === 'completed').map((m: any) => ({ ...m, _matchType: 'regular' as const }));
+        const practice = (practiceMatchHistory ?? []).filter((m: any) => m?.status === 'completed').map((m: any) => ({ ...m, _matchType: 'practice' as const }));
+        const league = (leagueMatchHistory ?? []).filter((m: any) => m?.status === 'completed').map((m: any) => ({ ...m, _matchType: 'tournament' as const }));
+        const allMatches = [...regular, ...practice, ...league]
+            .sort((a: any, b: any) => new Date(a?.date ?? 0).getTime() - new Date(b?.date ?? 0).getTime());
+
+        const history: MatchPerformance[] = [];
+        allMatches.forEach((match: any) => {
+            let playerTeam: 'teamA' | 'teamB' | null = null;
+            let matchedId: string | null = null;
+
+            if (match?.teamA?.players) {
+                const foundId = Object.keys(match.teamA.players).find(id => allPlayerIds.has(id));
+                if (foundId) {
+                    playerTeam = 'teamA';
+                    matchedId = foundId;
+                }
+            }
+            if (!playerTeam && match?.teamB?.players) {
+                const foundId = Object.keys(match.teamB.players).find(id => allPlayerIds.has(id));
+                if (foundId) {
+                    playerTeam = 'teamB';
+                    matchedId = foundId;
+                }
+            }
+
+            if (playerTeam && matchedId) {
+                const teamState = match[playerTeam];
+                const opponentName = (playerTeam === 'teamA' ? match?.teamB : match?.teamA)?.name;
+                const playerStatsForMatch = teamState?.playerStats?.[matchedId];
+                if (playerStatsForMatch) {
+                    let teamSet: TeamSet | undefined;
+                    const key = teamState?.key;
+                    if (key) {
+                        const [setId] = String(key).split('___');
+                        teamSet = (teamSets ?? []).find((s: TeamSet) => s.id === setId);
+                    }
+                    history.push({
+                        match,
+                        teamName: teamState.name,
+                        opponent: opponentName ?? '',
+                        stats: playerStatsForMatch,
+                        teamSet,
+                        matchType: match._matchType ?? 'regular',
+                    });
+                }
+            }
+        });
+        return history.reverse();
+    }, [matchHistory, practiceMatchHistory, leagueMatchHistory, allPlayerIds, teamSets]);
+
+    const baseForFilter = useMemo(() => {
+        if (appMode === 'CLUB') return unifiedPerformanceHistory;
+        return (performanceHistory ?? []).map((p: any) => {
+            const key = p?.match?.teamA?.key || p?.match?.teamB?.key;
+            let teamSet: TeamSet | undefined;
+            if (key) {
+                const [setId] = String(key).split('___');
+                teamSet = (teamSets ?? []).find((s: TeamSet) => s.id === setId);
+            }
+            return {
+                ...p,
+                teamSet: p.teamSet ?? teamSet,
+                matchType: (p?.match?.matchType ?? p?.matchType ?? 'regular') as 'regular' | 'practice' | 'tournament',
+            };
+        });
+    }, [appMode, unifiedPerformanceHistory, performanceHistory, teamSets]);
+
+    const getEntryCompetition = (entry: MatchPerformance): string | null => {
+        const key = entry?.match?.teamA?.key || entry?.match?.teamB?.key;
+        if (!key) return null;
+        const [setId] = String(key).split('___');
+        return (teamSets ?? []).find((s: TeamSet) => s.id === setId)?.className ?? null;
+    };
+
+    const filteredPerformanceHistory = useMemo(() => {
+        let base = baseForFilter;
+        if (appMode === 'CLUB' && selectedModalCompetition && selectedModalCompetition !== '전체') {
+            base = base.filter((p: MatchPerformance) => getEntryCompetition(p) === selectedModalCompetition);
+        }
+        if (categoryFilter === 'all') return base;
+        if (categoryFilter === 'practice') return base.filter((p: MatchPerformance) => p.matchType === 'practice');
+        return base.filter((p: MatchPerformance) => p.matchType === 'tournament');
+    }, [baseForFilter, categoryFilter, appMode, selectedModalCompetition]);
+
+    const filteredCumulativeStats = useMemo(() => {
+        const hist = filteredPerformanceHistory ?? [];
+        const stats: any = { matchesPlayed: 0, points: 0, serviceAces: 0, serveIn: 0, serviceFaults: 0, spikeSuccesses: 0, blockingPoints: 0, digs: 0, assists: 0 };
+        hist.forEach((p: any) => {
+            const s = p?.stats ?? {};
+            stats.matchesPlayed += 1;
+            Object.keys(s).forEach(k => { if (typeof s[k] === 'number') stats[k] = (stats[k] ?? 0) + s[k]; });
+        });
+        return stats;
+    }, [filteredPerformanceHistory]);
+
+    const displayStats = filteredCumulativeStats;
+
     const winRateStats = useMemo(() => {
-        const base = performanceHistory ?? [];
+        const base = filteredPerformanceHistory ?? [];
         const filteredHistory = winRateFilter === 'all' 
             ? base 
             : base.filter(p => p?.teamSet && String(p.teamSet?.teamCount ?? 4) === winRateFilter);
@@ -153,20 +374,20 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
         
         const winRate = (wins / matchesPlayed) * 100;
         return { winRate, wins, total: matchesPlayed };
-    }, [performanceHistory, winRateFilter]);
+    }, [filteredPerformanceHistory, winRateFilter]);
 
 
     const logs = useMemo(() => {
-        const byPlayer = coachingLogs?.[player?.id];
-        if (!byPlayer || !Array.isArray(byPlayer)) return [];
-        return [...byPlayer].sort((a, b) => new Date((b?.date) || 0).getTime() - new Date((a?.date) || 0).getTime());
-    }, [coachingLogs, player?.id]);
+        const merged: CoachingLog[] = [];
+        allPlayerIds.forEach(id => {
+            const byPlayer = coachingLogs?.[id];
+            if (byPlayer && Array.isArray(byPlayer)) merged.push(...byPlayer);
+        });
+        return merged.sort((a, b) => new Date((b?.date) || 0).getTime() - new Date((a?.date) || 0).getTime());
+    }, [coachingLogs, allPlayerIds]);
 
     const chartData = useMemo(() => {
-        // We want the chart to go from G1 -> G_Latest (left to right)
-        // performanceHistory is sorted Latest -> Oldest in RecordScreen calculation, 
-        // so we reverse it to be Oldest -> Latest for the chart (index 0 = first game).
-        const history = performanceHistory ?? [];
+        const history = filteredPerformanceHistory ?? [];
         return [...history].reverse().map(({ stats, match, teamName, opponent }, index) => {
             const s = stats ?? {};
             let value = 0;
@@ -196,28 +417,31 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
                 score: `${m.teamA?.score ?? 0}:${m.teamB?.score ?? 0}`
             };
         });
-    }, [performanceHistory, chartStat, statDisplayNames]);
+    }, [filteredPerformanceHistory, chartStat, statDisplayNames]);
 
     const calculateRates = useMemo(() => {
-        const totalServes = (cumulativeStats.serviceAces || 0) + (cumulativeStats.serveIn || 0) + (cumulativeStats.serviceFaults || 0);
+        const totalServes = (displayStats.serviceAces || 0) + (displayStats.serveIn || 0) + (displayStats.serviceFaults || 0);
         // Serve Ace Rate: Aces / Total Attempts
-        const aceRate = totalServes > 0 ? (cumulativeStats.serviceAces / totalServes) * 100 : 0;
-        // Serve Success Rate: (Aces + In) / Total Attempts
-        const successRate = totalServes > 0 ? ((cumulativeStats.serviceAces + cumulativeStats.serveIn) / totalServes) * 100 : 0;
-        
+        const aceRate = totalServes > 0 ? ((displayStats.serviceAces || 0) / totalServes) * 100 : 0;
+        const successRate = totalServes > 0 ? (((displayStats.serviceAces || 0) + (displayStats.serveIn || 0)) / totalServes) * 100 : 0;
         return { aceRate, successRate };
-    }, [cumulativeStats]);
+    }, [displayStats]);
 
-    // Get badges earned by this player
     const earnedBadges = useMemo(() => {
-        const playerBadges = playerAchievements?.[player?.id];
-        if (!playerBadges || !playerBadges.earnedBadgeIds) {
-            return [];
-        }
-        const ids = playerBadges.earnedBadgeIds;
-        const hasId = typeof ids?.has === 'function' ? (id: string) => ids.has(id) : (id: string) => (ids as unknown as string[])?.includes(id);
-        return (BADGE_DEFINITIONS || []).filter(badge => badge && hasId(badge.id));
-    }, [playerAchievements, player?.id]);
+        const badgeIds = new Set<string>();
+        allPlayerIds.forEach(id => {
+            const pb = playerAchievements?.[id];
+            const earned = pb?.earnedBadgeIds;
+            if (earned) {
+                if (typeof earned.has === 'function') {
+                    (earned as Set<string>).forEach((bid: string) => badgeIds.add(bid));
+                } else {
+                    (earned as string[] || []).forEach((bid: string) => badgeIds.add(bid));
+                }
+            }
+        });
+        return (BADGE_DEFINITIONS || []).filter(badge => badge && badgeIds.has(badge.id));
+    }, [playerAchievements, allPlayerIds]);
 
     // Custom Tooltip Component
     const CustomTooltip = ({ active, payload, label }: any) => {
@@ -286,28 +510,53 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
                                 <LockClosedIcon className="w-4 h-4" />
                                 {t('player_history_tab_coaching')}
                             </button>
-                            <button 
-                                onClick={() => { setActiveTab('memo'); setStrategyMemo(currentPlayerMemo ?? ''); }}
-                                className={`px-4 py-2 font-semibold ${activeTab === 'memo' ? 'border-b-2 border-sky-400 text-sky-400' : 'text-slate-400 hover:text-white'}`}
-                            >
-                                전략 메모
-                            </button>
+                            {appMode === 'CLUB' && (
+                                <button 
+                                    onClick={() => { setActiveTab('memo'); setStrategyMemo(currentPlayerMemo ?? ''); }}
+                                    className={`px-4 py-2 font-semibold ${activeTab === 'memo' ? 'border-b-2 border-sky-400 text-sky-400' : 'text-slate-400 hover:text-white'}`}
+                                >
+                                    전략 메모
+                                </button>
+                            )}
                         </div>
                     </div>
 
                     <div className="flex-grow overflow-y-auto pr-2 -mr-2">
                         {activeTab === 'analysis' && (
                             <div className="space-y-6 animate-fade-in">
+                                <div className="flex justify-between items-center flex-wrap gap-2 mb-2">
+                                    {appMode === 'CLUB' && (
+                                        <div className="flex gap-2 flex-wrap">
+                                            {(['all', 'practice', 'tournament'] as const).map(k => (
+                                                <button key={k} onClick={() => setCategoryFilter(k)} className={`px-3 py-1.5 rounded-lg text-sm font-semibold ${categoryFilter === k ? 'bg-sky-600 text-white' : 'bg-slate-700 text-slate-400 hover:text-white'}`}>
+                                                    {k === 'all' ? '전체' : k === 'practice' ? '연습 경기' : '대회 경기'}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {appMode === 'CLUB' && (
+                                        <select
+                                            value={selectedModalCompetition}
+                                            onChange={(e) => setSelectedModalCompetition(e.target.value)}
+                                            className="bg-slate-700 border border-slate-600 rounded-md px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                        >
+                                            <option value="전체">전체</option>
+                                            {availableCompetitions.map(c => (
+                                                <option key={c} value={c}>{c}</option>
+                                            ))}
+                                        </select>
+                                    )}
+                                </div>
                                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                                     {[
-                                        { label: t('player_history_stat_matches'), value: cumulativeStats.matchesPlayed, unit: t('player_history_unit_sessions') },
-                                        { label: t('player_history_stat_total_points'), value: cumulativeStats.points, unit: t('player_history_unit_points') },
+                                        { label: t('player_history_stat_matches'), value: displayStats.matchesPlayed, unit: t('player_history_unit_sessions') },
+                                        { label: t('player_history_stat_total_points'), value: displayStats.points, unit: t('player_history_unit_points') },
                                         { label: t('stat_serve_ace_rate'), value: isNaN(calculateRates.aceRate) ? '0.0' : calculateRates.aceRate.toFixed(1), unit: '%' },
                                         { label: t('stat_serve_success_rate'), value: isNaN(calculateRates.successRate) ? '0.0' : calculateRates.successRate.toFixed(1), unit: '%' },
-                                        { label: t('player_history_stat_total_spikes'), value: cumulativeStats.spikeSuccesses, unit: t('player_history_unit_sessions') },
-                                        { label: t('player_history_stat_total_blocks'), value: cumulativeStats.blockingPoints, unit: t('player_history_unit_sessions') },
-                                        { label: t('stat_display_digs'), value: cumulativeStats.digs || 0, unit: t('player_history_unit_sessions') },
-                                        { label: t('stat_display_assists'), value: cumulativeStats.assists || 0, unit: t('player_history_unit_sessions') },
+                                        { label: t('player_history_stat_total_spikes'), value: displayStats.spikeSuccesses || 0, unit: t('player_history_unit_sessions') },
+                                        { label: t('player_history_stat_total_blocks'), value: displayStats.blockingPoints || 0, unit: t('player_history_unit_sessions') },
+                                        { label: t('stat_display_digs'), value: displayStats.digs || 0, unit: t('player_history_unit_sessions') },
+                                        { label: t('stat_display_assists'), value: displayStats.assists || 0, unit: t('player_history_unit_sessions') },
                                     ].map(stat => (
                                         <div key={stat.label} className="bg-slate-800 p-3 rounded-lg text-center">
                                             <p className="text-slate-400 text-sm">{stat.label}</p>
@@ -379,7 +628,7 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                            {(performanceHistory ?? []).map((entry, index) => {
+                                            {(filteredPerformanceHistory ?? []).map((entry, index) => {
                                                 const { match, teamName, opponent, stats } = entry ?? {};
                                                 const s = stats ?? {};
                                                 const totalServes = (s.serviceAces || 0) + (s.serveIn || 0) + (s.serviceFaults || 0);
@@ -387,7 +636,7 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
                                                 <tr key={index} className="border-b border-slate-700 last:border-0 text-slate-300">
                                                     <td className="p-2 text-left">
                                                         <div className="text-xs">{match?.date ? new Date(match.date).toLocaleDateString() : ''}</div>
-                                                        <div className="text-[10px] text-slate-500 font-mono">(G{(performanceHistory?.length ?? 0) - index})</div>
+                                                        <div className="text-[10px] text-slate-500 font-mono">(G{(filteredPerformanceHistory?.length ?? 0) - index})</div>
                                                     </td>
                                                     <td className="p-2 text-left font-semibold">
                                                         <button onClick={() => match && handleTeamClick(match, teamName ?? '')} className="text-left hover:text-sky-400 transition-colors">
@@ -427,7 +676,7 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
                                                 return (
                                                     <button
                                                         key={badge.id}
-                                                        onClick={() => setSelectedBadgeDetail({ badge, player, stats: cumulativeStats })}
+                                                        onClick={() => setSelectedBadgeDetail({ badge, player, stats: displayStats })}
                                                         className={`p-3 bg-slate-700/50 rounded-lg flex flex-col items-center justify-center gap-2 text-center border-2 transition-all duration-200 cursor-pointer ${
                                                             isCompetitive 
                                                                 ? 'border-yellow-400/50 hover:border-yellow-400 yellow-glowing-border' 
@@ -487,23 +736,72 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
                                 </div>
                             )
                         )}
-                        {activeTab === 'memo' && (
-                            <div className="animate-fade-in space-y-4">
-                                <p className="text-slate-400 text-sm">해당 선수의 전력 분석 메모를 보고 수정할 수 있습니다. 저장 시 전역 데이터에 반영됩니다.</p>
-                                <div className="bg-slate-800 p-4 rounded-lg">
-                                    <textarea
-                                        value={strategyMemo}
-                                        onChange={(e) => setStrategyMemo(e.target.value)}
-                                        placeholder="예: 공격 에이스, 서브 리시브 약함"
-                                        className="w-full h-32 bg-slate-900 border border-slate-700 rounded-md p-3 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 resize-none"
-                                    />
-                                    <div className="flex justify-end mt-3 gap-2">
-                                        <button onClick={handleSaveStrategyMemo} className="bg-sky-600 hover:bg-sky-500 font-semibold py-2 px-4 rounded-lg text-white">
-                                            저장
-                                        </button>
-                                    </div>
-                                </div>
-                                {!setContainingPlayer && <p className="text-slate-500 text-sm">이 선수는 현재 팀 세트에 등록되어 있지 않아 메모를 저장할 수 없습니다.</p>}
+                        {appMode === 'CLUB' && activeTab === 'memo' && (
+                            <div className="animate-fade-in flex flex-col gap-4 h-full">
+                                <p className="text-slate-400 text-sm flex-shrink-0">해당 선수의 전력 분석 메모를 타임라인 형태로 관리합니다. 저장 시 전역 데이터에 반영됩니다.</p>
+                                {setContainingPlayer ? (
+                                    <>
+                                        <div className="flex flex-col sm:flex-row gap-2 flex-shrink-0">
+                                            <textarea
+                                                value={newMemoContent}
+                                                onChange={(e) => setNewMemoContent(e.target.value)}
+                                                placeholder="예: 공격 에이스, 서브 리시브 약함"
+                                                className="flex-1 min-h-[80px] bg-slate-900 border border-slate-700 rounded-md p-3 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 resize-none"
+                                                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAddMemo(); } }}
+                                            />
+                                            <button
+                                                onClick={handleAddMemo}
+                                                disabled={!newMemoContent.trim()}
+                                                className="flex-shrink-0 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:bg-slate-600 disabled:cursor-not-allowed font-semibold text-white transition-colors min-h-[44px] flex items-center justify-center gap-2"
+                                            >
+                                                ➕ 추가
+                                            </button>
+                                        </div>
+                                        <div className="flex-grow min-h-0 overflow-y-auto space-y-3 pr-2">
+                                            {memoEntries.length === 0 ? (
+                                                <p className="text-slate-500 text-sm text-center py-8">등록된 메모가 없습니다.</p>
+                                            ) : (
+                                                memoEntries.map((entry) => (
+                                                    <div key={entry.id} className="bg-slate-800 rounded-lg p-3 border border-slate-700/50 flex flex-col gap-2">
+                                                        <div className="flex justify-between items-start gap-2">
+                                                            <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+                                                                <span className="text-xs text-slate-500 flex-shrink-0">{entry.createdAt}</span>
+                                                                {entry.matchInfo && (
+                                                                    <span className="text-xs text-sky-400 flex-shrink-0">[{entry.matchInfo}]</span>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex gap-1 flex-shrink-0">
+                                                                {editingMemoId === entry.id ? (
+                                                                    <>
+                                                                        <button onClick={handleSaveEditMemo} className="text-xs px-2 py-1 rounded bg-sky-600 hover:bg-sky-500 text-white font-medium">저장</button>
+                                                                        <button onClick={handleCancelEditMemo} className="text-xs px-2 py-1 rounded bg-slate-600 hover:bg-slate-500 text-slate-300 font-medium">취소</button>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <button onClick={() => handleEditMemo(entry)} className="text-xs px-2 py-1 rounded bg-slate-600 hover:bg-slate-500 text-slate-300 font-medium">수정</button>
+                                                                        <button onClick={() => handleDeleteMemo(entry.id)} className="text-xs px-2 py-1 rounded bg-red-900/50 hover:bg-red-800/50 text-red-300 font-medium">삭제</button>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        {editingMemoId === entry.id ? (
+                                                            <textarea
+                                                                value={editingContent}
+                                                                onChange={(e) => setEditingContent(e.target.value)}
+                                                                className="w-full min-h-[60px] bg-slate-900 border border-slate-600 rounded-md p-2 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-sky-500 resize-none"
+                                                                autoFocus
+                                                            />
+                                                        ) : (
+                                                            <p className="text-slate-200 text-sm whitespace-pre-wrap break-words">{entry.content}</p>
+                                                        )}
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </>
+                                ) : (
+                                    <p className="text-slate-500 text-sm">이 선수는 현재 팀 세트에 등록되어 있지 않아 메모를 저장할 수 없습니다.</p>
+                                )}
                             </div>
                         )}
                     </div>

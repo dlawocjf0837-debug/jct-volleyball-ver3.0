@@ -54,7 +54,7 @@ const getTotalScoreWinner = (match: MatchState, settings: AppSettings): 'A' | 'B
 
 const PlayerStatsTable: React.FC<{ 
     teamMatchState: TeamMatchState; 
-    onPlayerClick: (player: Player) => void;
+    onPlayerClick: (player: Player, teamKey?: string) => void;
     teamSet: TeamSet | undefined;
     t: (key: string) => string;
 }> = ({ teamMatchState, onPlayerClick, teamSet, t }) => {
@@ -142,7 +142,7 @@ const PlayerStatsTable: React.FC<{
                                         <div className="w-1 h-0 group-hover:h-6 rounded-full transition-all duration-300 opacity-0 group-hover:opacity-100 absolute left-0 top-1/2 -translate-y-1/2" style={{ backgroundColor: teamMatchState.color }}></div>
                                         
                                         <button 
-                                            onClick={() => onPlayerClick(player)} 
+                                            onClick={() => onPlayerClick(player, teamMatchState.key)} 
                                             className="text-left group/btn min-h-[44px] flex items-center"
                                             aria-label={`${player.originalName} 상세 기록 보기`}
                                         >
@@ -239,7 +239,7 @@ const ScoreTrendChart: React.FC<{ match: EnrichedMatch, t: (key: string) => stri
 };
 
 const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContinueGame, preselectedMatchId, onClearPreselection }) => {
-    const { teamSets, matchHistory, practiceMatchHistory, leagueMatchHistory, matchState, matchTime, saveMatchHistory, savePracticeMatchHistory, saveLeagueMatchHistory, clearInProgressMatch, showToast, userEmblems, settings, language, leagueStandingsList, saveLeagueStandingsList } = useData();
+    const { teamSets, matchHistory, practiceMatchHistory, leagueMatchHistory, matchState, matchTime, saveMatchHistory, savePracticeMatchHistory, saveLeagueMatchHistory, clearInProgressMatch, showToast, userEmblems, settings, language, leagueStandingsList, saveLeagueStandingsList, playerCumulativeStats } = useData();
     const { t } = useTranslation();
     const [selectedMatch, setSelectedMatch] = useState<EnrichedMatch | null>(null);
     const [selectedClass, setSelectedClass] = useState<string>('');
@@ -247,6 +247,7 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContin
     const [pointsData, setPointsData] = useState<Record<string, { teamA: number; teamB: number }>>({});
     const [rankings, setRankings] = useState<{ rank: number | string; teamName: string; totalPoints: number }[]>([]);
     const [matchHistoryTab, setMatchHistoryTab] = useState<'practice' | 'tournament'>('practice');
+    const [selectedCompetition, setSelectedCompetition] = useState<string>('');
     const [setDetailTab, setSetDetailTab] = useState<0 | 1 | 2 | 'all'>('all');
     const [showRankingsModal, setShowRankingsModal] = useState(false);
     const [showScoreTrend, setShowScoreTrend] = useState(false);
@@ -422,8 +423,30 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContin
         );
     };
 
-    // 연습경기 탭: practiceMatchHistory / 대회경기 탭: leagueMatchHistory. 진행 중 경기는 해당 탭에만 표시.
+    // 수업 모드(CLASS): matchHistory만 사용. 클럽 모드(CLUB): 연습경기 탭 = practiceMatchHistory, 대회경기 탭 = leagueMatchHistory.
     const allMatches = useMemo((): EnrichedMatch[] => {
+        if (appMode === 'CLASS') {
+            const list = (matchHistory ?? [])
+                .map((m, originalIndex) => ({ m, originalIndex }))
+                .filter(({ m }) => !!m && m.status === 'completed')
+                .map(({ m, originalIndex }) => ({
+                    ...m,
+                    id: `history-${originalIndex}`,
+                    status: 'completed' as const,
+                    date: (m as MatchState & { date?: string }).date ?? new Date().toISOString(),
+                })) as EnrichedMatch[];
+            if (matchState?.status === 'in_progress' && !matchState.leagueId) {
+                list.push({
+                    ...matchState,
+                    status: 'in_progress',
+                    id: 'in-progress',
+                    date: new Date().toISOString(),
+                    time: matchTime,
+                } as EnrichedMatch);
+            }
+            return list.sort((a, b) => new Date((b.date ?? 0) as string).getTime() - new Date((a.date ?? 0) as string).getTime());
+        }
+
         const isPracticeTab = matchHistoryTab === 'practice';
         const source = isPracticeTab ? practiceMatchHistory : leagueMatchHistory;
         const prefix = isPracticeTab ? 'practice' : 'league';
@@ -449,7 +472,7 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContin
         }
 
         return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [matchHistoryTab, practiceMatchHistory, leagueMatchHistory, matchState, matchTime]);
+    }, [appMode, matchHistoryTab, matchHistory, practiceMatchHistory, leagueMatchHistory, matchState, matchTime]);
 
     useEffect(() => {
         if (preselectedMatchId && onClearPreselection) {
@@ -582,6 +605,18 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContin
         return sortedCounts.map(String);
     }, [teamSets]);
 
+    const availableCompetitions = useMemo(() => 
+        [...new Set((teamSets ?? []).map((s: TeamSet) => s.className))].filter(Boolean).sort(),
+    [teamSets]);
+
+    const getMatchCompetition = useCallback((match: EnrichedMatch): string | null => {
+        const key = match?.teamA?.key || match?.teamB?.key;
+        if (!key) return null;
+        const [setId] = key.split('___');
+        const ts = teamSets.find((s: TeamSet) => s.id === setId);
+        return ts?.className ?? null;
+    }, [teamSets]);
+
     const filteredMatches = useMemo(() => {
         const validMatches = allMatches.filter(match => {
             if (!match || !match.teamA || !match.teamB) {
@@ -591,7 +626,7 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContin
             return true;
         });
 
-        const classFiltered = selectedClass ? validMatches.filter((match: EnrichedMatch) => {
+        let classFiltered = selectedClass ? validMatches.filter((match: EnrichedMatch) => {
             const teamAData: FlattenedTeam | null = match.teamA.key ? allTeamData[match.teamA.key] : null;
             const teamBData: FlattenedTeam | null = match.teamB.key ? allTeamData[match.teamB.key] : null;
 
@@ -599,6 +634,16 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContin
             const teamBClass = teamBData?.className;
             return teamAClass === selectedClass || teamBClass === selectedClass;
         }) : validMatches;
+
+        if (appMode === 'CLUB' && matchHistoryTab === 'tournament' && selectedCompetition) {
+            classFiltered = classFiltered.filter((match: EnrichedMatch) => {
+                const teamAData: FlattenedTeam | null = match.teamA.key ? allTeamData[match.teamA.key] : null;
+                const teamBData: FlattenedTeam | null = match.teamB.key ? allTeamData[match.teamB.key] : null;
+                const compA = teamAData?.className;
+                const compB = teamBData?.className;
+                return compA === selectedCompetition && compB === selectedCompetition;
+            });
+        }
         
         return classFiltered.filter(match => {
             if (teamCountFilter === 'all') return true;
@@ -621,7 +666,7 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContin
             
             return String(matchFormat) === teamCountFilter;
         });
-    }, [allMatches, selectedClass, teamCountFilter, allTeamData, teamSets]);
+    }, [allMatches, selectedClass, selectedCompetition, teamCountFilter, allTeamData, teamSets, appMode, matchHistoryTab]);
     
     // ... (GameSummaryPanel)
 
@@ -732,38 +777,49 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContin
     }, [enrichedSelectedMatch, t]);
 
 
-    const calculatePlayerHistory = useCallback((player: Player) => {
+    /** 선수 클릭 시: 전역 playerCumulativeStats 사용 + teamSets에서 최신 선수 객체로 모달에 전달 (스탯 0 버그 방지) */
+    const calculatePlayerHistory = useCallback((player: Player, teamKey?: string) => {
         if (!player) return;
-    
-        const cumulativeStats: any = {
+
+        const latestPlayer: Player = (() => {
+            if (teamKey) {
+                const [setId] = teamKey.split('___');
+                const set = teamSets.find((s) => s.id === setId);
+                const found = set?.players?.[player.id];
+                if (found) return { ...found };
+            }
+            for (const s of teamSets) {
+                const p = s.players?.[player.id];
+                if (p) return { ...p };
+            }
+            return player;
+        })();
+
+        const baseStats = {
             points: 0, serviceAces: 0, serviceFaults: 0, blockingPoints: 0, spikeSuccesses: 0, matchesPlayed: 0,
             serveIn: 0, digs: 0, assists: 0
         };
+        const cumulativeStats: any = { ...baseStats, ...(playerCumulativeStats?.[player.id] ?? {}) };
+
         const performanceHistory: any[] = [];
-    
-        const completedMatches = matchHistory
-            .filter(m => m.status === 'completed' && !m.leagueId && !m.tournamentId)
-            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    
-        completedMatches.forEach(match => {
+        const allMatches = [
+            ...matchHistory.filter(m => m.status === 'completed' && !m.leagueId && !m.tournamentId),
+            ...(practiceMatchHistory || []).filter(m => m.status === 'completed'),
+            ...(leagueMatchHistory || []).filter(m => m.status === 'completed'),
+        ].sort((a, b) => new Date((a as { date?: string }).date ?? 0).getTime() - new Date((b as { date?: string }).date ?? 0).getTime());
+
+        allMatches.forEach(match => {
             let playerTeam: 'teamA' | 'teamB' | null = null;
             if (match.teamA.players && Object.keys(match.teamA.players).includes(player.id)) {
                 playerTeam = 'teamA';
             } else if (match.teamB.players && Object.keys(match.teamB.players).includes(player.id)) {
                 playerTeam = 'teamB';
             }
-    
             if (playerTeam) {
                 const teamState = match[playerTeam];
                 const opponentName = (playerTeam === 'teamA' ? match.teamB : match.teamA).name;
                 const playerStatsForMatch = teamState.playerStats?.[player.id];
-    
                 if (playerStatsForMatch) {
-                    cumulativeStats.matchesPlayed += 1;
-                    Object.keys(playerStatsForMatch).forEach(key => {
-                        cumulativeStats[key as keyof PlayerStats] = (cumulativeStats[key as keyof PlayerStats] || 0) + playerStatsForMatch[key as keyof PlayerStats];
-                    });
-    
                     performanceHistory.push({
                         match,
                         teamName: teamState.name,
@@ -773,14 +829,13 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContin
                 }
             }
         });
-    
+
         const totalServices = (cumulativeStats.serviceAces || 0) + (cumulativeStats.serviceFaults || 0);
-        cumulativeStats.serviceSuccessRate = totalServices > 0 ? ((cumulativeStats.serviceAces + cumulativeStats.serveIn) / totalServices) * 100 : 0;
-        
+        cumulativeStats.serviceSuccessRate = totalServices > 0 ? ((cumulativeStats.serviceAces || 0) + (cumulativeStats.serveIn || 0)) / totalServices * 100 : 0;
+
         performanceHistory.reverse();
-    
-        setPlayerHistoryData({ player, cumulativeStats, performanceHistory });
-    }, [matchHistory]);
+        setPlayerHistoryData({ player: latestPlayer, cumulativeStats, performanceHistory });
+    }, [matchHistory, practiceMatchHistory, leagueMatchHistory, teamSets, playerCumulativeStats]);
 
     const findTeamSetForMatchTeam = useCallback((teamKey: string | undefined) => {
         if (!teamKey) return undefined;
@@ -1045,49 +1100,73 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContin
                     performanceHistory={playerHistoryData.performanceHistory}
                     onClose={() => setPlayerHistoryData(null)}
                     teamSets={teamSets}
+                    appMode={appMode}
                 />
             )}
             <div className="max-w-7xl mx-auto bg-slate-900/50 backdrop-blur-sm border border-slate-700 p-6 rounded-lg shadow-2xl space-y-6 animate-fade-in w-full">
-                {/* 연습경기 / 대회경기 탭 */}
-                <div className="flex gap-2 border-b border-slate-600 pb-3 no-print">
-                    <button
-                        type="button"
-                        onClick={() => { setMatchHistoryTab('practice'); setSelectedMatch(null); }}
-                        className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${matchHistoryTab === 'practice' ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
-                    >
-                        🏐 연습경기
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => { setMatchHistoryTab('tournament'); setSelectedMatch(null); }}
-                        className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${matchHistoryTab === 'tournament' ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
-                    >
-                        🏆 대회경기
-                    </button>
-                </div>
+                {/* 연습경기 / 대회경기 탭: 클럽 모드에서만 표시 */}
+                {appMode === 'CLUB' && (
+                    <div className="flex gap-2 border-b border-slate-600 pb-3 no-print">
+                        <button
+                            type="button"
+                            onClick={() => { setMatchHistoryTab('practice'); setSelectedMatch(null); }}
+                            className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${matchHistoryTab === 'practice' ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
+                        >
+                            🏐 연습경기
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => { setMatchHistoryTab('tournament'); setSelectedMatch(null); }}
+                            className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${matchHistoryTab === 'tournament' ? 'bg-amber-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
+                        >
+                            🏆 대회경기
+                        </button>
+                    </div>
+                )}
                 {/* ... Header and filter controls ... */}
                 <div className="flex flex-col lg:flex-row items-center lg:justify-between mb-6 gap-4 no-print">
                     <h1 className="text-3xl lg:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 text-center lg:text-right">
                         {t('record_list_title')}
                     </h1>
-                    <div className="flex gap-4 items-center self-start lg:self-auto">
-                        <div>
-                            <label htmlFor="class-select-history" className="sr-only">{t('record_filter_class_label')}</label>
-                            <select
-                                id="class-select-history"
-                                value={selectedClass}
-                                onChange={(e) => {
-                                    setSelectedClass(e.target.value);
-                                    setSelectedMatch(null);
-                                    setPointsData({});
-                                    setRankings([]);
-                                }}
-                                className="bg-slate-700 border border-slate-600 rounded-md p-2 text-white focus:outline-none focus:ring-2 focus:ring-[#00A3FF]"
-                            >
-                                <option value="">{t('record_all_classes')}</option>
-                                {availableClasses.map(c => <option key={c} value={c}>{c}</option>)}
-                            </select>
-                        </div>
+                    <div className="flex gap-4 items-center self-start lg:self-auto flex-wrap">
+                        {appMode === 'CLASS' && (
+                            <div>
+                                <label htmlFor="class-select-history" className="sr-only">{t('record_filter_class_label')}</label>
+                                <select
+                                    id="class-select-history"
+                                    value={selectedClass}
+                                    onChange={(e) => {
+                                        setSelectedClass(e.target.value);
+                                        setSelectedMatch(null);
+                                        setPointsData({});
+                                        setRankings([]);
+                                    }}
+                                    className="bg-slate-700 border border-slate-600 rounded-md p-2 text-white focus:outline-none focus:ring-2 focus:ring-[#00A3FF]"
+                                >
+                                    <option value="">{t('record_all_classes')}</option>
+                                    {availableClasses.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                            </div>
+                        )}
+                        {appMode === 'CLUB' && matchHistoryTab === 'tournament' && (
+                            <div>
+                                <label htmlFor="competition-select-history" className="sr-only">대회 선택</label>
+                                <select
+                                    id="competition-select-history"
+                                    value={selectedCompetition}
+                                    onChange={(e) => {
+                                        setSelectedCompetition(e.target.value);
+                                        setSelectedMatch(null);
+                                        setPointsData({});
+                                        setRankings([]);
+                                    }}
+                                    className="bg-slate-700 border border-slate-600 rounded-md p-2 text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                >
+                                    <option value="">전체 대회</option>
+                                    {availableCompetitions.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                            </div>
+                        )}
                         <button onClick={handleExportCSV} disabled={filteredMatches.length === 0} className="bg-sky-600 hover:bg-sky-500 text-white font-bold py-2 px-4 rounded-lg transition duration-200 disabled:bg-slate-600 disabled:cursor-not-allowed">
                             {t('record_download_csv')}
                         </button>
@@ -1125,12 +1204,24 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContin
                                 const teamAEmblem = teamAInfo?.emblem || match.teamA.emblem;
                                 const teamBEmblem = teamBInfo?.emblem || match.teamB.emblem;
 
+                                const isAssessment = (match as MatchState & { isAssessment?: boolean }).isAssessment;
                                 return (
                                 <div
                                     key={match.id}
-                                    className={`flex items-center justify-between p-3 rounded-md transition-all duration-200 ${selectedMatch?.id === match.id ? 'bg-[#00A3FF]/20 ring-2 ring-[#00A3FF]' : 'bg-slate-800 hover:bg-slate-700'}`}
+                                    className={`flex items-center justify-between p-3 rounded-md transition-all duration-200 ${selectedMatch?.id === match.id ? 'bg-[#00A3FF]/20 ring-2 ring-[#00A3FF]' : isAssessment ? 'bg-amber-900/30 border-2 border-amber-500/50 hover:bg-amber-900/40' : 'bg-slate-800 hover:bg-slate-700'}`}
                                 >
                                     <div className="flex-grow cursor-pointer" onClick={() => setSelectedMatch(match)}>
+                                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                                            {matchHistoryTab === 'tournament' && (() => {
+                                                const comp = getMatchCompetition(match);
+                                                return comp ? <span className="inline-block text-xs font-medium bg-amber-600/80 text-amber-100 px-2 py-0.5 rounded">[{comp}]</span> : null;
+                                            })()}
+                                            {isAssessment && (
+                                                <span className="inline-flex items-center gap-1 text-xs font-semibold bg-amber-500/30 text-amber-200 px-2 py-0.5 rounded border border-amber-500/50">
+                                                    🎯 수행평가
+                                                </span>
+                                            )}
+                                        </div>
                                         <div className="flex justify-between items-center text-lg">
                                             <div className="flex items-center gap-2">
                                                 <TeamEmblem emblem={teamAEmblem} color={teamAColor} className="w-10 h-10"/>
@@ -1177,6 +1268,42 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContin
                     
                     {enrichedSelectedMatch ? (
                         <div className="space-y-6 pt-6 border-t border-slate-700 animate-fade-in printable-area">
+                            {(enrichedSelectedMatch as EnrichedMatch & { isAssessment?: boolean }).isAssessment && (
+                                <>
+                                    <div className="rounded-xl overflow-hidden border-2 border-amber-500/60 bg-amber-600/90 no-print">
+                                        <div className="px-5 py-4 flex items-center gap-3">
+                                            <span className="text-2xl">🎯</span>
+                                            <h2 className="text-xl font-bold text-amber-950">수행평가 매치</h2>
+                                        </div>
+                                    </div>
+                                    {(() => {
+                                        const match = enrichedSelectedMatch as EnrichedMatch & { hustlePlayers?: { id: string; name: string; team: 'A' | 'B' }[]; hustlePlayerIds?: string[] };
+                                        const list = match.hustlePlayers?.length
+                                            ? match.hustlePlayers
+                                            : (match.hustlePlayerIds ?? []).map(pid => {
+                                                const inA = match.teamA?.players?.[pid];
+                                                const inB = match.teamB?.players?.[pid];
+                                                const p = inA ?? inB;
+                                                return { id: pid, name: p?.originalName ?? '선수', team: (inA ? 'A' : 'B') as 'A' | 'B' };
+                                              });
+                                        if (list.length === 0) return null;
+                                        return (
+                                            <div className="rounded-xl border-2 border-amber-500/40 bg-amber-900/30 p-4 no-print">
+                                                <h3 className="text-sm font-bold text-amber-400 mb-2">🔥 오늘의 허슬 플레이어</h3>
+                                                <p className="text-slate-200 font-medium">
+                                                    {list.map((hp, i) => (
+                                                        <span key={hp.id}>
+                                                            {i > 0 && ', '}
+                                                            <span className="text-amber-200">{hp.name}</span>
+                                                            <span className="text-slate-500 text-sm ml-1">({hp.team === 'A' ? enrichedSelectedMatch.teamA.name : enrichedSelectedMatch.teamB.name})</span>
+                                                        </span>
+                                                    ))}
+                                                </p>
+                                            </div>
+                                        );
+                                    })()}
+                                </>
+                            )}
                              <div className="printable-header hidden print:flex">
                                 <h1 className="printable-title">J-IVE 경기 분석 리포트</h1>
                                 <div className="text-right">
@@ -1185,7 +1312,8 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContin
                                 </div>
                             </div>
                             <div className="flex flex-col lg:flex-row items-center lg:justify-between mb-6 gap-4 no-print">
-                                <h1 className="text-3xl lg:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 text-center lg:text-right">
+                                <h1 className={`text-3xl lg:text-4xl font-bold text-center lg:text-right ${(enrichedSelectedMatch as EnrichedMatch & { isAssessment?: boolean }).isAssessment ? 'text-amber-200' : 'text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400'}`}>
+                                    {(enrichedSelectedMatch as EnrichedMatch & { isAssessment?: boolean }).isAssessment && '🎯 '}
                                     {t('record_detailed_analysis')}
                                 </h1>
                                  <div className='flex items-center gap-2 self-start lg:self-auto'>
@@ -1241,7 +1369,7 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContin
                                 </div>
                             )}
 
-                            {enrichedSelectedMatch.status === 'completed' && enrichedSelectedMatch.setScores && enrichedSelectedMatch.setScores.length > 0 && (
+                            {appMode === 'CLUB' && enrichedSelectedMatch.status === 'completed' && enrichedSelectedMatch.setScores && enrichedSelectedMatch.setScores.length > 0 && (
                                 <div className="flex flex-wrap gap-2 no-print">
                                     {enrichedSelectedMatch.setScores.map((_, idx) => (
                                         <button
@@ -1269,7 +1397,7 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContin
 
                             {enrichedSelectedMatch.status === 'completed' && <GameSummaryPanel />}
 
-                            {enrichedSelectedMatch.status === 'completed' && setDetailTab === 'all' && enrichedSelectedMatch.setScores?.length && (
+                            {appMode === 'CLUB' && enrichedSelectedMatch.status === 'completed' && setDetailTab === 'all' && enrichedSelectedMatch.setScores?.length && (
                                 <div className="bg-slate-800/50 border border-slate-600 rounded-lg p-4 no-print">
                                     <h3 className="text-lg font-bold text-slate-200 mb-2">{t('record_overview_tab')} · 세트별 점수</h3>
                                     <p className="text-slate-300 font-mono">

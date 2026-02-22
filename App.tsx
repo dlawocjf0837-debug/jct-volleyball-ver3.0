@@ -25,7 +25,10 @@ import AnnouncerScreen from './screens/AnnouncerScreen';
 import CameraDirectorScreen from './screens/CameraDirectorScreen';
 import CompetitionScreen from './screens/CompetitionScreen';
 import AdminLockScreen from './screens/AdminLockScreen';
-import { Player, Screen, Stats, STAT_KEYS, MatchState, SavedTeamInfo, SavedOpponentTeam } from './types';
+import StudentJoinScreen from './screens/StudentJoinScreen';
+import RoleRecordScreen from './screens/RoleRecordScreen';
+import { AssessmentRankingScreen } from './screens/AssessmentRankingScreen';
+import { Player, Screen, Stats, STAT_KEYS, MatchState, SavedTeamInfo, SavedOpponentTeam, MatchRoles } from './types';
 import ConfirmationModal from './components/common/ConfirmationModal';
 import PasswordModal from './components/common/PasswordModal';
 import { useTranslation } from './hooks/useTranslation';
@@ -54,7 +57,7 @@ const getInitialPendingJoinCodeFromUrl = (): string | null => {
 };
 
 const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | 'CLUB'; onReturnToInitialScreen?: () => void }) => {
-    const [view, setView] = useState<'menu' | 'teamBuilder' | 'matchSetup' | 'attendance' | 'scoreboard' | 'history' | 'referee' | 'teamManagement' | 'teamAnalysis' | 'achievements' | 'skillDrill' | 'playerRecords' | 'cheerSong' | 'settings' | 'tournament' | 'leagueLobby' | 'league' | 'announcer' | 'cameraDirector' | 'competition'>(getInitialViewFromUrl);
+    const [view, setView] = useState<'menu' | 'teamBuilder' | 'matchSetup' | 'attendance' | 'scoreboard' | 'history' | 'referee' | 'teamManagement' | 'teamAnalysis' | 'achievements' | 'skillDrill' | 'playerRecords' | 'cheerSong' | 'settings' | 'tournament' | 'leagueLobby' | 'league' | 'announcer' | 'cameraDirector' | 'competition' | 'roleRecord' | 'assessmentRanking'>(getInitialViewFromUrl);
     const [scoreboardMode, setScoreboardMode] = useState<'record' | 'referee'>('record');
     const [entryMode, setEntryMode] = useState<'class' | 'club'>('class');
     const { 
@@ -62,7 +65,7 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
         isPasswordModalOpen, handlePasswordSuccess, handlePasswordCancel, closeSession, p2p, requestPassword, leagueStandingsList, getTournamentSettingsForLive
     } = useData();
     const [pendingJoinCode, setPendingJoinCode] = useState<string | null>(getInitialPendingJoinCodeFromUrl);
-    const [teamsForAttendance, setTeamsForAttendance] = useState<{ teamA: string, teamB: string, teamAKey?: string, teamBKey?: string, teamBFromOpponent?: SavedOpponentTeam } | null>(null);
+    const [teamsForAttendance, setTeamsForAttendance] = useState<{ teamA: string, teamB: string, teamAKey?: string, teamBKey?: string, teamBFromOpponent?: SavedOpponentTeam, matchRoles?: MatchRoles, isAssessmentMode?: boolean } | null>(null);
     const [preselectedMatchId, setPreselectedMatchId] = useState<string | null>(null);
     const [tournamentInfoForMatch, setTournamentInfoForMatch] = useState<TournamentInfo | null>(null);
     const [leagueInfoForMatch, setLeagueInfoForMatch] = useState<LeagueInfo | null>(null);
@@ -190,7 +193,7 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
         setView('menu');
     }, []);
 
-    const handleGoToAttendance = (teams: { teamA: string, teamB: string, teamAKey?: string, teamBKey?: string, teamBFromOpponent?: SavedOpponentTeam }, tournamentInfo?: TournamentInfo, leagueInfo?: LeagueInfo) => {
+    const handleGoToAttendance = (teams: { teamA: string, teamB: string, teamAKey?: string, teamBKey?: string, teamBFromOpponent?: SavedOpponentTeam, isAssessmentMode?: boolean }, tournamentInfo?: TournamentInfo, leagueInfo?: LeagueInfo) => {
         setTeamsForAttendance(teams);
         setTournamentInfoForMatch(tournamentInfo || null);
         setLeagueInfoForMatch(leagueInfo || null);
@@ -200,8 +203,10 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
     const handleStartMatchFromAttendance = async (data: { 
         attendingPlayers: { teamA: Record<string, Player>, teamB: Record<string, Player> },
         onCourtIds: { teamA: Set<string>, teamB: Set<string> },
+        onCourtOrder?: { teamA: string[], teamB: string[] },
         teamAInfo: SavedTeamInfo | null,
         teamBInfo: SavedTeamInfo | null,
+        matchRoles?: MatchRoles;
     }) => {
         if (!teamsForAttendance) return;
         const sessionData = {
@@ -212,11 +217,14 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
         const isLeague = !!leagueInfoForMatch;
         const t = isLeague ? await getTournamentSettingsForLive() : { tournamentMaxSets: 3, tournamentTargetScore: 21 };
         startMatch(sessionData, undefined, data.attendingPlayers, tournamentInfoForMatch || undefined, data.onCourtIds, leagueInfoForMatch || undefined, {
+            onCourtOrder: data.onCourtOrder,
             isPracticeMatch: isNextMatchPractice,
             maxSets: isLeague ? t.tournamentMaxSets : (isNextMatchPractice ? 1 : (appMode === 'CLUB' ? 3 : undefined)),
             tournamentTargetScore: isLeague ? t.tournamentTargetScore : undefined,
             isLeagueMatch: isLeague,
             leagueStandingsId: leagueInfoForMatch?.leagueId ?? undefined,
+            matchRoles: data.matchRoles ?? teamsForAttendance?.matchRoles,
+            isAssessment: teamsForAttendance?.isAssessmentMode,
         });
         setIsNextMatchPractice(false);
         setScoreboardMode('record');
@@ -293,13 +301,17 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
             case 'history':
                 return <RecordScreen appMode={appMode} onContinueGame={handleContinueGame} preselectedMatchId={preselectedMatchId} onClearPreselection={() => setPreselectedMatchId(null)} />;
             case 'playerRecords':
-                return <PlayerRecordsScreen />;
+                return <PlayerRecordsScreen appMode={appMode} />;
+            case 'roleRecord':
+                return <RoleRecordScreen onBack={() => setView('menu')} />;
+            case 'assessmentRanking':
+                return <AssessmentRankingScreen onBack={() => setView('menu')} />;
             case 'referee':
                  return <RefereeScreen onStartMatch={handleStartRefereeMatch} />;
             case 'teamManagement':
                 return <TeamManagementScreen appMode={appMode} />;
             case 'teamAnalysis':
-                return <TeamAnalysisScreen />;
+                return <TeamAnalysisScreen appMode={appMode} />;
             case 'achievements':
                 return <AchievementsScreen />;
             case 'skillDrill':
@@ -307,7 +319,7 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
             case 'cheerSong':
                 return <CheerSongScreen />;
             case 'settings':
-                return <SettingsScreen />;
+                return <SettingsScreen appMode={appMode} />;
             case 'competition':
                 return (
                     <CompetitionScreen
@@ -383,6 +395,8 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
                             setView('history');
                         }}
                         onShowPlayerRecords={() => setView('playerRecords')}
+                        onShowRoleRecord={() => setView('roleRecord')}
+                        onShowAssessmentRanking={() => setView('assessmentRanking')}
                         onShowAchievements={() => setView('achievements')}
                         onStartSkillDrill={() => setView('skillDrill')}
                         onStartTeamAnalysis={() => setView('teamAnalysis')}
@@ -409,6 +423,7 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
             case 'scoreboard': return 'scoreboard_title';
             case 'history': return 'match_history_title';
             case 'playerRecords': return 'player_records_title';
+            case 'roleRecord': return 'role_record_title';
             case 'achievements': return 'achievements_title';
             case 'skillDrill': return 'skill_drill_title';
             case 'referee': return 'referee_scoreboard_title';
@@ -531,8 +546,28 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
 const AppWithGate = () => {
     const [isUnlocked, setIsUnlocked] = useState(false);
     const [appMode, setAppMode] = useState<'CLASS' | 'CLUB'>('CLASS');
+    const [showStudentJoin, setShowStudentJoin] = useState(() => !!getInitialPendingJoinCodeFromUrl());
+
+    if (!isUnlocked && showStudentJoin) {
+        const pendingCode = getInitialPendingJoinCodeFromUrl();
+        return (
+            <DataProvider appMode={appMode}>
+                <StudentJoinScreen
+                    onBackToLock={() => setShowStudentJoin(false)}
+                    appMode={appMode}
+                    pendingJoinCode={pendingCode}
+                    clearPendingJoinCode={() => window.history.replaceState({}, '', window.location.pathname)}
+                />
+            </DataProvider>
+        );
+    }
     if (!isUnlocked) {
-        return <AdminLockScreen onUnlock={(mode) => { setAppMode(mode); setIsUnlocked(true); }} />;
+        return (
+            <AdminLockScreen
+                onUnlock={(mode) => { setAppMode(mode); setIsUnlocked(true); }}
+                onRequestStudentJoin={() => setShowStudentJoin(true)}
+            />
+        );
     }
     return (
         <DataProvider appMode={appMode}>

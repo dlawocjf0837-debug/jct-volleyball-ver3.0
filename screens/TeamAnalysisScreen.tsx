@@ -122,10 +122,12 @@ const TeamComparisonRadarModal: React.FC<TeamComparisonRadarModalProps> = ({ isO
 };
 
 
-const TeamAnalysisScreen: React.FC = () => {
-    const { matchHistory, teamSets, showToast } = useData();
+interface TeamAnalysisScreenProps { appMode?: 'CLASS' | 'CLUB'; }
+const TeamAnalysisScreen: React.FC<TeamAnalysisScreenProps> = ({ appMode = 'CLASS' }) => {
+    const { matchHistory, leagueMatchHistory, teamSets, showToast } = useData();
     const { t } = useTranslation();
     const [selectedClass, setSelectedClass] = useState<string>('all');
+    const [selectedCompetition, setSelectedCompetition] = useState<string>('');
     const [teamCountFilter, setTeamCountFilter] = useState('all');
     const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'winRate', direction: 'descending' });
     const [chartMetric, setChartMetric] = useState<keyof TeamStats>('winRate');
@@ -143,11 +145,31 @@ const TeamAnalysisScreen: React.FC = () => {
         return map;
     }, [teamSets]);
 
+    const sourceMatches = appMode === 'CLUB' ? (leagueMatchHistory ?? []) : matchHistory;
+    const availableCompetitions = useMemo(() => 
+        [...new Set((teamSets ?? []).map((s: { className: string }) => s.className))].filter(Boolean).sort(),
+    [teamSets]);
+
     const teamPerformanceData = useMemo((): TeamStats[] => {
         const stats: { [teamName: string]: Omit<TeamStats, 'teamName' | 'winRate' | 'avgPointsFor' | 'avgPointsAgainst' | 'className' | 'emblem' | 'color' | 'slogan' | 'teamCount' | 'avgServeSuccess'> } = {};
 
-        matchHistory
-            .filter(match => match.status === 'completed' && match.winner)
+        let matches = sourceMatches.filter((match: any) => match.status === 'completed' && match.winner);
+        if (appMode === 'CLUB' && selectedCompetition) {
+            matches = matches.filter((match: any) => {
+                const getComp = (key: string) => {
+                    if (!key) return null;
+                    const [setId] = key.split('___');
+                    return (teamSets ?? []).find((s: any) => s.id === setId)?.className ?? null;
+                };
+                const keyA = match?.teamA?.key || match?.teamB?.key;
+                const keyB = match?.teamB?.key;
+                const compA = getComp(keyA || '');
+                const compB = keyB ? getComp(keyB) : compA;
+                return compA === selectedCompetition && compB === selectedCompetition;
+            });
+        }
+
+        matches
             .forEach(match => {
                 const processTeam = (team: 'teamA' | 'teamB') => {
                     const teamData = match[team];
@@ -223,7 +245,7 @@ const TeamAnalysisScreen: React.FC = () => {
                 serveIn: data.serveIn
             };
         });
-    }, [matchHistory, teamDetailsMap, t]);
+    }, [sourceMatches, selectedCompetition, teamDetailsMap, t, appMode, teamSets]);
 
     const availableClasses = useMemo(() => {
         const classSet = new Set(teamPerformanceData.map(t => t.className));
@@ -232,26 +254,30 @@ const TeamAnalysisScreen: React.FC = () => {
 
     const availableTeamCounts = useMemo(() => {
         const counts = new Set<number>();
-        const relevantSets = (selectedClass === 'all')
+        const compKey = appMode === 'CLUB' ? selectedCompetition : selectedClass;
+        const compAll = appMode === 'CLUB' ? '' : 'all';
+        const relevantSets = (compKey === compAll)
             ? teamSets
-            : teamSets.filter(set => set.className === selectedClass);
+            : teamSets.filter((set: { className: string }) => set.className === compKey);
             
-        relevantSets.forEach(set => {
+        relevantSets.forEach((set: { teamCount?: number }) => {
             counts.add(set.teamCount ?? 4); 
         });
         return Array.from(counts).filter(c => c > 0).sort((a,b) => a - b).map(String);
-    }, [teamSets, selectedClass]);
+    }, [teamSets, selectedClass, selectedCompetition, appMode]);
 
     const filteredData = useMemo(() => {
-        const classFiltered = selectedClass === 'all'
+        const compKey = appMode === 'CLUB' ? selectedCompetition : selectedClass;
+        const compAll = appMode === 'CLUB' ? '' : 'all';
+        const classFiltered = compKey === compAll
             ? teamPerformanceData
-            : teamPerformanceData.filter(team => team.className === selectedClass);
+            : teamPerformanceData.filter(team => team.className === compKey);
         
         if (teamCountFilter === 'all') {
             return classFiltered;
         }
         return classFiltered.filter(team => String(team.teamCount) === teamCountFilter);
-    }, [teamPerformanceData, selectedClass, teamCountFilter]);
+    }, [teamPerformanceData, selectedClass, selectedCompetition, teamCountFilter, appMode]);
 
     const sortedData = useMemo(() => {
         const sortableData = [...filteredData];
@@ -392,20 +418,37 @@ const TeamAnalysisScreen: React.FC = () => {
                     <h1 className="text-3xl lg:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 text-center lg:text-right">
                         {t('team_analysis_title')}
                     </h1>
-                    <div className="flex gap-4 items-center self-start lg:self-auto">
-                        <select
-                            id="class-select-analysis"
-                            value={selectedClass}
-                            onChange={(e) => {
-                                setSelectedClass(e.target.value);
-                                setTeamCountFilter('all');
-                                setSelectedTeamsForComparison(new Set());
-                            }}
-                            className="bg-slate-700 border border-slate-600 rounded-md p-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#00A3FF]"
-                        >
-                            <option value="all">{t('analysis_filter_all_classes')}</option>
-                            {availableClasses.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
+                    <div className="flex gap-4 items-center self-start lg:self-auto flex-wrap">
+                        {appMode === 'CLASS' && (
+                            <select
+                                id="class-select-analysis"
+                                value={selectedClass}
+                                onChange={(e) => {
+                                    setSelectedClass(e.target.value);
+                                    setTeamCountFilter('all');
+                                    setSelectedTeamsForComparison(new Set());
+                                }}
+                                className="bg-slate-700 border border-slate-600 rounded-md p-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#00A3FF]"
+                            >
+                                <option value="all">{t('analysis_filter_all_classes')}</option>
+                                {availableClasses.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        )}
+                        {appMode === 'CLUB' && (
+                            <select
+                                id="competition-select-analysis"
+                                value={selectedCompetition}
+                                onChange={(e) => {
+                                    setSelectedCompetition(e.target.value);
+                                    setTeamCountFilter('all');
+                                    setSelectedTeamsForComparison(new Set());
+                                }}
+                                className="bg-slate-700 border border-slate-600 rounded-md p-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                            >
+                                <option value="">전체 대회</option>
+                                {availableCompetitions.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        )}
                         <div className="flex gap-1">
                             <button onClick={() => setTeamCountFilter('all')} className={`px-3 py-1.5 text-xs rounded transition-colors ${teamCountFilter === 'all' ? 'bg-[#00A3FF] text-white font-bold' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}>{t('record_all_formats')}</button>
                             {availableTeamCounts.map(count => (

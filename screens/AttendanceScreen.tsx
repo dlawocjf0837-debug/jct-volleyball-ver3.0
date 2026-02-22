@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useData } from '../contexts/DataContext';
-import { Player, SavedTeamInfo, SavedOpponentTeam, Stats } from '../types';
+import { Player, SavedTeamInfo, SavedOpponentTeam, Stats, MatchRoles } from '../types';
 import TeamEmblem from '../components/TeamEmblem';
 import { PlayerMemoModal } from '../components/PlayerMemoModal';
+import { RolePlayerPickerModal } from '../components/RolePlayerPickerModal';
 import { useTranslation } from '../hooks/useTranslation';
 
 const defaultStats: Stats = { height: 0, shuttleRun: 0, flexibility: 0, fiftyMeterDash: 0, underhand: 0, serve: 0 };
@@ -42,12 +43,15 @@ interface AttendanceScreenProps {
         teamAKey?: string;
         teamBKey?: string;
         teamBFromOpponent?: SavedOpponentTeam;
+        matchRoles?: MatchRoles;
     };
     onStartMatch: (data: {
         attendingPlayers: { teamA: Record<string, Player>, teamB: Record<string, Player> },
         onCourtIds: { teamA: Set<string>, teamB: Set<string> },
+        onCourtOrder?: { teamA: string[], teamB: string[] },
         teamAInfo: SavedTeamInfo | null,
         teamBInfo: SavedTeamInfo | null,
+        matchRoles?: MatchRoles;
     }) => void;
 }
 
@@ -95,27 +99,70 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
         };
     }, [teamSelection, teamSetsMap]);
     
-    const [onCourt, setOnCourt] = useState<{ teamA: Set<string>, teamB: Set<string> }>({ teamA: new Set(), teamB: new Set() });
+    const [onCourtOrdered, setOnCourtOrdered] = useState<{ teamA: string[], teamB: string[] }>({ teamA: [], teamB: [] });
     const [memoOverrides, setMemoOverrides] = useState<Record<string, string>>({});
     const [memoModalPlayer, setMemoModalPlayer] = useState<{ playerId: string; name: string; side: 'teamA' | 'teamB' } | null>(null);
+    const [matchRoles, setMatchRoles] = useState<MatchRoles>(() => teamSelection.matchRoles ?? { announcers: [], referees: [], lineJudges: [], cameraDirectors: [], recorders: [] });
+    const [rolePickerTarget, setRolePickerTarget] = useState<'announcer' | 'referee' | 'lineJudge' | 'cameraDirector' | 'recorder' | null>(null);
 
     useEffect(() => {
-        setOnCourt({
-            teamA: new Set(Object.keys(teamAPlayers)),
-            teamB: new Set(Object.keys(teamBPlayers))
-        });
+        const aOrder = Object.values(teamAPlayers).sort((a: Player, b: Player) => parseInt(a.studentNumber || '0') - parseInt(b.studentNumber || '0')).map(p => p.id);
+        const bOrder = Object.values(teamBPlayers).sort((a: Player, b: Player) => parseInt(a.studentNumber || '0') - parseInt(b.studentNumber || '0')).map(p => p.id);
+        setOnCourtOrdered({ teamA: aOrder, teamB: bOrder });
     }, [teamAPlayers, teamBPlayers]);
 
     const handleToggleOnCourt = (playerId: string, team: 'teamA' | 'teamB') => {
-        setOnCourt(prev => {
-            const newSet = new Set(prev[team]);
-            if (newSet.has(playerId)) {
-                newSet.delete(playerId);
-            } else {
-                newSet.add(playerId);
-            }
-            return { ...prev, [team]: newSet };
+        setOnCourtOrdered(prev => {
+            const arr = prev[team];
+            const idx = arr.indexOf(playerId);
+            if (idx >= 0) return { ...prev, [team]: arr.filter(id => id !== playerId) };
+            return { ...prev, [team]: [...arr, playerId] };
         });
+    };
+
+    const handleMoveCourtOrder = (team: 'teamA' | 'teamB', index: number, direction: 'up' | 'down') => {
+        setOnCourtOrdered(prev => {
+            const arr = [...prev[team]];
+            const newIdx = direction === 'up' ? index - 1 : index + 1;
+            if (newIdx < 0 || newIdx >= arr.length) return prev;
+            [arr[index], arr[newIdx]] = [arr[newIdx], arr[index]];
+            return { ...prev, [team]: arr };
+        });
+    };
+
+    const handleDragStart = (team: 'teamA' | 'teamB', index: number) => (e: React.DragEvent) => {
+        e.dataTransfer.setData('text/plain', JSON.stringify({ team, index }));
+        e.dataTransfer.effectAllowed = 'move';
+    };
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+    };
+    const handleDragEnd = (e: React.DragEvent) => {
+        (e.target as HTMLElement).classList.remove('opacity-60');
+    };
+    const handleDrop = (team: 'teamA' | 'teamB', dropIndex: number) => (e: React.DragEvent) => {
+        e.preventDefault();
+        (e.currentTarget as HTMLElement).classList.remove('opacity-60');
+        try {
+            const raw = e.dataTransfer.getData('text/plain');
+            const { team: fromTeam, index: dragIndex } = JSON.parse(raw) as { team: 'teamA' | 'teamB'; index: number };
+            if (fromTeam !== team || dragIndex === dropIndex) return;
+            setOnCourtOrdered(prev => {
+                const arr = [...prev[team]];
+                const [removed] = arr.splice(dragIndex, 1);
+                const insertAt = dragIndex < dropIndex ? dropIndex - 1 : dropIndex;
+                arr.splice(insertAt, 0, removed);
+                return { ...prev, [team]: arr };
+            });
+        } catch (_) { /* ignore */ }
+    };
+    const handleDragEnter = (e: React.DragEvent) => {
+        e.preventDefault();
+        (e.currentTarget as HTMLElement).classList.add('opacity-60');
+    };
+    const handleDragLeave = (e: React.DragEvent) => {
+        (e.currentTarget as HTMLElement).classList.remove('opacity-60');
     };
 
     const handleStart = () => {
@@ -132,9 +179,11 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
                 teamA: mergeMemo(teamAPlayers),
                 teamB: mergeMemo(teamBPlayers),
             },
-            onCourtIds: onCourt,
+            onCourtIds: { teamA: new Set(onCourtOrdered.teamA), teamB: new Set(onCourtOrdered.teamB) },
+            onCourtOrder: onCourtOrdered,
             teamAInfo: teamAInfo,
             teamBInfo: teamBInfo,
+            ...(appMode === 'CLASS' ? { matchRoles } : {}),
         });
     };
     
@@ -143,29 +192,83 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
     // FIX: Add explicit Player type to sort callback parameters to resolve them being inferred as `unknown`.
     const sortedTeamBPlayers = useMemo(() => Object.values(teamBPlayers).sort((a: Player, b: Player) => parseInt(a.studentNumber) - parseInt(b.studentNumber)), [teamBPlayers]);
     
-    const isStartDisabled = onCourt.teamA.size < 1 || onCourt.teamB.size < 1;
+    const onCourtSetA = useMemo(() => new Set(onCourtOrdered.teamA), [onCourtOrdered.teamA]);
+    const onCourtSetB = useMemo(() => new Set(onCourtOrdered.teamB), [onCourtOrdered.teamB]);
+    const isStartDisabled = onCourtOrdered.teamA.length < 1 || onCourtOrdered.teamB.length < 1;
+    const lineupComplete = onCourtOrdered.teamA.length > 0 && onCourtOrdered.teamB.length > 0;
+
+    const selectedClasses = useMemo(() => {
+        const classes: string[] = [];
+        if (teamSelection.teamAKey) {
+            const data = teamSetsMap.get(teamSelection.teamAKey);
+            if (data?.set.className && !classes.includes(data.set.className)) classes.push(data.set.className);
+        }
+        if (teamSelection.teamBKey) {
+            const data = teamSetsMap.get(teamSelection.teamBKey);
+            if (data?.set.className && !classes.includes(data.set.className)) classes.push(data.set.className);
+        }
+        return classes;
+    }, [teamSelection.teamAKey, teamSelection.teamBKey, teamSetsMap]);
+
+    const excludePlayerIds = useMemo(() => [...onCourtOrdered.teamA, ...onCourtOrdered.teamB], [onCourtOrdered.teamA, onCourtOrdered.teamB]);
 
     const showPlayerMemo = appMode === 'CLUB';
-    const PlayerList: React.FC<{
-        players: Player[];
-        onCourtSet: Set<string>;
+    const showServeOrder = appMode === 'CLUB';
+    const playerById = useMemo(() => ({ ...teamAPlayers, ...teamBPlayers }), [teamAPlayers, teamBPlayers]);
+    const CourtOrderList: React.FC<{
+        orderedIds: string[];
+        team: 'teamA' | 'teamB';
+        allPlayers: Player[];
         onToggle: (playerId: string) => void;
         onMemoClick: (playerId: string, name: string) => void;
         showMemoButton: boolean;
-    }> = ({ players, onCourtSet, onToggle, onMemoClick, showMemoButton }) => (
-        <div className="space-y-2">
-            {players.map(player => (
-                <label key={player.id} className="flex items-center gap-3 p-3 rounded-lg bg-slate-800 cursor-pointer hover:bg-slate-700 transition-colors">
-                    <input
-                        type="checkbox"
-                        checked={onCourtSet.has(player.id)}
-                        onChange={() => onToggle(player.id)}
-                        className="h-6 w-6 bg-slate-700 border-slate-500 rounded text-sky-500 focus:ring-sky-500 cursor-pointer"
-                    />
-                    <span className="font-semibold text-slate-200 flex-1">{player.originalName}</span>
-                    {showMemoButton && (
-                        <button type="button" onClick={e => { e.preventDefault(); onMemoClick(player.id, player.originalName); }} className="p-1 rounded hover:bg-slate-600 text-amber-400/90 shrink-0" title="전력 분석 메모">📝</button>
-                    )}
+        showServeOrder: boolean;
+        teamColor: string;
+        onDragStart: (team: 'teamA' | 'teamB', index: number) => (e: React.DragEvent) => void;
+        onDragOver: (e: React.DragEvent) => void;
+        onDragEnter: (e: React.DragEvent) => void;
+        onDragLeave: (e: React.DragEvent) => void;
+        onDragEnd: (e: React.DragEvent) => void;
+        onDrop: (team: 'teamA' | 'teamB', index: number) => (e: React.DragEvent) => void;
+    }> = ({ orderedIds, team, allPlayers, onToggle, onMemoClick, showMemoButton, showServeOrder, teamColor, onDragStart, onDragOver, onDragEnter, onDragLeave, onDragEnd, onDrop }) => (
+        <div className="space-y-1.5">
+            {showServeOrder && <p className="text-xs text-slate-400 mb-2">체크한 선수가 주전(1번~6번 서버 순서), ▲▼ 또는 드래그로 서브 순서 변경</p>}
+            {orderedIds.map((id, idx) => {
+                const player = playerById[id];
+                if (!player) return null;
+                return (
+                    <label
+                        key={id}
+                        draggable={showServeOrder}
+                        onDragStart={showServeOrder ? onDragStart(team, idx) : undefined}
+                        onDragOver={showServeOrder ? onDragOver : undefined}
+                        onDragEnter={showServeOrder ? onDragEnter : undefined}
+                        onDragLeave={showServeOrder ? onDragLeave : undefined}
+                        onDragEnd={showServeOrder ? onDragEnd : undefined}
+                        onDrop={showServeOrder ? onDrop(team, idx) : undefined}
+                        className={`flex items-center gap-3 p-2.5 rounded-lg cursor-pointer hover:opacity-90 transition-all border-l-4 ${
+                            team === 'teamA' ? 'bg-blue-900/30 border-blue-500/60' : 'bg-red-900/30 border-red-500/60'
+                        } ${showServeOrder ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                        style={{ borderLeftColor: teamColor }}
+                    >
+                        <input type="checkbox" checked onChange={() => onToggle(id)} className="h-5 w-5 rounded flex-shrink-0" style={{ accentColor: teamColor }} />
+                        <span className="font-medium text-slate-200 flex-1">{player.originalName}</span>
+                        {showServeOrder && (
+                            <div className="flex flex-col gap-0.5 opacity-70">
+                                <button type="button" onClick={e => { e.preventDefault(); handleMoveCourtOrder(team, idx, 'up'); }} disabled={idx === 0} className="p-0.5 rounded hover:bg-slate-600/50 disabled:opacity-30 text-slate-400 leading-none text-xs">▲</button>
+                                <button type="button" onClick={e => { e.preventDefault(); handleMoveCourtOrder(team, idx, 'down'); }} disabled={idx === orderedIds.length - 1} className="p-0.5 rounded hover:bg-slate-600/50 disabled:opacity-30 text-slate-400 leading-none text-xs">▼</button>
+                            </div>
+                        )}
+                        {showMemoButton && (
+                            <button type="button" onClick={e => { e.preventDefault(); onMemoClick(id, player.originalName); }} className="p-1 rounded hover:bg-slate-600/50 text-amber-400/90 text-sm" title="전력 분석 메모">📝</button>
+                        )}
+                    </label>
+                );
+            })}
+            {allPlayers.filter(p => !orderedIds.includes(p.id)).map(player => (
+                <label key={player.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-slate-800/50 cursor-pointer hover:bg-slate-700/50 transition-colors border-l-4 border-transparent">
+                    <input type="checkbox" checked={false} onChange={() => onToggle(player.id)} className="h-5 w-5 rounded flex-shrink-0" style={{ accentColor: teamColor }} />
+                    <span className="text-slate-500 flex-1">+ {player.originalName}</span>
                 </label>
             ))}
         </div>
@@ -185,18 +288,76 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
                 <div className="bg-slate-900/50 p-4 rounded-lg border-2 border-slate-700">
                     <div className="flex flex-col items-center text-center gap-2 mb-4">
                         {teamAInfo && <TeamEmblem emblem={teamAInfo.emblem} color={teamAInfo.color || '#3b82f6'} className="w-16 h-16" />}
-                        <h3 className="text-2xl font-bold" style={{ color: teamAInfo?.color || '#3b82f6' }}>{teamAInfo?.teamName || 'Team A'} ({onCourt.teamA.size}{t('attendance_count_suffix')})</h3>
+                        <h3 className="text-2xl font-bold" style={{ color: teamAInfo?.color || '#3b82f6' }}>{teamAInfo?.teamName || 'Team A'} ({onCourtOrdered.teamA.length}{t('attendance_count_suffix')})</h3>
                     </div>
-                    <PlayerList players={sortedTeamAPlayers} onCourtSet={onCourt.teamA} onToggle={(id) => handleToggleOnCourt(id, 'teamA')} onMemoClick={(id, name) => setMemoModalPlayer({ playerId: id, name, side: 'teamA' })} showMemoButton={showPlayerMemo} />
+                    <CourtOrderList orderedIds={onCourtOrdered.teamA} team="teamA" allPlayers={sortedTeamAPlayers} onToggle={(id) => handleToggleOnCourt(id, 'teamA')} onMemoClick={(id, name) => setMemoModalPlayer({ playerId: id, name, side: 'teamA' })} showMemoButton={showPlayerMemo} showServeOrder={showServeOrder} teamColor={teamAInfo?.color || '#3b82f6'} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragEnd={handleDragEnd} onDrop={handleDrop} />
                 </div>
                 <div className="bg-slate-900/50 p-4 rounded-lg border-2 border-slate-700">
                     <div className="flex flex-col items-center text-center gap-2 mb-4">
                         {teamBInfo && <TeamEmblem emblem={teamBInfo.emblem} color={teamBInfo.color || '#ef4444'} className="w-16 h-16" />}
-                        <h3 className="text-2xl font-bold" style={{ color: teamBInfo?.color || '#ef4444' }}>{teamBInfo?.teamName || 'Team B'} ({onCourt.teamB.size}{t('attendance_count_suffix')})</h3>
+                        <h3 className="text-2xl font-bold" style={{ color: teamBInfo?.color || '#ef4444' }}>{teamBInfo?.teamName || 'Team B'} ({onCourtOrdered.teamB.length}{t('attendance_count_suffix')})</h3>
                     </div>
-                    <PlayerList players={sortedTeamBPlayers} onCourtSet={onCourt.teamB} onToggle={(id) => handleToggleOnCourt(id, 'teamB')} onMemoClick={(id, name) => setMemoModalPlayer({ playerId: id, name, side: 'teamB' })} showMemoButton={showPlayerMemo} />
+                    <CourtOrderList orderedIds={onCourtOrdered.teamB} team="teamB" allPlayers={sortedTeamBPlayers} onToggle={(id) => handleToggleOnCourt(id, 'teamB')} onMemoClick={(id, name) => setMemoModalPlayer({ playerId: id, name, side: 'teamB' })} showMemoButton={showPlayerMemo} showServeOrder={showServeOrder} teamColor={teamBInfo?.color || '#ef4444'} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragEnd={handleDragEnd} onDrop={handleDrop} />
                 </div>
             </div>
+            {appMode === 'CLASS' && lineupComplete && (
+                <div className="p-4 sm:p-5 bg-slate-800/50 rounded-lg border border-slate-700">
+                    <h3 className="text-lg sm:text-xl font-bold text-sky-400 mb-3">🎭 경기 역할 배정</h3>
+                    <p className="text-sm sm:text-base text-slate-400 mb-4">비출전 학생에게 경기 역할을 배정할 수 있습니다. 역할당 최대 4명.</p>
+                    <div className="space-y-4">
+                        {[
+                            { key: 'announcer' as const, label: '아나운서', players: matchRoles.announcers },
+                            { key: 'referee' as const, label: '주심', players: matchRoles.referees },
+                            { key: 'cameraDirector' as const, label: '카메라 감독', players: matchRoles.cameraDirectors },
+                            { key: 'recorder' as const, label: '기록관', players: matchRoles.recorders },
+                            { key: 'lineJudge' as const, label: '선심', players: matchRoles.lineJudges },
+                        ].map(({ key, label, players }) => (
+                            <div key={key} className="flex items-start sm:items-center justify-between gap-3 p-3 rounded-lg bg-slate-900/50 flex-wrap sm:flex-nowrap">
+                                <span className="text-base sm:text-lg font-medium text-slate-300 shrink-0">{label}</span>
+                                <div className="flex flex-wrap items-center gap-2 flex-1 justify-end min-w-0">
+                                    {players.map(p => (
+                                        <span
+                                            key={p.id}
+                                            onClick={() => {
+                                                const remove = players.filter(x => x.id !== p.id);
+                                                if (key === 'announcer') setMatchRoles(r => ({ ...r, announcers: remove }));
+                                                else if (key === 'referee') setMatchRoles(r => ({ ...r, referees: remove }));
+                                                else if (key === 'lineJudge') setMatchRoles(r => ({ ...r, lineJudges: remove }));
+                                                else if (key === 'cameraDirector') setMatchRoles(r => ({ ...r, cameraDirectors: remove }));
+                                                else if (key === 'recorder') setMatchRoles(r => ({ ...r, recorders: remove }));
+                                            }}
+                                            className="bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-sm cursor-pointer hover:bg-blue-200 transition"
+                                        >
+                                            {p.originalName} ✕
+                                        </span>
+                                    ))}
+                                    {players.length < 4 && (
+                                        <button type="button" onClick={() => setRolePickerTarget(key)} className="text-sm px-3 py-1.5 rounded-lg bg-slate-600 hover:bg-slate-500 text-white font-medium">+ 학생 선택</button>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            <RolePlayerPickerModal
+                isOpen={!!rolePickerTarget}
+                onClose={() => setRolePickerTarget(null)}
+                selectedClasses={selectedClasses}
+                excludePlayerIds={excludePlayerIds}
+                roleLabel={rolePickerTarget === 'lineJudge' ? '선심' : rolePickerTarget === 'announcer' ? '아나운서' : rolePickerTarget === 'referee' ? '주심' : rolePickerTarget === 'cameraDirector' ? '카메라 감독' : rolePickerTarget === 'recorder' ? '기록관' : ''}
+                multiSelect={true}
+                selectedPlayers={rolePickerTarget === 'announcer' ? matchRoles.announcers : rolePickerTarget === 'referee' ? matchRoles.referees : rolePickerTarget === 'lineJudge' ? matchRoles.lineJudges : rolePickerTarget === 'cameraDirector' ? matchRoles.cameraDirectors : rolePickerTarget === 'recorder' ? matchRoles.recorders : []}
+                onSelectMultiple={(list) => {
+                    if (rolePickerTarget === 'announcer') setMatchRoles(r => ({ ...r, announcers: list }));
+                    else if (rolePickerTarget === 'referee') setMatchRoles(r => ({ ...r, referees: list }));
+                    else if (rolePickerTarget === 'lineJudge') setMatchRoles(r => ({ ...r, lineJudges: list }));
+                    else if (rolePickerTarget === 'cameraDirector') setMatchRoles(r => ({ ...r, cameraDirectors: list }));
+                    else if (rolePickerTarget === 'recorder') setMatchRoles(r => ({ ...r, recorders: list }));
+                }}
+            />
+
             {memoModalPlayer && (
                 <PlayerMemoModal
                     isOpen={!!memoModalPlayer}
@@ -219,7 +380,7 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
                 <button
                     onClick={handleStart}
                     disabled={isStartDisabled}
-                    className="bg-[#00A3FF] hover:bg-[#0082cc] text-white font-bold py-3 px-12 rounded-lg transition duration-200 text-xl disabled:bg-slate-600 disabled:cursor-not-allowed"
+                    className="w-full sm:w-auto bg-[#00A3FF] hover:bg-[#0082cc] text-white font-bold py-3 px-12 rounded-lg transition duration-200 text-xl disabled:bg-slate-600 disabled:cursor-not-allowed"
                 >
                     {isStartDisabled ? t('select_min_one_player_per_team') : t('start_match')}
                 </button>

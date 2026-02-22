@@ -7,10 +7,13 @@ import { BadgeDetailModal } from '../components/BadgeDetailModal';
 import { BADGE_DEFINITIONS } from '../data/badges';
 import { useTranslation } from '../hooks/useTranslation';
 
-const PlayerRecordsScreen: React.FC = () => {
-    const { teamSets, matchHistory, playerCumulativeStats, playerAchievements } = useData();
+interface PlayerRecordsScreenProps { appMode?: 'CLASS' | 'CLUB'; }
+const PlayerRecordsScreen: React.FC<PlayerRecordsScreenProps> = ({ appMode = 'CLASS' }) => {
+    const { teamSets, matchHistory, practiceMatchHistory, leagueMatchHistory, playerCumulativeStats, playerAchievements } = useData();
     const { t } = useTranslation();
     const [selectedClass, setSelectedClass] = useState<string>('');
+    const [selectedTournament, setSelectedTournament] = useState<string>('');
+    const [selectedTeam, setSelectedTeam] = useState<string>('');
     const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
     const [playerHistoryData, setPlayerHistoryData] = useState<any | null>(null);
     const [selectedBadgeDetail, setSelectedBadgeDetail] = useState<{ badge: Badge, player: Player, stats: Partial<PlayerCumulativeStats> } | null>(null);
@@ -18,19 +21,19 @@ const PlayerRecordsScreen: React.FC = () => {
     const availableClasses = useMemo(() => {
         const classSet = new Set<string>();
         (teamSets ?? []).forEach(set => {
-            // Strip any non-numeric suffixes if possible, but keep original if needed.
-            // Assumption: set.className usually contains "1반", "2반".
-            // We want just "1", "2".
             const digits = set.className.replace(/[^0-9]/g, '');
-            if (digits) {
-                classSet.add(digits);
-            } else {
-                // Fallback for non-numeric class names
-                classSet.add(set.className);
-            }
+            if (digits) classSet.add(digits);
+            else classSet.add(set.className);
         });
         return Array.from(classSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
     }, [teamSets]);
+
+    const availableTournaments = useMemo(() => [...new Set((teamSets ?? []).map((s) => s.className))].sort(), [teamSets]);
+    const availableTeamsForTournament = useMemo(() => {
+        if (!selectedTournament) return [];
+        const s = (teamSets ?? []).find((set) => set.className === selectedTournament);
+        return (s?.teams ?? []).map((t: { teamName: string }) => t.teamName).sort();
+    }, [teamSets, selectedTournament]);
 
     // Group players by identity (Class + Student Number + Name) to handle duplicates from old ID generation logic
     const groupedPlayers = useMemo<Map<string, { player: Player; ids: string[] }>>(() => {
@@ -62,17 +65,19 @@ const PlayerRecordsScreen: React.FC = () => {
     }, [groupedPlayers]);
 
     const filteredPlayers = useMemo(() => {
+        if (appMode === 'CLUB') {
+            if (!selectedTournament || !selectedTeam) return [];
+            const targetSet = (teamSets ?? []).find((s) => s.className === selectedTournament);
+            const targetTeam = targetSet?.teams?.find((t: { teamName: string }) => t.teamName === selectedTeam);
+            const teamPlayerIds = new Set(targetTeam?.playerIds ?? []);
+            return allPlayers.filter((p) => teamPlayerIds.has(p.id));
+        }
         if (!selectedClass) return [];
-    
-        // Only return representative players that belong to the selected class
         return allPlayers.filter(player => {
-             // Check if player class matches. Note: player.class is just the number string "1", "2".
-             // We need to compare it with the selectedClass ("1", "2") directly.
-             // Sometimes player.class might have suffix in old data, strip it.
-             const pClass = player.class.replace(/[^0-9]/g, '');
-             return pClass === selectedClass || player.class === selectedClass;
+            const pClass = player.class.replace(/[^0-9]/g, '');
+            return pClass === selectedClass || player.class === selectedClass;
         });
-    }, [allPlayers, selectedClass]); // t 의존성 제거: 필터링 로직에서 사용하지 않음
+    }, [allPlayers, selectedClass, appMode, selectedTournament, selectedTeam, teamSets]);
     
     // Aggregate stats from all IDs belonging to the same person
     const getAggregatedStats = useCallback((player: Player) => {
@@ -135,10 +140,26 @@ const PlayerRecordsScreen: React.FC = () => {
         };
         const performanceHistory: any[] = [];
     
-        const completedMatches = (matchHistory ?? [])
-            .filter((m: { status?: string }) => m?.status === 'completed')
+        const regular = (matchHistory ?? []).filter((m: any) => m?.status === 'completed').map((m: any) => ({ ...m, _matchType: 'regular' as const }));
+        const practice = (practiceMatchHistory ?? []).filter((m: any) => m?.status === 'completed').map((m: any) => ({ ...m, _matchType: 'practice' as const }));
+        let league = (leagueMatchHistory ?? []).filter((m: any) => m?.status === 'completed').map((m: any) => ({ ...m, _matchType: 'tournament' as const }));
+        if (appMode === 'CLUB' && selectedTournament) {
+            league = league.filter((m: any) => {
+                const keyA = m?.teamA?.key;
+                const keyB = m?.teamB?.key;
+                const getComp = (key: string) => {
+                    if (!key) return null;
+                    const [setId] = key.split('___');
+                    return (teamSets ?? []).find((s: any) => s.id === setId)?.className ?? null;
+                };
+                const compA = getComp(keyA || keyB || '');
+                const compB = keyB ? getComp(keyB) : compA;
+                return compA === selectedTournament && compB === selectedTournament;
+            });
+        }
+        const completedMatches = [...regular, ...practice, ...league]
             .sort((a: { date?: string }, b: { date?: string }) => new Date(a?.date ?? 0).getTime() - new Date(b?.date ?? 0).getTime());
-    
+
         completedMatches.forEach((match: any) => {
             let playerTeam: 'teamA' | 'teamB' | null = null;
             let matchedId: string | null = null;
@@ -175,6 +196,7 @@ const PlayerRecordsScreen: React.FC = () => {
                         teamName: teamState.name,
                         opponent: opponentName,
                         stats: playerStatsForMatch,
+                        matchType: match._matchType ?? 'regular',
                     });
                 }
             }
@@ -186,7 +208,7 @@ const PlayerRecordsScreen: React.FC = () => {
         performanceHistory.reverse();
     
         setPlayerHistoryData({ player, cumulativeStats, performanceHistory });
-    }, [matchHistory, groupedPlayers]);
+    }, [matchHistory, practiceMatchHistory, leagueMatchHistory, groupedPlayers, appMode, selectedTournament, teamSets]);
 
     const handlePlayerClick = (player: Player) => {
         setSelectedPlayer(player);
@@ -202,6 +224,7 @@ const PlayerRecordsScreen: React.FC = () => {
                     performanceHistory={playerHistoryData.performanceHistory}
                     onClose={() => setPlayerHistoryData(null)}
                     teamSets={teamSets}
+                    appMode={appMode}
                 />
             )}
             {selectedBadgeDetail && (
@@ -217,24 +240,56 @@ const PlayerRecordsScreen: React.FC = () => {
                     <h1 className="text-3xl lg:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 text-center lg:text-right">
                         {t('player_records_title')}
                     </h1>
-                    <div className="flex-grow sm:flex-grow-0 self-start lg:self-auto">
-                        <label htmlFor="class-select-records" className="sr-only">{t('record_filter_class_label')}</label>
-                        <select
-                            id="class-select-records"
-                            value={selectedClass}
-                            onChange={(e) => setSelectedClass(e.target.value)}
-                            className="w-full sm:w-auto bg-slate-700 border border-slate-600 rounded-md p-3 text-white focus:outline-none focus:ring-2 focus:ring-[#00A3FF]"
-                        >
-                            <option value="">{t('player_records_select_class_prompt')}</option>
-                            {(availableClasses ?? []).map(c => (
-                                <option key={c} value={c}>{t('class_format', { class: c })}</option>
-                            ))}
-                        </select>
+                    <div className="flex-grow sm:flex-grow-0 self-start lg:self-auto flex flex-wrap gap-2 items-center">
+                        {appMode === 'CLUB' ? (
+                            <>
+                                <label htmlFor="tournament-select-records" className="sr-only">대회 선택</label>
+                                <select
+                                    id="tournament-select-records"
+                                    value={selectedTournament}
+                                    onChange={(e) => { setSelectedTournament(e.target.value); setSelectedTeam(''); }}
+                                    className="bg-slate-700 border border-slate-600 rounded-md p-3 text-white focus:outline-none focus:ring-2 focus:ring-[#00A3FF]"
+                                >
+                                    <option value="">대회 선택</option>
+                                    {availableTournaments.map((c) => (
+                                        <option key={c} value={c}>{c}</option>
+                                    ))}
+                                </select>
+                                <label htmlFor="team-select-records" className="sr-only">팀 선택</label>
+                                <select
+                                    id="team-select-records"
+                                    value={selectedTeam}
+                                    onChange={(e) => setSelectedTeam(e.target.value)}
+                                    className="bg-slate-700 border border-slate-600 rounded-md p-3 text-white focus:outline-none focus:ring-2 focus:ring-[#00A3FF]"
+                                    disabled={!selectedTournament}
+                                >
+                                    <option value="">팀(학교) 선택</option>
+                                    {availableTeamsForTournament.map((tn) => (
+                                        <option key={tn} value={tn}>{tn}</option>
+                                    ))}
+                                </select>
+                            </>
+                        ) : (
+                            <>
+                                <label htmlFor="class-select-records" className="sr-only">{t('record_filter_class_label')}</label>
+                                <select
+                                    id="class-select-records"
+                                    value={selectedClass}
+                                    onChange={(e) => setSelectedClass(e.target.value)}
+                                    className="w-full sm:w-auto bg-slate-700 border border-slate-600 rounded-md p-3 text-white focus:outline-none focus:ring-2 focus:ring-[#00A3FF]"
+                                >
+                                    <option value="">{t('player_records_select_class_prompt')}</option>
+                                    {(availableClasses ?? []).map(c => (
+                                        <option key={c} value={c}>{t('class_format', { class: c })}</option>
+                                    ))}
+                                </select>
+                            </>
+                        )}
                     </div>
                 </div>
 
                 <div className="bg-slate-900 p-4 rounded-lg border border-slate-800 min-h-[400px]">
-                    {selectedClass ? (
+                    {(appMode === 'CLUB' ? (selectedTournament && selectedTeam) : selectedClass) ? (
                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 items-start">
                             {(filteredPlayers ?? []).map(player => {
                                 // Use the aggregation function instead of direct lookup
@@ -285,7 +340,7 @@ const PlayerRecordsScreen: React.FC = () => {
                     ) : (
                         <div className="flex flex-col items-center justify-center h-full text-center py-8 px-4 text-slate-400">
                             <h3 className="text-lg font-bold text-sky-400 mb-3">{t('player_records_guide_title')}</h3>
-                            <p>{t('player_records_guide_desc')}</p>
+                            <p>{appMode === 'CLUB' ? '대회와 팀을 선택하면 해당 팀의 선수 기록을 볼 수 있습니다.' : t('player_records_guide_desc')}</p>
                         </div>
                     )}
                 </div>

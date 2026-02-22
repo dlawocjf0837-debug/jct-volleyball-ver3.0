@@ -1,7 +1,7 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useData } from '../contexts/DataContext';
 import localforage from 'localforage';
-import type { TeamSet, SavedOpponentTeam, SavedTeamInfo } from '../types';
+import type { TeamSet, SavedOpponentTeam, SavedTeamInfo, MatchState } from '../types';
 
 const SAVED_TACTICS_KEY = 'jive_saved_tactics_list';
 const TACTICAL_MEMOS_KEY = 'jive_tactical_memos';
@@ -22,11 +22,11 @@ interface SavedTactics {
     selectedTeamBlue?: { name: string; setId?: string; memo?: string };
 }
 
-interface Props { isOpen: boolean; onClose: () => void; appMode?: 'CLASS' | 'CLUB'; }
+interface Props { isOpen: boolean; onClose: () => void; appMode?: 'CLASS' | 'CLUB'; /** 스코어보드 내부에서 열릴 때 현재 경기 명단 자동 세팅용 */ initialMatchState?: MatchState | null; }
 
 const ASPECT = 2;
-/** 자석 크기: 3~4글자 이름이 잘리지 않도록 56px(w-14) 이상 */
-const TOKEN_SIZE = 56;
+/** 자석 크기: 가독성 향상을 위해 64px(w-16) */
+const TOKEN_SIZE = 64;
 const INITIAL_BENCH = 2;
 
 /** 후보 추가 시 절대 중복되지 않는 고유 id 생성 */
@@ -34,27 +34,46 @@ function uniqueBenchId(prefix: string): string {
     return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
 }
 
-const POS_6 = [{ x: 14, y: 22 }, { x: 25, y: 22 }, { x: 36, y: 22 }, { x: 14, y: 55 }, { x: 25, y: 55 }, { x: 36, y: 55 }];
-const POS_6_OPP = POS_6.map((p) => ({ x: 100 - p.x, y: p.y }));
-const POS_9 = [{ x: 14, y: 18 }, { x: 25, y: 18 }, { x: 36, y: 18 }, { x: 14, y: 42 }, { x: 25, y: 42 }, { x: 36, y: 42 }, { x: 14, y: 66 }, { x: 25, y: 66 }, { x: 36, y: 66 }];
-const POS_9_OPP = POS_9.map((p) => ({ x: 100 - p.x, y: p.y }));
+/** 팀 이름 부분 제거 후 '1번' 또는 학생 이름만 반환 (자석 라벨용) */
+function stripTeamNameFromLabel(raw: string, teamName?: string): string {
+    let s = (raw ?? '').trim();
+    if (teamName) s = s.replace(new RegExp(`^${teamName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*`), '');
+    s = s.replace(/^.+팀\s*/, '').trim();
+    return s || '?';
+}
+
+/** 부모 코트 기준 절대 좌표(%). Red: x 20~40%, Blue: x 60~80%. 벤치: y 85~90%, x 30~70% 중앙부. */
+/** 6인제: Red 진영 2열 3행 (앞3/뒤3), x 20~40% */
+const POS_6 = [
+    { x: 25, y: 20 }, { x: 30, y: 20 }, { x: 35, y: 20 },   // 앞열
+    { x: 25, y: 55 }, { x: 30, y: 55 }, { x: 35, y: 55 },   // 뒤열
+];
+const POS_6_OPP = [
+    { x: 65, y: 20 }, { x: 70, y: 20 }, { x: 75, y: 20 },
+    { x: 65, y: 55 }, { x: 70, y: 55 }, { x: 75, y: 55 },
+];
+/** 9인제: Red 진영 3열 3행, x 20~40% */
+const POS_9 = [
+    { x: 25, y: 16 }, { x: 30, y: 16 }, { x: 35, y: 16 },   // 앞열
+    { x: 25, y: 42 }, { x: 30, y: 42 }, { x: 35, y: 42 },   // 중간열
+    { x: 25, y: 68 }, { x: 30, y: 68 }, { x: 35, y: 68 },   // 뒤열
+];
+const POS_9_OPP = [
+    { x: 65, y: 16 }, { x: 70, y: 16 }, { x: 75, y: 16 },
+    { x: 65, y: 42 }, { x: 70, y: 42 }, { x: 75, y: 42 },
+    { x: 65, y: 68 }, { x: 70, y: 68 }, { x: 75, y: 68 },
+];
 const LABELS_6 = ['S', 'A', 'A', 'A', 'L', 'L'];
 const LABELS_9 = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
-/** 벤치 자석 X: 버튼과 220px 이상 여백, 5%(≈40~50px) 간격으로 중앙 방향 일렬 배치 */
-const BENCH_LEFT_START = 26;   // 왼쪽 버튼 밖에서 시작 (% ≈ 220px+ 여백)
-const BENCH_LEFT_END = 46;     // 중앙 방향 끝 (%)
-const BENCH_RIGHT_START = 74;  // 오른쪽 버튼 밖에서 시작 (% ≈ 220px+ 여백)
-const BENCH_RIGHT_END = 54;    // 중앙 방향 끝 (%)
-const BENCH_STEP_PCT = 5;      // 자석 간격 ≈ 40~50px
+/** 벤치: y 88% 고정(안전지대, 창 크기 변화 시 잘림/겹침 방지). Red: 20+5*i, Blue: 80-5*i */
+const BENCH_Y = 88;
 
-function benchPos(n: number, side: 'left' | 'right') {
+function benchPos(n: number, side: 'left' | 'right'): { x: number; y: number }[] {
     const arr: { x: number; y: number }[] = [];
     for (let i = 0; i < n; i++) {
-        const x = side === 'left'
-            ? Math.min(BENCH_LEFT_END, BENCH_LEFT_START + i * BENCH_STEP_PCT)
-            : Math.max(BENCH_RIGHT_END, BENCH_RIGHT_START - i * BENCH_STEP_PCT);
-        arr.push({ x, y: 90 });
+        const x = side === 'left' ? 20 + i * 5 : 80 - i * 5;
+        arr.push({ x: Math.max(2, Math.min(98, x)), y: BENCH_Y });
     }
     return arr;
 }
@@ -73,7 +92,7 @@ function buildTokens(ruleMode: 6 | 9, benchRed: number, benchBlue: number): Toke
     return t;
 }
 
-export const TacticalBoardModal: React.FC<Props> = ({ isOpen, onClose, appMode = 'CLASS' }) => {
+export const TacticalBoardModal: React.FC<Props> = ({ isOpen, onClose, appMode = 'CLASS', initialMatchState }) => {
     const { settings, teamSets, opponentTeams, leagueStandingsList, saveTeamSets, showToast } = useData();
     const coordRef = useRef<HTMLDivElement>(null);
     const courtRef = useRef<HTMLDivElement>(null);
@@ -108,10 +127,13 @@ export const TacticalBoardModal: React.FC<Props> = ({ isOpen, onClose, appMode =
     const lastClickRef = useRef<{ id: string; t: number } | null>(null);
 
     const rule = appMode === 'CLUB' && [6, 9].includes(Number(settings?.volleyballRuleSystem)) ? (settings!.volleyballRuleSystem as 6 | 9) : 6;
-    const classNames = [...new Set(teamSets.map((s) => s.className))].sort();
     const leagueItems = leagueStandingsList?.list ?? [];
-    /** CLUB 모드: '클럽 팀'을 맨 앞에 두어 teamSets 기반 팀 목록을 필터 없이 항상 표시 */
-    const clubTabs = ['클럽 팀', ...leagueItems.map((d) => d.tournamentName), ...(opponentTeams.length ? ['상대팀'] : [])];
+    const clubTeams = appMode === 'CLUB' ? (teamSets ?? []) : [];
+    const cats = useMemo(() => {
+        if (appMode === 'CLASS') return [...new Set(teamSets.map((s) => s.className))].sort();
+        const comps = [...new Set(clubTeams.map((t: TeamSet & { competition?: string; groupName?: string }) => t.competition || t.groupName || t.className))].filter(Boolean);
+        return [...comps.sort(), ...leagueItems.map((d) => d.tournamentName).filter((n) => !comps.includes(n)), ...(opponentTeams.length ? ['상대팀'] : [])];
+    }, [appMode, teamSets, leagueItems, opponentTeams, clubTeams]);
 
     const getPt = useCallback((clientX: number, clientY: number) => {
         const el = coordRef.current;
@@ -234,33 +256,21 @@ export const TacticalBoardModal: React.FC<Props> = ({ isOpen, onClose, appMode =
             const court = ruleMode === 6 ? 6 : 9;
             const ball = prev.find((t) => t.id === 'ball');
             const rest = prev.filter((t) => t.id !== 'ball');
-            if (side === 'red') {
-                const current = rest.filter((t) => t.team === 'red').length - court;
-                if (current >= 6) return prev;
-                const positions = benchPos(current + 1, 'left');
-                const newPos = positions[current]!;
-                const newToken: Token = {
-                    id: uniqueBenchId('r_bench'),
-                    label: '후보',
-                    team: 'red',
-                    x: newPos.x,
-                    y: newPos.y,
-                };
-                return ball ? [...rest, newToken, ball] : [...rest, newToken];
-            } else {
-                const current = rest.filter((t) => t.team === 'blue').length - court;
-                if (current >= 6) return prev;
-                const positions = benchPos(current + 1, 'right');
-                const newPos = positions[current]!;
-                const newToken: Token = {
-                    id: uniqueBenchId('b_bench'),
-                    label: '후보',
-                    team: 'blue',
-                    x: newPos.x,
-                    y: newPos.y,
-                };
-                return ball ? [...rest, newToken, ball] : [...rest, newToken];
-            }
+            const isRed = side === 'red';
+            const benchTokens = rest.filter((t) => t.team === side && t.y >= 80);
+            const benchCount = benchTokens.length;
+            if (benchCount >= 6) return prev;
+            const newX = isRed ? 20 + (benchCount * 5) : 80 - (benchCount * 5);
+            const newY = BENCH_Y;
+            const newToken: Token = {
+                id: uniqueBenchId(isRed ? 'r_bench' : 'b_bench'),
+                label: '후보',
+                team: side,
+                x: newX,
+                y: newY,
+            };
+            if (ball) return [...rest, newToken, ball];
+            return [...rest, newToken];
         });
         if (side === 'red') setBenchRed((b) => Math.min(6, b + 1));
         else setBenchBlue((b) => Math.min(6, b + 1));
@@ -360,8 +370,9 @@ export const TacticalBoardModal: React.FC<Props> = ({ isOpen, onClose, appMode =
             opponentTeams.forEach((opp) => out.push({ team: { teamName: opp.name, captainId: '', playerIds: [] } as SavedTeamInfo, isOpp: opp }));
             return out;
         }
-        if (cat === '클럽 팀') {
-            teamSets.forEach((set) => set.teams.forEach((team) => out.push({ set, team })));
+        const matchingSets = (teamSets ?? []).filter((s) => s.className === cat);
+        if (matchingSets.length > 0) {
+            matchingSets.forEach((set) => set.teams.forEach((team) => out.push({ set, team })));
             return out;
         }
         const ld = leagueItems.find((d) => d.tournamentName === cat);
@@ -382,7 +393,8 @@ export const TacticalBoardModal: React.FC<Props> = ({ isOpen, onClose, appMode =
         const newTokens: Token[] = players.map((p, i) => {
             const isCourt = i < courtCount;
             const { x, y } = isCourt ? courtPos[i]! : benchPositions[i - courtCount]!;
-            const label = (p.name ?? '').trim() || '?';
+            const rawLabel = (p.name ?? (p.backNumber ? `${p.backNumber}번` : '')).trim();
+            const label = stripTeamNameFromLabel(rawLabel, teamName) || (p.backNumber ? `${p.backNumber}번` : '?');
             return {
                 id: `${side}_${p.id}_${i}`,
                 label,
@@ -472,8 +484,6 @@ export const TacticalBoardModal: React.FC<Props> = ({ isOpen, onClose, appMode =
         else await loadLeagueTeam(item.team.teamName, side);
     };
 
-    /** CLASS: 반 이름 목록 / CLUB: 클럽 팀·대회·상대팀만 표시(CLASS 수업 데이터 미포함) */
-    const cats = appMode === 'CLASS' ? classNames : clubTabs;
     const teamsRed = getTeamsForCat((catRed || cats[0]) ?? '');
     const teamsBlue = getTeamsForCat((catBlue || cats[0]) ?? '');
 
@@ -483,6 +493,45 @@ export const TacticalBoardModal: React.FC<Props> = ({ isOpen, onClose, appMode =
             setPendingBlueTeamName(selectedTeamBlue?.name ?? '');
         }
     }, [rosterOpen, selectedTeamRed?.name, selectedTeamBlue?.name]);
+
+    /** 스코어보드 내부에서 열릴 때: 현재 경기 양 팀 명단을 코트/벤치에 즉시 자동 세팅 */
+    useEffect(() => {
+        if (!isOpen || !initialMatchState?.teamA?.players || !initialMatchState?.teamB?.players) return;
+        const toSlots = (team: { players: Record<string, { id?: string; originalName?: string; studentNumber?: string; memo?: string }>; onCourtPlayerIds?: string[]; benchPlayerIds?: string[] }): PlayerSlot[] => {
+            const onCourt = team.onCourtPlayerIds ?? [];
+            const bench = team.benchPlayerIds ?? [];
+            const order = [...onCourt, ...bench];
+            return order.map((pid) => {
+                const p = team.players[pid];
+                return p ? { id: p.id ?? pid, name: (p.originalName ?? '?').trim() || '?', backNumber: p.studentNumber ? String(p.studentNumber).trim() : undefined, memo: p.memo } : { id: pid, name: '?', backNumber: undefined };
+            });
+        };
+        const redSlots = toSlots(initialMatchState.teamA);
+        const blueSlots = toSlots(initialMatchState.teamB);
+        if (redSlots.length === 0 && blueSlots.length === 0) return;
+        const courtCount = ruleMode === 6 ? 6 : 9;
+        const playersToTokens = (players: PlayerSlot[], side: 'red' | 'blue', teamName: string): Token[] => {
+            const safe = players ?? [];
+            const courtPos = side === 'red' ? (ruleMode === 6 ? POS_6 : POS_9) : (ruleMode === 6 ? POS_6_OPP : POS_9_OPP);
+            return safe.map((p, i) => {
+                const isCourt = i < courtCount;
+                const benchIndex = i - courtCount;
+                const x = isCourt ? (courtPos[i]?.x ?? 50) : (side === 'red' ? 20 + (benchIndex * 5) : 80 - (benchIndex * 5));
+                const y = isCourt ? (courtPos[i]?.y ?? 50) : BENCH_Y;
+                const rawLabel = (p.name ?? (p.backNumber ? `${p.backNumber}번` : '')).trim();
+                const label = stripTeamNameFromLabel(rawLabel, teamName) || (p.backNumber ? `${p.backNumber}번` : '?');
+                return { id: `${side}_${p.id}_${i}`, label, team: side, x, y, name: p.name, memo: p.memo };
+            });
+        };
+        const newRed = playersToTokens(redSlots, 'red', initialMatchState.teamA.name);
+        const newBlue = playersToTokens(blueSlots, 'blue', initialMatchState.teamB.name);
+        const ball = { id: 'ball', label: '', team: 'ball' as const, x: 50, y: 90 };
+        setTokens([...newRed, ...newBlue, ball]);
+        if (redSlots.length > 0) setBenchRed(Math.min(6, Math.max(0, redSlots.length - courtCount)));
+        if (blueSlots.length > 0) setBenchBlue(Math.min(6, Math.max(0, blueSlots.length - courtCount)));
+        setSelectedTeamRed(redSlots.length > 0 ? { name: initialMatchState.teamA.name } : null);
+        setSelectedTeamBlue(blueSlots.length > 0 ? { name: initialMatchState.teamB.name } : null);
+    }, [isOpen, !!initialMatchState, ruleMode]);
 
     const applyRosterAndClose = async (e?: React.FormEvent) => {
         e?.preventDefault?.();
@@ -495,17 +544,16 @@ export const TacticalBoardModal: React.FC<Props> = ({ isOpen, onClose, appMode =
         const redData = redTeam ? await getTeamDataForItem(redTeam, 'red') : null;
         const blueData = blueTeam ? await getTeamDataForItem(blueTeam, 'blue') : null;
 
-        const playersToTokens = (players: PlayerSlot[], side: 'red' | 'blue'): Token[] => {
+        const playersToTokens = (players: PlayerSlot[], side: 'red' | 'blue', teamName: string): Token[] => {
             const safe = players ?? [];
             const courtPos = side === 'red' ? (ruleMode === 6 ? POS_6 : POS_9) : (ruleMode === 6 ? POS_6_OPP : POS_9_OPP);
-            const benchCount = Math.max(0, safe.length - courtCount);
-            const positions = benchPos(benchCount, side === 'red' ? 'left' : 'right');
             return safe.map((p, i) => {
                 const isCourt = i < courtCount;
-                const pos = isCourt ? courtPos[i] : positions[i - courtCount];
-                const x = pos?.x ?? 100 + i * 40;
-                const y = pos?.y ?? 100;
-                const label = (p.name ?? '').trim() || '?';
+                const benchIndex = i - courtCount;
+                const x = isCourt ? (courtPos[i]?.x ?? 50) : (side === 'red' ? 20 + (benchIndex * 5) : 80 - (benchIndex * 5));
+                const y = isCourt ? (courtPos[i]?.y ?? 50) : BENCH_Y;
+                const rawLabel = (p.name ?? (p.backNumber ? `${p.backNumber}번` : '')).trim();
+                const label = stripTeamNameFromLabel(rawLabel, teamName) || (p.backNumber ? `${p.backNumber}번` : '?');
                 return {
                     id: `${side}_${p.id}_${i}`,
                     label,
@@ -518,8 +566,8 @@ export const TacticalBoardModal: React.FC<Props> = ({ isOpen, onClose, appMode =
             });
         };
 
-        const newRedTokens = redData ? playersToTokens(redData.playerSlots, 'red') : [];
-        const newBlueTokens = blueData ? playersToTokens(blueData.playerSlots, 'blue') : [];
+        const newRedTokens = redData ? playersToTokens(redData.playerSlots, 'red', redData.teamName) : [];
+        const newBlueTokens = blueData ? playersToTokens(blueData.playerSlots, 'blue', blueData.teamName) : [];
         const newTokens = { red: newRedTokens, blue: newBlueTokens };
         console.log('생성된 새 자석들:', newTokens);
 
@@ -555,13 +603,21 @@ export const TacticalBoardModal: React.FC<Props> = ({ isOpen, onClose, appMode =
             await localforage.setItem(SAVED_TACTICS_KEY, map);
             setSaveOpen(false);
             setSaveName('');
-            window.alert('저장 성공');
+            showToast?.('전술이 저장되었습니다.', 'success');
         } catch {
-            window.alert('저장 실패');
+            showToast?.('저장에 실패했습니다.', 'error');
         }
     };
 
-    const openLoad = async () => { try { const map = (await localforage.getItem(SAVED_TACTICS_KEY) as Record<string, SavedTactics> | null) ?? {}; setSavedMap(map); setLoadOpen(true); } catch { window.alert('불러오기 실패'); } };
+    const openLoad = async () => {
+        try {
+            const map = (await localforage.getItem(SAVED_TACTICS_KEY) as Record<string, SavedTactics> | null) ?? {};
+            setSavedMap(map);
+            setLoadOpen(true);
+        } catch {
+            showToast?.('불러오기에 실패했습니다.', 'error');
+        }
+    };
     const doLoad = (name: string) => {
         const d = savedMap[name];
         if (!d?.tokens) return;
@@ -573,7 +629,7 @@ export const TacticalBoardModal: React.FC<Props> = ({ isOpen, onClose, appMode =
         if (d.selectedTeamRed) setSelectedTeamRed(d.selectedTeamRed);
         if (d.selectedTeamBlue) setSelectedTeamBlue(d.selectedTeamBlue);
         setLoadOpen(false);
-        window.alert('전술 불러옴');
+        showToast?.('전술을 불러왔습니다.', 'success');
     };
 
     const clearStrokes = () => { setStrokes([]); setEraseStrokes([]); setCurrentStroke([]); setUndoStack([]); };
@@ -604,20 +660,24 @@ export const TacticalBoardModal: React.FC<Props> = ({ isOpen, onClose, appMode =
                         </div>
                     </div>
 
-                    {/* 벤치 영역 (The Bench) */}
-                    <div className="w-full max-w-5xl mx-auto h-24 flex-shrink-0 bg-slate-900/90 rounded-xl mt-2 flex items-center justify-between px-6 relative z-20">
-                        <button type="button" onClick={() => addBench('red')} disabled={redBenchFull} className="relative z-[80] px-3 py-2 rounded-lg bg-slate-600 hover:bg-slate-500 text-white text-xs font-medium shadow-md shrink-0 disabled:opacity-50 disabled:cursor-not-allowed">+ 우리팀 후보 추가</button>
-                        <div className="flex-1 min-w-0 flex items-center justify-center" />
-                        <button type="button" onClick={() => addBench('blue')} disabled={blueBenchFull} className="relative z-[80] px-3 py-2 rounded-lg bg-slate-600 hover:bg-slate-500 text-white text-xs font-medium shadow-md shrink-0 disabled:opacity-50 disabled:cursor-not-allowed">+ 상대팀 후보 추가</button>
+                    {/* 벤치 영역: 버튼 양극단 배치(자석과 겹침 방지), 자석은 아래 토큰 레이어에서 % 좌표로 렌더 */}
+                    <div className="w-full max-w-5xl mx-auto flex-shrink-0 bg-slate-900/90 rounded-xl mt-2 px-6 py-3 relative z-20 min-h-[3rem]">
+                        <button type="button" onClick={() => addBench('red')} disabled={redBenchFull} className="absolute left-0 top-1/2 -translate-y-1/2 z-[70] ml-2 px-3 py-2 rounded-lg bg-slate-600 hover:bg-slate-500 text-white text-xs font-medium shadow-md shrink-0 disabled:opacity-50 disabled:cursor-not-allowed">+ 우리팀 후보 추가</button>
+                        <button type="button" onClick={() => addBench('blue')} disabled={blueBenchFull} className="absolute right-0 top-1/2 -translate-y-1/2 z-[70] mr-2 px-3 py-2 rounded-lg bg-slate-600 hover:bg-slate-500 text-white text-xs font-medium shadow-md shrink-0 disabled:opacity-50 disabled:cursor-not-allowed">+ 상대팀 후보 추가</button>
                     </div>
 
-                    {/* 토큰 레이어: coordRef 전체(아레나+벤치) 기준 % 위치, z-[60]으로 벤치(z-20) 위에 항상 표시 */}
+                    {/* 토큰 레이어: 코트+벤치+볼 전부 position:absolute, left/top % 좌표로 배치. 위치 기반 다이내믹 사이즈 적용 */}
                     <div className="absolute inset-0 z-[60] pointer-events-none">
-                        {tokens.map((tok) => (
-                            <div key={tok.id} className="absolute z-[60] touch-none cursor-grab active:cursor-grabbing pointer-events-auto select-none flex items-center justify-center text-white rounded-full shadow-lg border-2 border-white/80" style={{ left: `${tok.x}%`, top: `${tok.y}%`, width: TOKEN_SIZE, height: TOKEN_SIZE, marginLeft: -TOKEN_SIZE / 2, marginTop: -TOKEN_SIZE / 2, backgroundColor: tok.team === 'red' ? '#dc2626' : tok.team === 'blue' ? '#2563eb' : 'transparent' }} onPointerDown={(e) => handleTokenDown(e, tok.id)} onPointerMove={(e) => handleTokenMove(e, tok.id)} onPointerUp={(e) => handleTokenUp(e, tok.id)}>
-                                {tok.team === 'ball' ? <span style={{ fontSize: 22 }}>🏐</span> : <span className="font-bold text-sm leading-tight text-center tracking-tighter break-keep w-full px-1 flex items-center justify-center" style={{ wordBreak: 'keep-all' }}>{tok.label}</span>}
-                            </div>
-                        ))}
+                        {tokens.map((tok) => {
+                            const isBench = tok.y >= 80;
+                            const sizeClass = isBench ? 'w-[44px] h-[44px]' : 'w-16 h-16';
+                            const textClass = isBench ? 'text-[11px]' : 'text-base';
+                            return (
+                                <div key={tok.id} className={`absolute z-[60] touch-none cursor-grab active:cursor-grabbing pointer-events-auto select-none flex items-center justify-center text-white rounded-full shadow-lg border-2 border-white/80 transition-all duration-200 ease-in-out ${sizeClass}`} style={{ position: 'absolute', left: `${tok.x}%`, top: `${tok.y}%`, transform: 'translate(-50%, -50%)', backgroundColor: tok.team === 'red' ? '#dc2626' : tok.team === 'blue' ? '#2563eb' : 'transparent' }} onPointerDown={(e) => handleTokenDown(e, tok.id)} onPointerMove={(e) => handleTokenMove(e, tok.id)} onPointerUp={(e) => handleTokenUp(e, tok.id)}>
+                                    {tok.team === 'ball' ? <span className={isBench ? 'text-lg' : 'text-2xl'}>🏐</span> : <span className={`font-bold leading-tight text-center tracking-tighter break-keep w-full px-1 flex items-center justify-center ${textClass}`} style={{ wordBreak: 'keep-all' }}>{tok.label}</span>}
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
 
@@ -723,9 +783,13 @@ export const TacticalBoardModal: React.FC<Props> = ({ isOpen, onClose, appMode =
                                 <div className="font-bold text-red-200 text-lg mb-4">🔴 우리 팀 명단 세팅</div>
                                 <label className="text-slate-300 text-base mb-1">반/대회 선택</label>
                                 <select value={catRed || (cats[0] ?? '')} onChange={(e) => setCatRed(e.target.value)} className="w-full p-4 text-xl rounded-lg bg-slate-700 border border-slate-600 text-white mb-4 focus:ring-2 focus:ring-red-500">
-                                    {cats.map((cn, cIdx) => (
-                                        <option key={`cat-red-${cIdx}-${cn}`} value={cn}>{cn}</option>
-                                    ))}
+                                    {appMode === 'CLUB'
+                                        ? [...new Set(clubTeams.map((t: TeamSet & { competition?: string; groupName?: string }) => t.competition || t.groupName || t.className))].filter(Boolean).map((comp) => (
+                                            <option key={comp} value={comp}>{comp}</option>
+                                        ))
+                                        : cats.map((cn, cIdx) => (
+                                            <option key={`cat-red-${cIdx}-${cn}`} value={cn}>{cn}</option>
+                                        ))}
                                 </select>
                                 <label className="text-slate-300 text-base mb-1">팀 선택</label>
                                 <select
@@ -743,9 +807,13 @@ export const TacticalBoardModal: React.FC<Props> = ({ isOpen, onClose, appMode =
                                 <div className="font-bold text-blue-200 text-lg mb-4">🔵 상대 팀 명단 세팅</div>
                                 <label className="text-slate-300 text-base mb-1">반/대회 선택</label>
                                 <select value={catBlue || (cats[0] ?? '')} onChange={(e) => setCatBlue(e.target.value)} className="w-full p-4 text-xl rounded-lg bg-slate-700 border border-slate-600 text-white mb-4 focus:ring-2 focus:ring-blue-500">
-                                    {cats.map((cn, cIdx) => (
-                                        <option key={`cat-blue-${cIdx}-${cn}`} value={cn}>{cn}</option>
-                                    ))}
+                                    {appMode === 'CLUB'
+                                        ? [...new Set(clubTeams.map((t: TeamSet & { competition?: string; groupName?: string }) => t.competition || t.groupName || t.className))].filter(Boolean).map((comp) => (
+                                            <option key={comp} value={comp}>{comp}</option>
+                                        ))
+                                        : cats.map((cn, cIdx) => (
+                                            <option key={`cat-blue-${cIdx}-${cn}`} value={cn}>{cn}</option>
+                                        ))}
                                 </select>
                                 <label className="text-slate-300 text-base mb-1">팀 선택</label>
                                 <select

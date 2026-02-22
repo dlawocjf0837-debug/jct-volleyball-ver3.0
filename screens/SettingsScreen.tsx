@@ -4,7 +4,8 @@ import { AppSettings } from '../types';
 import { useTranslation } from '../hooks/useTranslation';
 import { isAdminPasswordCorrect, setAdminPassword } from '../utils/adminPassword';
 
-const SettingsScreen: React.FC = () => {
+interface SettingsScreenProps { appMode?: 'CLASS' | 'CLUB'; }
+const SettingsScreen: React.FC<SettingsScreenProps> = ({ appMode = 'CLASS' }) => {
     const { settings, saveSettings, showToast } = useData();
     const { t } = useTranslation();
     const [currentSettings, setCurrentSettings] = useState<AppSettings>(settings);
@@ -183,6 +184,7 @@ const SettingsScreen: React.FC = () => {
                 </div>
             </div>
 
+            {appMode !== 'CLUB' && (
             <div className="space-y-4 pt-6 border-t border-slate-700">
                 <h3 className="text-xl font-bold text-slate-300">추가 점수 설정</h3>
                 <div className="flex items-center justify-between bg-slate-800/50 p-4 rounded-lg">
@@ -206,6 +208,7 @@ const SettingsScreen: React.FC = () => {
                     </label>
                 </div>
             </div>
+            )}
 
             <div className="space-y-4 pt-6 border-t border-slate-700">
                 <h3 className="text-xl font-bold text-slate-300">비밀번호 수정</h3>

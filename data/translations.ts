@@ -77,6 +77,7 @@ export const translations: Record<string, Record<Language, string>> = {
   scoreboard_title: { ko: "스코어보드", id: "PAPAN SKOR" },
   match_history_title: { ko: "경기 기록", id: "RIWAYAT LAGA" },
   player_records_title: { ko: "선수 기록", id: "CATATAN PEMAIN" },
+  role_record_title: { ko: "학생 역할 수행 기록", id: "Catatan Peran Siswa" },
   achievements_title: { ko: "명예의 전당", id: "AULA KEHORMATAN" },
   skill_drill_title: { ko: "스킬 드릴", id: "LATIHAN SKILL" },
   referee_scoreboard_title: { ko: "주심용 스코어보드", id: "PAPAN SKOR WASIT" },
