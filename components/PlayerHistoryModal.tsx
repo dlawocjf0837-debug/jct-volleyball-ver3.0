@@ -433,11 +433,8 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
             const pb = playerAchievements?.[id];
             const earned = pb?.earnedBadgeIds;
             if (earned) {
-                if (typeof earned.has === 'function') {
-                    (earned as Set<string>).forEach((bid: string) => badgeIds.add(bid));
-                } else {
-                    (earned as string[] || []).forEach((bid: string) => badgeIds.add(bid));
-                }
+                const ids = earned instanceof Set ? Array.from(earned) : (Array.isArray(earned) ? earned : []);
+                ids.forEach((bid: string) => badgeIds.add(bid));
             }
         });
         return (BADGE_DEFINITIONS || []).filter(badge => badge && badgeIds.has(badge.id));
@@ -512,7 +509,7 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
                             </button>
                             {appMode === 'CLUB' && (
                                 <button 
-                                    onClick={() => { setActiveTab('memo'); setStrategyMemo(currentPlayerMemo ?? ''); }}
+                                    onClick={() => setActiveTab('memo')}
                                     className={`px-4 py-2 font-semibold ${activeTab === 'memo' ? 'border-b-2 border-sky-400 text-sky-400' : 'text-slate-400 hover:text-white'}`}
                                 >
                                     전략 메모

@@ -577,7 +577,7 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContin
         if (setDetailTab === 'all') return timelineEvents;
         const raw = currentSetEvents as Array<{ type?: string; descriptionKey?: string; score?: { a: number; b: number } }>;
         if (!raw?.length) return [];
-        return raw.map(e => ({
+        return raw.map((e): TimelineEvent => ({
             type: (e.type as ScoreEventType) || 'LOG',
             team: null,
             description: e.descriptionKey ?? '',
