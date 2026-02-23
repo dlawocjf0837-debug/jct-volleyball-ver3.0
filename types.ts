@@ -513,6 +513,7 @@ export interface DataContextType {
     leagueStandingsList: LeagueStandingsDataList;
     saveLeagueStandings: (data: LeagueStandingsData | null) => Promise<void>;
     saveLeagueStandingsList: (data: LeagueStandingsDataList) => Promise<void>;
+    practiceMatchHistory: any[];
     leagueMatchHistory: (MatchState & { date: string; time?: number })[];
     saveOpponentTeam: (team: Omit<SavedOpponentTeam, 'id' | 'savedAt'>) => Promise<void>;
     updateOpponentTeam: (id: string, team: Partial<SavedOpponentTeam>) => Promise<void>;
