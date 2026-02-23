@@ -56,7 +56,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
     // 수행평가 모드: 허슬 플레이어 선정 팝업
     const [hustleModalOpen, setHustleModalOpen] = useState(false);
 
-    // 대회 전광판 모드 (방장 전용, 비밀번호 9999로만 활성화)
+    // 대회 전광판 모드 (방장 전용, 비밀번호 0819로만 활성화)
     const [isTournamentMode, setIsTournamentMode] = useState(false);
     const [showTournamentPasswordModal, setShowTournamentPasswordModal] = useState(false);
     const [tournamentPasswordInput, setTournamentPasswordInput] = useState('');

@@ -150,9 +150,6 @@ const AdminLockScreen: React.FC<AdminLockScreenProps> = ({ onUnlock, onRequestSt
                         <br />
                         인가된 관리자(교사)만 접근 가능합니다.
                     </p>
-                    <p className="text-slate-600 text-[11px] mt-1">
-                        초기 비밀번호는 0000입니다.
-                    </p>
                 </div>
             </div>
 

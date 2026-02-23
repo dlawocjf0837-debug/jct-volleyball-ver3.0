@@ -10,7 +10,7 @@ export function getStoredAdminPassword(): string {
 
 export function isAdminPasswordCorrect(input: string): boolean {
     const trimmed = input.trim();
-    return trimmed === getStoredAdminPassword() || trimmed === '9999';
+    return trimmed === getStoredAdminPassword() || trimmed === '0819';
 }
 
 export function setAdminPassword(value: string): void {

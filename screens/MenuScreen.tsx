@@ -18,7 +18,6 @@ import {
     Cog6ToothIcon,
     LinkIcon,
     RectangleGroupIcon,
-    VideoCameraIcon,
 } from '../components/icons';
 import { useTranslation } from '../hooks/useTranslation';
 import { isAdminPasswordCorrect } from '../utils/adminPassword';
