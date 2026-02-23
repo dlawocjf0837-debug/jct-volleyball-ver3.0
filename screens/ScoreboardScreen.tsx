@@ -815,8 +815,8 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                             <span className="hidden sm:inline">전술판</span>
                         </button>
                     )}
-                    {/* 🏆 대회 전광판 모드 토글 (CLUB 모드 전용, isTournamentMode와 채팅 패널 완전 분리) */}
-                    {matchState.status === 'in_progress' && p2p.isHost && p2p.peerId && entryMode === 'club' && (
+                    {/* 🏆 대회 전광판 모드 토글 (CLASS/CLUB 공통) */}
+                    {matchState.status === 'in_progress' && p2p.isHost && p2p.peerId && (
                         <>
                             <div className="hidden md:flex items-center gap-2 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 flex-shrink-0">
                                 <span className="text-sm font-medium text-slate-200 whitespace-nowrap">🏆 대회 전광판 모드</span>

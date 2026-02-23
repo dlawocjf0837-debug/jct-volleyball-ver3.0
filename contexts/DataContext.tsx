@@ -189,8 +189,8 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
     const latestMatchStateRef = useRef<MatchState | null>(null);
     /** 방장 대회 모드 상태 (브로드캐스트용) */
     const latestHostTournamentModeRef = useRef<boolean>(false);
-    /** 방장 채팅 허용 상태 (브로드캐스트용, 기본 true) */
-    const latestHostChatEnabledRef = useRef<boolean>(true);
+    /** 방장 채팅 허용 상태 (브로드캐스트용, appMode에 따라 초기화) */
+    const latestHostChatEnabledRef = useRef<boolean>(appMode === 'CLASS' ? false : true);
     
     const t = useCallback((key: string, replacements?: Record<string, string | number>): string => {
         let translation = translations[key]?.[language] || key;
@@ -289,8 +289,8 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
         });
     }, []);
 
-    const [isChatWindowVisible, setIsChatWindowVisible] = useState(true);
-    const latestChatWindowVisibleRef = useRef(true);
+    const [isChatWindowVisible, setIsChatWindowVisible] = useState(appMode === 'CLASS' ? false : true);
+    const latestChatWindowVisibleRef = useRef(appMode === 'CLASS' ? false : true);
     useEffect(() => { latestChatWindowVisibleRef.current = isChatWindowVisible; }, [isChatWindowVisible]);
     const setChatWindowVisible = useCallback((value: boolean) => {
         latestChatWindowVisibleRef.current = value;
@@ -316,7 +316,8 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
         });
     }, [broadcast]);
 
-    const [isChatEnabled, setIsChatEnabled] = useState(true);
+    const [isChatEnabled, setIsChatEnabled] = useState(appMode === 'CLASS' ? false : true);
+    useEffect(() => { latestHostChatEnabledRef.current = isChatEnabled; }, [isChatEnabled]);
     const setChatEnabled = useCallback((value: boolean) => {
         latestHostChatEnabledRef.current = value;
         setIsChatEnabled(value);

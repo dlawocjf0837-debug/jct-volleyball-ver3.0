@@ -4,7 +4,7 @@ import { SavedTeamInfo, Player, TeamSet } from '../types';
 import EmblemModal from '../components/EmblemModal';
 import TeamEmblem from '../components/TeamEmblem';
 import { TeamProfileCardModal } from '../components/TeamProfileCardModal';
-import { CheckIcon, IdentificationIcon, PencilIcon, TrashIcon, UsersIcon } from '../components/icons';
+import { IdentificationIcon, PencilIcon, TrashIcon, UsersIcon } from '../components/icons';
 import ConfirmationModal from '../components/common/ConfirmationModal';
 import RosterManagementModal from '../components/RosterManagementModal';
 import PlayerSelectionModal from '../components/PlayerSelectionModal';
@@ -86,9 +86,6 @@ const TeamManagementScreen: React.FC<TeamManagementScreenProps> = ({ appMode = '
     const [selectedClassFilter, setSelectedClassFilter] = useState<string>('all');
     const [selectedFormatFilter, setSelectedFormatFilter] = useState<string>('all');
 
-    // 이름 편집 모드: true면 탭 클릭 시 이름 수정(Prompt), false면 탭 이동
-    const [isEditingName, setIsEditingName] = useState(false);
-
     // Trade mode states
     const [isTradeMode, setIsTradeMode] = useState(false);
     const [tradeSource, setTradeSource] = useState<{ player: Player; teamKey: string } | null>(null);
@@ -98,19 +95,6 @@ const TeamManagementScreen: React.FC<TeamManagementScreenProps> = ({ appMode = '
     const [selectingForTeamKey, setSelectingForTeamKey] = useState<string | null>(null);
     const [isLoadTeamModalOpen, setIsLoadTeamModalOpen] = useState(false);
     const [loadTeamTargetSetId, setLoadTeamTargetSetId] = useState<string | null>(null);
-
-    /** 탭 이름 변경: 전역 teamSets 업데이트 (useData → saveTeamSets 사용) */
-    const handleRenameTab = (currentName: string) => {
-        const newName = prompt('새 이름을 입력하세요.', currentName);
-        if (!newName || newName.trim() === '' || newName.trim() === currentName) return;
-
-        const trimmed = newName.trim();
-        const next = teamSets.map(set =>
-            set.className === currentName ? { ...set, className: trimmed } : set
-        );
-        saveTeamSets(next, isClub ? '대회(조) 이름이 변경되었습니다.' : '반 이름이 변경되었습니다.');
-    };
-
 
     React.useEffect(() => {
         const initialConfigs: Record<string, Config> = {};
@@ -143,13 +127,11 @@ const TeamManagementScreen: React.FC<TeamManagementScreenProps> = ({ appMode = '
         return teamSets.filter(set => set.className === selectedClassFilter);
     }, [teamSets, selectedClassFilter]);
 
-    // 선택된 반의 사용 가능한 포맷 목록 추출
+    // 선택된 반의 사용 가능한 포맷 목록 추출 (2팀제, 3팀제, 4팀제 항상 포함)
     const availableFormats = useMemo(() => {
-        const formatSet = new Set<number>();
+        const formatSet = new Set<number>([2, 3, 4]);
         filteredTeamSets.forEach(set => {
-            if (set.teamCount) {
-                formatSet.add(set.teamCount);
-            }
+            formatSet.add(set.teamCount ?? 4);
         });
         return Array.from(formatSet).sort((a, b) => a - b);
     }, [filteredTeamSets]);
@@ -598,36 +580,11 @@ const TeamManagementScreen: React.FC<TeamManagementScreenProps> = ({ appMode = '
 
                 {/* 필터 섹션 - 반/대회(조) 탭 UI */}
                 <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 space-y-4">
-                    {/* 반 또는 대회(조) 선택 탭 + 이름 편집 모드 토글 */}
+                    {/* 반 또는 대회(조) 선택 탭 */}
                     <div>
-                        <div className="flex items-center gap-2 mb-2">
-                            <label className="font-semibold text-sm text-slate-300">
-                                {isClub ? '대회(조) 선택' : t('player_input_class_select_label')}
-                            </label>
-                            <button
-                                type="button"
-                                onClick={() => setIsEditingName(prev => !prev)}
-                                className={
-                                    isEditingName
-                                        ? 'flex items-center gap-1 text-sm text-green-400 hover:text-green-300 transition-colors font-bold'
-                                        : 'flex items-center gap-1 text-sm text-gray-400 hover:text-white transition-colors'
-                                }
-                                title={isEditingName ? '수정 완료' : '이름 수정'}
-                                aria-label={isEditingName ? '수정 완료' : '이름 수정'}
-                            >
-                                {isEditingName ? (
-                                    <>
-                                        <CheckIcon className="w-3.5 h-3.5" />
-                                        수정 완료
-                                    </>
-                                ) : (
-                                    <>
-                                        <PencilIcon className="w-3.5 h-3.5" />
-                                        이름 수정
-                                    </>
-                                )}
-                            </button>
-                        </div>
+                        <label className="block font-semibold text-sm text-slate-300 mb-2">
+                            {isClub ? '대회(조) 선택' : t('player_input_class_select_label')}
+                        </label>
                         <div className="flex gap-2 flex-wrap">
                             <button
                                 onClick={() => {
@@ -643,40 +600,20 @@ const TeamManagementScreen: React.FC<TeamManagementScreenProps> = ({ appMode = '
                                 {t('player_input_class_all')}
                             </button>
                             {availableClasses.map(className => (
-                                <span key={className} className="inline-flex items-center gap-1">
-                                    <button
-                                        onClick={() => {
-                                            if (!isEditingName) {
-                                                setSelectedClassFilter(className);
-                                                setSelectedFormatFilter('all');
-                                            }
-                                        }}
-                                        className={`px-4 py-2 text-sm rounded-md transition-all min-h-[44px] font-semibold inline-flex items-center ${
-                                            isEditingName
-                                                ? 'border-2 border-dashed border-blue-400 bg-slate-800 text-slate-200'
-                                                : selectedClassFilter === className
-                                                    ? 'bg-[#00A3FF] text-white'
-                                                    : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
-                                        }`}
-                                    >
-                                        {className}
-                                    </button>
-                                    {isEditingName && (
-                                        <button
-                                            type="button"
-                                            className="ml-1 p-2 rounded-md hover:bg-white/20 text-blue-400 hover:text-white bg-blue-900/60 border border-blue-400 z-10"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                e.preventDefault();
-                                                handleRenameTab(className);
-                                            }}
-                                            title="이름 수정"
-                                            aria-label="이름 수정"
-                                        >
-                                            <PencilIcon className="w-4 h-4" />
-                                        </button>
-                                    )}
-                                </span>
+                                <button
+                                    key={className}
+                                    onClick={() => {
+                                        setSelectedClassFilter(className);
+                                        setSelectedFormatFilter('all');
+                                    }}
+                                    className={`px-4 py-2 text-sm rounded-md transition-colors min-h-[44px] font-semibold ${
+                                        selectedClassFilter === className
+                                            ? 'bg-[#00A3FF] text-white'
+                                            : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                                    }`}
+                                >
+                                    {className}
+                                </button>
                             ))}
                         </div>
                     </div>
@@ -749,7 +686,12 @@ const TeamManagementScreen: React.FC<TeamManagementScreenProps> = ({ appMode = '
                                     if (!config) return null;
                                     const conflict = colorConflicts.get(team.teamName);
                                     return (
-                                    <div key={team.key} className="bg-slate-800 p-4 rounded-lg space-y-4">
+                                    <div
+                                        key={team.key}
+                                        className={`bg-slate-800 p-4 rounded-lg space-y-4 transition-all ${
+                                            conflict ? 'ring-2 ring-amber-400/70 ring-offset-2 ring-offset-slate-900' : ''
+                                        }`}
+                                    >
                                         <div className="flex items-start gap-4">
                                             <div className="flex-shrink-0 flex flex-col items-center gap-2">
                                                 <span className="text-xs text-slate-400">{t('team_management_emblem_label')}</span>
@@ -788,7 +730,6 @@ const TeamManagementScreen: React.FC<TeamManagementScreenProps> = ({ appMode = '
                                                         <span>{config.teamName}</span>
                                                         <PencilIcon className="w-5 h-5 text-slate-400 cursor-pointer group-hover:text-slate-300 transition-colors flex-shrink-0" />
                                                     </button>
-                                                    {conflict && <span className="text-xs text-yellow-400 bg-yellow-900/50 px-2 py-1 rounded-md">{t('team_management_color_conflict', { teams: conflict.join(', ') })}</span>}
                                                 </div>
                                                 <div>
                                                     <label className="block text-sm font-semibold text-slate-400 mb-1">{t('team_management_color_label')}</label>

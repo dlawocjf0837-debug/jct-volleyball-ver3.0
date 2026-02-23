@@ -84,7 +84,12 @@ const Header: React.FC<HeaderProps> = ({ title, showBackButton, onBack, showLang
                             type="button"
                             role="switch"
                             aria-checked={appMode === 'CLUB'}
-                            onClick={() => onAppModeChange(appMode === 'CLASS' ? 'CLUB' : 'CLASS')}
+                            onClick={() => {
+                                if (appMode === 'CLASS') {
+                                    alert('🛠️ [스포츠클럽 모드 베타 테스트 중!]\n\n이 기능은 정식 도입을 위해 현재 테스트 및 매뉴얼 작업 중입니다. 기능이 불안정할 수 있으니 참고만 부탁드립니다! 😉');
+                                }
+                                onAppModeChange(appMode === 'CLASS' ? 'CLUB' : 'CLASS');
+                            }}
                             className={`relative inline-flex h-7 w-12 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-slate-900 ${appMode === 'CLUB' ? 'bg-amber-500/80' : 'bg-slate-600'}`}
                         >
                             <span className={`pointer-events-none absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform ${appMode === 'CLUB' ? 'translate-x-5' : 'translate-x-0'}`} />

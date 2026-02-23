@@ -644,10 +644,10 @@ const AnnouncerScreen: React.FC<AnnouncerScreenProps> = ({ onNavigateToHistory, 
                 </div>
             )}
 
-            {p2p.isConnected && matchState && (p2p.chatWindowVisible !== false) && (p2p.chatEnabled !== false) && (
+            {p2p.isConnected && matchState && p2p.chatEnabled === true && p2p.chatWindowVisible === true && (
                 <LiveChatOverlay
                     messages={receivedChatMessages}
-                    isInputEnabled={p2p.chatEnabled ?? true}
+                    isInputEnabled={true}
                     showInputSection={true}
                     myViewerLabel={p2p.viewerLabel}
                     onSend={(text) => {
@@ -660,8 +660,8 @@ const AnnouncerScreen: React.FC<AnnouncerScreenProps> = ({ onNavigateToHistory, 
                     maxLength={30}
                 />
             )}
-            {isTournamentMode && (
-                <div className="fixed bottom-4 left-0 right-0 z-20 flex flex-col items-center gap-2 px-4">
+            {p2p.isConnected && matchState && (
+                <div className="fixed bottom-4 left-0 right-0 z-50 flex flex-col items-center gap-2 px-4">
                     {emojiCooldownRemaining > 0 && (
                         <span className="text-xs text-slate-400">{emojiCooldownRemaining}초 후 가능</span>
                     )}

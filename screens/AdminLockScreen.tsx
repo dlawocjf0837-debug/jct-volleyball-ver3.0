@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { isAdminPasswordCorrect } from '../utils/adminPassword';
 import { loadBackupFromFile } from '../utils/loadBackupOnLockScreen';
 
@@ -13,7 +13,15 @@ const AdminLockScreen: React.FC<AdminLockScreenProps> = ({ onUnlock, onRequestSt
     const [appMode, setAppMode] = useState<'CLASS' | 'CLUB'>('CLASS');
     const [loadToast, setLoadToast] = useState<string | null>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const [showBetaModal, setShowBetaModal] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    /** 모드가 CLUB으로 변경될 때 베타 알림 모달 표시 */
+    useEffect(() => {
+        if (appMode === 'CLUB') {
+            setShowBetaModal(true);
+        }
+    }, [appMode]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -47,6 +55,8 @@ const AdminLockScreen: React.FC<AdminLockScreenProps> = ({ onUnlock, onRequestSt
         }
     };
 
+    const handleModeChange = (newMode: 'CLASS' | 'CLUB') => setAppMode(newMode);
+
     return (
         <div className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800 flex flex-col items-center justify-center p-6">
             <input
@@ -73,7 +83,7 @@ const AdminLockScreen: React.FC<AdminLockScreenProps> = ({ onUnlock, onRequestSt
                             type="button"
                             role="switch"
                             aria-checked={appMode === 'CLUB'}
-                            onClick={() => setAppMode((m) => (m === 'CLASS' ? 'CLUB' : 'CLASS'))}
+                            onClick={() => handleModeChange(appMode === 'CLASS' ? 'CLUB' : 'CLASS')}
                             className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:ring-offset-2 focus:ring-offset-slate-800 ${appMode === 'CLUB' ? 'bg-amber-500/80' : 'bg-slate-600'}`}
                         >
                             <span className={`pointer-events-none absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${appMode === 'CLUB' ? 'translate-x-4' : 'translate-x-0'}`} />
@@ -145,6 +155,28 @@ const AdminLockScreen: React.FC<AdminLockScreenProps> = ({ onUnlock, onRequestSt
                     </p>
                 </div>
             </div>
+
+            {showBetaModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+                    <div className="bg-slate-800 p-6 rounded-xl shadow-2xl max-w-sm w-full text-center border-2 border-amber-500 animate-fade-in">
+                        <div className="text-5xl mb-4">🛠️</div>
+                        <h3 className="text-xl font-bold text-amber-400 mb-3">[스포츠클럽 모드 베타 테스트 중!]</h3>
+                        <p className="text-gray-300 text-sm mb-6 leading-relaxed break-keep">
+                            임재철 선생님이 다음 학기(여름방학쯤) 정식 도입을 위해 열심히 테스트하고 있는 기능입니다.
+                            <br/><br/>
+                            아직 사용 매뉴얼이 없으니 구경만 해보시거나, 조심해서(?) 다뤄주세요!
+                            <br/>
+                            (피드백은 언제나 환영입니다 😉)
+                        </p>
+                        <button
+                            onClick={() => setShowBetaModal(false)}
+                            className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold transition-colors"
+                        >
+                            확인했습니다
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
