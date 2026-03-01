@@ -1406,7 +1406,7 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
         }
     };
 
-    const saveRoleHistoryAfterMatch = useCallback(async (matchInfo: string, date: string): Promise<void> => {
+    const saveRoleHistoryAfterMatch = useCallback(async (matchInfo: string, date: string, teamCount?: number): Promise<void> => {
         const roles = matchRolesRef.current;
         if (!roles) return;
         const entries: { playerId: string; role: string }[] = [];
@@ -1419,9 +1419,9 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
             matchRolesRef.current = null;
             return;
         }
-        const entriesByPlayerId = new Map<string, { role: string; date: string; matchInfo: string }[]>();
+        const entriesByPlayerId = new Map<string, { role: string; date: string; matchInfo: string; teamCount?: number }[]>();
         entries.forEach(({ playerId, role }) => {
-            const rec = { role, date, matchInfo };
+            const rec = { role, date, matchInfo, ...(teamCount != null ? { teamCount } : {}) };
             if (!entriesByPlayerId.has(playerId)) entriesByPlayerId.set(playerId, []);
             entriesByPlayerId.get(playerId)!.push(rec);
         });
@@ -1433,7 +1433,7 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                 const p = players[playerId];
                 if (!p) return;
                 hasChanges = true;
-                const prev = (p as Player & { roleHistory?: Array<{ role: string; date: string; matchInfo: string }> }).roleHistory ?? [];
+                const prev = (p as Player & { roleHistory?: Array<{ role: string; date: string; matchInfo: string; teamCount?: number }> }).roleHistory ?? [];
                 newPlayers[playerId] = {
                     ...p,
                     roleHistory: [...prev, ...recs],

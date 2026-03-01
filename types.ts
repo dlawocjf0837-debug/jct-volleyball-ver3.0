@@ -35,8 +35,8 @@ export interface Player {
     customLabel2?: string; // 서브 대체 라벨
     /** 전력 분석/특이사항 메모 (클럽 모드 상대 선수 등) */
     memo?: string;
-    /** 수업 모드: 경기 역할 수행 이력 (아나운서, 주심, 선심 등) */
-    roleHistory?: Array<{ role: string; date: string; matchInfo: string }>;
+    /** 수업 모드: 경기 역할 수행 이력 (아나운서, 주심, 선심 등). teamCount: 해당 경기의 팀 구성(2/3/4팀제). */
+    roleHistory?: Array<{ role: string; date: string; matchInfo: string; teamCount?: number }>;
 }
 
 /** 수업 모드: 경기 역할 배정 데이터 (MatchSetup → Scoreboard 전달) - 모든 역할 최대 4명 배열 */
@@ -526,7 +526,7 @@ export interface DataContextType {
     toast: ToastState;
     saveTeamSets: (newTeamSets: TeamSet[], successMessage?: string) => Promise<void>;
     saveMatchHistory: (newHistory: (MatchState & { date: string, time?: number })[], successMessage?: string) => Promise<void>;
-    saveRoleHistoryAfterMatch: (matchInfo: string, date: string) => Promise<void>;
+    saveRoleHistoryAfterMatch: (matchInfo: string, date: string, teamCount?: number) => Promise<void>;
     savePracticeMatchHistory: (newList: (MatchState & { date: string; time?: number })[], successMessage?: string) => Promise<void>;
     saveLeagueMatchHistory: (newList: (MatchState & { date: string; time?: number })[], successMessage?: string) => Promise<void>;
     saveUserEmblems: (newUserEmblems: UserEmblem[]) => Promise<void>;

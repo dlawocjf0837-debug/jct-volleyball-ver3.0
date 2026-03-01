@@ -414,7 +414,9 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
         await saveMatchHistory(newHistory, '최종 경기 기록이 저장되었습니다!');
         const dateStr = finalResult.date ? new Date(finalResult.date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
         const matchInfo = `${matchState.teamA.name} vs ${matchState.teamB.name}`;
-        if (saveRoleHistoryAfterMatch) await saveRoleHistoryAfterMatch(matchInfo, dateStr);
+        const setId = matchState?.teamA?.key?.split('___')[0];
+        const teamCount = (teamSets ?? []).find((s: { id?: string }) => s.id === setId)?.teamCount ?? 4;
+        if (saveRoleHistoryAfterMatch) await saveRoleHistoryAfterMatch(matchInfo, dateStr, teamCount);
         clearInProgressMatch();
         onBackToMenu();
     };

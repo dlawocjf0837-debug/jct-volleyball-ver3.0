@@ -7,12 +7,16 @@ interface RoleRecordScreenProps {
     onBack: () => void;
 }
 
-type RoleEntry = { role: string; date: string; matchInfo: string };
+type RoleEntry = { role: string; date: string; matchInfo: string; teamCount?: number };
+
+const TEAM_FILTER_VALUES = ['ALL', '2', '3', '4'] as const;
+type TeamFilterValue = typeof TEAM_FILTER_VALUES[number];
 
 export default function RoleRecordScreen({ onBack }: RoleRecordScreenProps) {
     const { teamSets } = useData();
     const { t } = useTranslation();
     const [selectedClass, setSelectedClass] = useState<string>('');
+    const [teamFilter, setTeamFilter] = useState<TeamFilterValue>('ALL');
 
     const availableClasses = useMemo(() => {
         const classes = new Set<string>();
@@ -62,9 +66,19 @@ export default function RoleRecordScreen({ onBack }: RoleRecordScreenProps) {
             }));
     }, [studentsAll]);
 
+    /** teamFilter에 맞게 걸러낸 역할 이력 (표시·집계용) */
+    const studentsWithFilteredRoles = useMemo(() => {
+        return studentsWithRoles.map(({ player, roleHistory }) => {
+            const filtered = teamFilter === 'ALL'
+                ? roleHistory
+                : roleHistory.filter(e => String(e.teamCount ?? 4) === teamFilter);
+            return { player, roleHistory: filtered, id: player.id };
+        });
+    }, [studentsWithRoles, teamFilter]);
+
     const roleCounts = useMemo(() => {
         const counts: Record<string, Record<string, number>> = {};
-        studentsWithRoles.forEach(({ player, roleHistory }) => {
+        studentsWithFilteredRoles.forEach(({ player, roleHistory }) => {
             const id = player.id;
             if (!counts[id]) counts[id] = {};
             roleHistory.forEach(e => {
@@ -72,12 +86,12 @@ export default function RoleRecordScreen({ onBack }: RoleRecordScreenProps) {
             });
         });
         return counts;
-    }, [studentsWithRoles]);
+    }, [studentsWithFilteredRoles]);
 
     const [expandedId, setExpandedId] = useState<string | null>(null);
 
     const getRoleHistoryForPlayer = (playerId: string): RoleEntry[] => {
-        const found = studentsWithRoles.find(s => s.player.id === playerId);
+        const found = studentsWithFilteredRoles.find(s => s.player.id === playerId);
         const raw = found?.roleHistory ?? [];
         const seen = new Set<string>();
         return raw.filter(e => {
@@ -103,6 +117,28 @@ export default function RoleRecordScreen({ onBack }: RoleRecordScreenProps) {
                     ))}
                 </select>
             </div>
+
+            {selectedClass && (
+                <div className="no-print">
+                    <label className="block text-sm font-semibold text-slate-400 mb-2">팀 구성 기준</label>
+                    <div className="flex flex-wrap gap-2">
+                        {TEAM_FILTER_VALUES.map((value) => (
+                            <button
+                                key={value}
+                                type="button"
+                                onClick={() => setTeamFilter(value)}
+                                className={`px-3 py-2 text-sm rounded-lg transition-colors min-h-[44px] ${
+                                    teamFilter === value
+                                        ? 'bg-sky-600 text-white font-semibold'
+                                        : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                                }`}
+                            >
+                                {value === 'ALL' ? '전체' : t('record_team_format', { count: parseInt(value, 10) })}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {!selectedClass && (
                 <p className="text-slate-500 text-center py-12">반을 선택하면 학생별 역할 수행 이력이 표시됩니다.</p>
