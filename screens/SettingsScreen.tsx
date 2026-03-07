@@ -18,6 +18,10 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ appMode = 'CLASS' }) =>
     useEffect(() => {
         setCurrentSettings(settings);
     }, [settings]);
+    useEffect(() => {
+        if (showPasswordModal) document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = ''; };
+    }, [showPasswordModal]);
 
     const openPasswordModal = () => {
         setPasswordStep('verify');
@@ -122,7 +126,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ appMode = 'CLASS' }) =>
             <div className="space-y-4 pt-6 border-t border-slate-700">
                 <h3 className="text-xl font-bold text-slate-300">🏆 스포츠클럽 대회 룰 설정</h3>
                 <p className="text-slate-400 text-sm">
-                    조별 리그에서 [📺 라이브 전광판 켜기]로 진행할 때 적용됩니다. 결승 세트(마지막 세트)는 항상 15점, 8점에서 코트 체인지입니다.
+                    조별 리그에서 [📺 실시간 점수 입력]으로 진행할 때 적용됩니다. 결승 세트(마지막 세트)는 항상 15점, 8점에서 코트 체인지입니다.
                 </p>
                 <div className="space-y-3">
                     <p className="text-slate-300 font-semibold text-sm">대회 세트 당 목표 점수 (1~n-1세트)</p>
@@ -251,8 +255,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ appMode = 'CLASS' }) =>
             </div>
 
             {showPasswordModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={closePasswordModal} role="dialog" aria-modal="true">
-                    <div className="bg-slate-900 rounded-2xl border border-slate-600 shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={closePasswordModal} role="dialog" aria-modal="true">
+                    <div className="bg-slate-900 rounded-2xl border border-slate-600 shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                         {passwordStep === 'verify' ? (
                             <>
                                 <div className="p-6">

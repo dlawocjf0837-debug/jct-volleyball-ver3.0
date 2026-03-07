@@ -1,9 +1,10 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../contexts/DataContext';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 import { ArrowUpIcon, ArrowDownIcon } from '../components/icons';
 import TeamEmblem from '../components/TeamEmblem';
+import { HeatmapViewer, HitRecord } from '../components/HeatmapViewer';
 import { SavedTeamInfo } from '../types';
 import { useTranslation } from '../hooks/useTranslation';
 
@@ -86,11 +87,15 @@ const TeamComparisonRadarModal: React.FC<TeamComparisonRadarModalProps> = ({ isO
 
     const modalTitle = teams?.length === 2 ? t('analysis_compare_title') : t('analysis_radar_title_single');
 
+    useEffect(() => {
+        if (isOpen) document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = ''; };
+    }, [isOpen]);
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 animate-fade-in" onClick={onClose}>
-            <div className="bg-slate-900 rounded-lg shadow-2xl p-6 w-full max-w-2xl text-white border border-slate-700" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+            <div className="bg-slate-900 rounded-lg shadow-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto text-white border border-slate-700" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-start mb-4">
                     <div>
                         <h2 className="text-2xl font-bold text-[#00A3FF]">{modalTitle}</h2>
@@ -134,6 +139,7 @@ const TeamAnalysisScreen: React.FC<TeamAnalysisScreenProps> = ({ appMode = 'CLAS
     const [selectedTeamsForComparison, setSelectedTeamsForComparison] = useState<Set<string>>(new Set());
     const [isComparisonModalOpen, setIsComparisonModalOpen] = useState(false);
     const [isGraphOnlyMode, setIsGraphOnlyMode] = useState(false);
+    const [selectedTeamForHeatmap, setSelectedTeamForHeatmap] = useState<string>('');
 
     const teamDetailsMap = useMemo(() => {
         const map = new Map<string, SavedTeamInfo & { className: string, teamCount: number }>();
@@ -145,7 +151,7 @@ const TeamAnalysisScreen: React.FC<TeamAnalysisScreenProps> = ({ appMode = 'CLAS
         return map;
     }, [teamSets]);
 
-    const sourceMatches = appMode === 'CLUB' ? (leagueMatchHistory ?? []) : matchHistory;
+    const sourceMatches = appMode === 'CLUB' ? (leagueMatchHistory ?? matchHistory ?? []) : (matchHistory ?? []);
     const availableCompetitions = useMemo(() => 
         [...new Set((teamSets ?? []).map((s: { className: string }) => s.className))].filter(Boolean).sort(),
     [teamSets]);
@@ -246,6 +252,100 @@ const TeamAnalysisScreen: React.FC<TeamAnalysisScreenProps> = ({ appMode = 'CLAS
             };
         });
     }, [sourceMatches, selectedCompetition, teamDetailsMap, t, appMode, teamSets]);
+
+    /** 팀별 시즌 누적: 무적 추출 — scoreLocations·history·eventHistory 모두 사용, 팀 ID/HOME/AWAY/A/B 전부 방어 */
+    const teamHeatmapData = useMemo(() => {
+        const map = new Map<string, { score: HitRecord[]; conceded: HitRecord[] }>();
+        let matches = (sourceMatches || []).filter((m: any) => m?.status === 'completed' && m?.winner);
+        if (appMode === 'CLUB' && selectedCompetition) {
+            const getComp = (key: string) => {
+                if (!key) return null;
+                const [setId] = String(key).split('___');
+                return (teamSets ?? []).find((s: any) => s.id === setId)?.className ?? null;
+            };
+            matches = matches.filter((match: any) => {
+                const keyA = match?.teamA?.key || match?.teamB?.key;
+                const keyB = match?.teamB?.key;
+                const compA = getComp(keyA || '');
+                const compB = keyB ? getComp(keyB) : compA;
+                return compA === selectedCompetition && compB === selectedCompetition;
+            });
+        }
+        const toHitRecord = (x: number, y: number, statType: string): HitRecord | null => {
+            const t = String(statType || '').toUpperCase();
+            if (t.includes('SPIKE') && (t.includes('SUCCESS') || t === 'SPIKE')) return { x, y, statType: 'SPIKE_SUCCESS' };
+            if ((t.includes('SERVICE') && t.includes('ACE')) || t === 'SERVE_ACE') return { x, y, statType: 'SERVICE_ACE' };
+            return null;
+        };
+        const hasHitLocation = (e: any) => e?.hitLocation || (e?.x != null && e?.y != null);
+        const getHit = (e: any) => e?.hitLocation ?? { x: e?.x ?? 0, y: e?.y ?? 0 };
+        const isSpikeOrAceType = (e: any) => {
+            const type = String(e?.type ?? e?.statType ?? '').toUpperCase();
+            return type === 'SPIKE' || type === 'SERVE_ACE' || (type.includes('SPIKE') && type.includes('SUCCESS')) || (type.includes('SERVICE') && type.includes('ACE'));
+        };
+
+        matches.forEach((match: any) => {
+            if (!match) return;
+            const homeId = String(match?.homeTeam?.id ?? match?.homeTeamId ?? match?.homeTeam ?? match?.teamA?.name ?? match?.teamA?.id ?? '');
+            const awayId = String(match?.awayTeam?.id ?? match?.awayTeamId ?? match?.awayTeam ?? match?.teamB?.name ?? match?.teamB?.id ?? '');
+            const teamAName = String(match?.teamA?.name ?? match?.teamA?.id ?? homeId);
+            const teamBName = String(match?.teamB?.name ?? match?.teamB?.id ?? awayId);
+            if (!teamAName && !teamBName) return;
+
+            if (teamAName && !map.has(teamAName)) map.set(teamAName, { score: [], conceded: [] });
+            if (teamBName && !map.has(teamBName)) map.set(teamBName, { score: [], conceded: [] });
+
+            const bucketA = teamAName ? map.get(teamAName)! : null;
+            const bucketB = teamBName ? map.get(teamBName)! : null;
+
+            const rawHistory = Array.isArray(match?.scoreLocations) ? match.scoreLocations : (Array.isArray(match?.history) ? match.history : []);
+            const fromEventHistory = Array.isArray(match?.eventHistory)
+                ? match.eventHistory.filter((e: any) => hasHitLocation(e) && isSpikeOrAceType(e) && (e?.team === 'A' || e?.team === 'B'))
+                : [];
+            const combined: any[] = [...rawHistory];
+            fromEventHistory.forEach((e: any) => {
+                const hl = getHit(e);
+                combined.push({
+                    team: e.team,
+                    hitLocation: hl,
+                    x: hl.x,
+                    y: hl.y,
+                    type: e?.type,
+                    statType: e?.statType ?? e?.type,
+                });
+            });
+
+            combined.forEach((event: any) => {
+                if (!hasHitLocation(event) || !isSpikeOrAceType(event)) return;
+                const hl = getHit(event);
+                const x = Number(hl.x) ?? 0;
+                const y = Number(hl.y) ?? 0;
+                const type = event?.type ?? event?.statType ?? '';
+                const statType = String(type).toUpperCase().includes('SPIKE') ? 'SPIKE_SUCCESS' : 'SERVICE_ACE';
+                const h = toHitRecord(x, y, statType);
+                if (!h) return;
+
+                const eventTeamStr = String(event?.team ?? '').toUpperCase();
+                const isHomeEvent =
+                    String(event?.team) === homeId ||
+                    (eventTeamStr === 'HOME' || eventTeamStr === 'A') ||
+                    event?.team === 'A';
+                const isAwayEvent =
+                    String(event?.team) === awayId ||
+                    (eventTeamStr === 'AWAY' || eventTeamStr === 'B') ||
+                    event?.team === 'B';
+
+                if (isHomeEvent) {
+                    if (bucketA) bucketA.score.push(h);
+                    if (bucketB) bucketB.conceded.push(h);
+                } else if (isAwayEvent) {
+                    if (bucketB) bucketB.score.push(h);
+                    if (bucketA) bucketA.conceded.push(h);
+                }
+            });
+        });
+        return map;
+    }, [sourceMatches, selectedCompetition, appMode, teamSets]);
 
     const availableClasses = useMemo(() => {
         const classSet = new Set(teamPerformanceData.map(t => t.className));
@@ -588,6 +688,41 @@ const TeamAnalysisScreen: React.FC<TeamAnalysisScreenProps> = ({ appMode = 'CLAS
                                 </div>
                             </div>
                         </div>
+
+                        {/* 시즌 누적 득점/실점 히트맵 (CLUB 전용) — 2D 풀 코트 */}
+                        {appMode === 'CLUB' && sortedData.length > 0 && (
+                            <div className="bg-slate-900/50 p-6 rounded-lg border border-slate-800 shadow-xl">
+                                <h3 className="text-xl font-bold text-slate-300 mb-2">🔥 시즌 누적 득점/실점 위치 (풀 코트)</h3>
+                                <p className="text-slate-500 text-sm mb-4">해당 팀이 이번 시즌(선택 대회) 동안 기록한 득점 위치와 상대에게 허용한 실점 위치입니다.</p>
+                                <select
+                                    value={selectedTeamForHeatmap || sortedData[0]?.teamName || ''}
+                                    onChange={(e) => setSelectedTeamForHeatmap(e.target.value)}
+                                    className="bg-slate-700 border border-slate-600 rounded-md p-2 text-white text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                >
+                                    {sortedData.map((t) => (
+                                        <option key={t.teamName} value={t.teamName}>{t.teamName}</option>
+                                    ))}
+                                </select>
+                                {(() => {
+                                    const teamName = selectedTeamForHeatmap || sortedData[0]?.teamName || '';
+                                    const data = teamName ? teamHeatmapData.get(teamName) : null;
+                                    const team = sortedData.find((t) => t.teamName === teamName);
+                                    if (!team) return null;
+                                    const scoreRecords = data?.score ?? [];
+                                    const concedeRecords = data?.conceded ?? [];
+                                    const hasAny = scoreRecords.length > 0 || concedeRecords.length > 0;
+                                    return (
+                                        <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                                            {hasAny ? (
+                                                <HeatmapViewer scoreRecords={scoreRecords} concedeRecords={concedeRecords} maxHeight={320} position="LEFT" title="" />
+                                            ) : (
+                                                <p className="text-slate-500 text-sm py-6 text-center">기록된 득점/실점 위치가 없습니다.</p>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        )}
                     </>
                 )}
             </div>

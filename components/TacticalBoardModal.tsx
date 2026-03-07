@@ -642,6 +642,10 @@ export const TacticalBoardModal: React.FC<Props> = ({ isOpen, onClose, appMode =
         { key: 'eraser', label: '지우개' },
     ];
 
+    useEffect(() => {
+        if (isOpen) document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = ''; };
+    }, [isOpen]);
     if (!isOpen) return null;
 
     return (

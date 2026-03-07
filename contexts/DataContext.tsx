@@ -643,8 +643,9 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                         if (newState[target].timeouts > 0) {
                             newEventDescription = `${newState[target].name}, 작전 타임 요청.`;
                             newEventType = 'TIMEOUT';
-                            newState[target].timeouts -= 1;
-                            newState.timeout = { team: action.team, timeLeft: 30 };
+                            newState[target] = { ...newState[target], timeouts: Math.max(0, newState[target].timeouts - 1) };
+                            const initialTimeoutSeconds = appMode === 'CLUB' ? 120 : 30;
+                            newState.timeout = { team: action.team, timeLeft: initialTimeoutSeconds };
                         }
                         break;
                     }
@@ -730,15 +731,32 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                         const lastServing = newState.lastServingTeamAtSetEnd;
                         const firstServeNext = lastServing === 'A' ? 'B' : 'A';
                         newState.currentSet += 1;
-                        newState.teamA = { ...newState.teamA, score: 0 };
-                        newState.teamB = { ...newState.teamB, score: 0 };
+                        newState.teamA = { ...newState.teamA, score: 0, timeouts: 2 };
+                        newState.teamB = { ...newState.teamB, score: 0, timeouts: 2 };
                         newState.setEnded = false;
                         newState.completedSetScore = undefined;
                         newState.lastServingTeamAtSetEnd = undefined;
                         newState.servingTeam = firstServeNext;
                         if (appMode === 'CLUB' && settings.volleyballRuleSystem === 6) {
                             const t = firstServeNext === 'A' ? 'teamA' : 'teamB';
-                            newState[t] = { ...newState[t], currentServerIndex: 0 };
+                            const arr = newState[t].onCourtPlayerIds;
+                            const len = arr?.length || 6;
+                            const prev = newState[t].currentServerIndex ?? 0;
+                            newState[t] = { ...newState[t], currentServerIndex: (prev + 1) % len };
+                        }
+                        if (action.initialOnCourtA !== undefined || action.initialBenchA !== undefined) {
+                            newState.teamA = {
+                                ...newState.teamA,
+                                onCourtPlayerIds: action.initialOnCourtA ?? newState.teamA.onCourtPlayerIds,
+                                benchPlayerIds: action.initialBenchA ?? newState.teamA.benchPlayerIds,
+                            };
+                        }
+                        if (action.initialOnCourtB !== undefined || action.initialBenchB !== undefined) {
+                            newState.teamB = {
+                                ...newState.teamB,
+                                onCourtPlayerIds: action.initialOnCourtB ?? newState.teamB.onCourtPlayerIds,
+                                benchPlayerIds: action.initialBenchB ?? newState.teamB.benchPlayerIds,
+                            };
                         }
                         newState.scoreHistory = [...(newState.scoreHistory || []), { a: 0, b: 0 }];
                         newState.eventHistory.push({ score: { a: 0, b: 0 }, descriptionKey: '다음 세트 시작.', time: matchTime, type: 'UNKNOWN' });
@@ -779,14 +797,29 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                 }
     
                 if (newEventDescription) {
+                    const hitLocation = (action.type === 'SERVICE_ACE' || action.type === 'SPIKE_SUCCESS') && 'hitLocation' in action && action.hitLocation
+                        ? action.hitLocation
+                        : undefined;
                     const finalEvent: ScoreEvent = {
                         ...newEvent,
                         score: { a: newState.teamA.score, b: newState.teamB.score },
                         descriptionKey: newEventDescription,
                         time: matchTime,
-                        type: newEventType
+                        type: newEventType,
+                        ...(hitLocation && { hitLocation }),
+                        ...(hitLocation && (action.type === 'SERVICE_ACE' || action.type === 'SPIKE_SUCCESS') && 'team' in action && { team: action.team }),
                     };
                     newState.eventHistory.push(finalEvent);
+                    if (hitLocation && (action.type === 'SERVICE_ACE' || action.type === 'SPIKE_SUCCESS')) {
+                        newState.scoreLocations = [...(newState.scoreLocations || []), {
+                            team: action.team,
+                            playerId: action.playerId,
+                            statType: action.type,
+                            x: hitLocation.x,
+                            y: hitLocation.y,
+                            time: matchTime,
+                        }];
+                    }
                 }
     
                 return newState;
@@ -2021,7 +2054,8 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
             }
             
             if (Array.isArray(teamSets) && teamSets.every(isValidTeamSet)) setTeamSets(teamSets);
-            if (Array.isArray(matchHistory) && matchHistory.every(m => m && typeof m.date === 'string' && isValidMatchState(m))) setMatchHistory(matchHistory);
+            const ensureHistoryFields = (m: any) => ({ ...m, scoreLocations: Array.isArray(m?.scoreLocations) ? m.scoreLocations : [], eventHistory: Array.isArray(m?.eventHistory) ? m.eventHistory : [] });
+            if (Array.isArray(matchHistory) && matchHistory.every(m => m && typeof m.date === 'string' && isValidMatchState(m))) setMatchHistory(matchHistory.map(ensureHistoryFields));
             if (isValidUserEmblems(userEmblems)) setUserEmblems(userEmblems);
             if (isValidTournaments(tournaments)) setTournaments(tournaments);
             if (isValidLeagues(leagues)) setLeagues(leagues);
@@ -2029,11 +2063,12 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
             else setCoachingLogs(sanitizeCoachingLogs(coachingLogs));
             setOpponentTeams(sanitizeOpponentTeams(parsedOpponentTeams));
             if (Array.isArray(parsedPracticeMatchHistory) && parsedPracticeMatchHistory.every(m => m && typeof m.date === 'string' && isValidMatchState(m))) {
-                setPracticeMatchHistory(parsedPracticeMatchHistory);
-                practiceMatchHistoryRef.current = parsedPracticeMatchHistory;
+                const normalized = parsedPracticeMatchHistory.map(ensureHistoryFields);
+                setPracticeMatchHistory(normalized);
+                practiceMatchHistoryRef.current = normalized;
             }
             if (Array.isArray(parsedLeagueMatchHistory) && parsedLeagueMatchHistory.every(m => m && typeof m.date === 'string' && isValidMatchState(m))) {
-                setLeagueMatchHistory(parsedLeagueMatchHistory);
+                setLeagueMatchHistory(parsedLeagueMatchHistory.map(ensureHistoryFields));
             }
             if (parsedLeagueStandingsList && Array.isArray(parsedLeagueStandingsList.list)) {
                 setLeagueStandingsList({ list: parsedLeagueStandingsList.list, selectedId: parsedLeagueStandingsList.selectedId ?? null });

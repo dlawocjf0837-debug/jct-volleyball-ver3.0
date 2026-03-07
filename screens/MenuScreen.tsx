@@ -39,6 +39,7 @@ interface MenuScreenProps {
     onShowAchievements: () => void;
     onStartSkillDrill: () => void;
     onStartTeamAnalysis: () => void;
+    onStartHeatmapAnalysis?: () => void;
     onStartTeamManagement: () => void;
     onStartCheerSongManagement: () => void;
     onExportData: () => void;
@@ -85,6 +86,7 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
     onShowAchievements,
     onStartSkillDrill,
     onStartTeamAnalysis,
+    onStartHeatmapAnalysis,
     onStartTeamManagement,
     onStartCheerSongManagement,
     onExportData,
@@ -298,6 +300,7 @@ const MenuScreen: React.FC<MenuScreenProps> = ({
                         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
                             <MenuCard icon={<BookmarkSquareIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_match_records_title')} description={t('menu_match_records_desc')} onClick={() => onShowHistory()} />
                             <MenuCard icon={<ChartBarIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_team_analysis_title')} description={t('menu_team_analysis_desc')} onClick={onStartTeamAnalysis} />
+                            {isClub && onStartHeatmapAnalysis && <MenuCard icon={<span className="text-xl">🗺️</span>} title="히트맵 분석" description="대회·경기별 득점/실점 위치 풀코트 시각화" onClick={onStartHeatmapAnalysis} />}
                             <MenuCard icon={<IdentificationIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_player_records_title')} description={t('menu_player_records_desc')} onClick={onShowPlayerRecords} />
                             {!isClub && onShowAssessmentRanking && <MenuCard icon={<span className="text-xl">🏆</span>} title="클래스 랭킹 보드" description="경기 스탯 및 참여도 기반 학생 랭킹 확인" onClick={onShowAssessmentRanking} />}
                             {!isClub && <MenuCard icon={<TrophyIcon className="w-6 h-6 sm:w-8 sm:h-8" />} title={t('menu_achievements_title')} description={t('menu_achievements_desc')} onClick={onShowAchievements} />}

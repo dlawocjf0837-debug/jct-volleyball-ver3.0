@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { SkillDrillVideo } from '../data/skillDrills';
 import { useTranslation } from '../hooks/useTranslation';
 import { PlayIcon } from '../components/icons';
@@ -46,6 +46,12 @@ const getYoutubeInfo = (url: string): { videoId: string | null; watchUrl: string
 
 const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({ video, onClose }) => {
     const { t } = useTranslation();
+    useEffect(() => {
+        if (video) {
+            document.body.style.overflow = 'hidden';
+            return () => { document.body.style.overflow = ''; };
+        }
+    }, [video]);
     if (!video) return null;
 
     const { videoId, watchUrl } = getYoutubeInfo(video.youtubeUrl);
@@ -56,14 +62,8 @@ const VideoPlayerModal: React.FC<VideoPlayerModalProps> = ({ video, onClose }) =
     const transcript = t(video.transcriptKey);
 
     return (
-        <div 
-            className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 animate-fade-in"
-            onClick={onClose}
-        >
-            <div 
-                className="bg-slate-900 rounded-lg shadow-2xl p-6 w-full max-w-2xl text-white border border-slate-700 max-h-[90vh] flex flex-col"
-                onClick={(e) => e.stopPropagation()}
-            >
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+            <div className="bg-slate-900 rounded-lg shadow-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto text-white border border-slate-700 flex flex-col" onClick={(e) => e.stopPropagation()}>
                 <div className="flex justify-between items-start mb-4">
                     <div>
                         <h2 className="text-2xl font-bold text-[#00A3FF]">{title}</h2>

@@ -13,6 +13,7 @@ import { EffectPopup } from '../components/EffectPopup';
 import { PlayerHistoryModal } from '../components/PlayerHistoryModal';
 import { HustlePlayerModal } from '../components/HustlePlayerModal';
 import AutoSaveToast from '../components/AutoSaveToast';
+import { HeatmapRecordModal, HeatmapCoordinates } from '../components/HeatmapRecordModal';
 import { Action, MatchState, Player, ScoreEvent, ScoreEventType } from '../types';
 import TeamEmblem from '../components/TeamEmblem';
 import { useTranslation } from '../hooks/useTranslation';
@@ -53,6 +54,9 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
     const [assistModalOpen, setAssistModalOpen] = useState(false);
     const [pendingAssistTeam, setPendingAssistTeam] = useState<'A' | 'B' | null>(null);
 
+    /** CLUB: 스파이크/서브 에이스 득점 시 히트맵 위치 기록 요청 (모달 띄운 뒤 최종 dispatch) */
+    const [heatmapRequest, setHeatmapRequest] = useState<{ playerId: string; statType: 'SPIKE_SUCCESS' | 'SERVICE_ACE'; team: 'A' | 'B' } | null>(null);
+
     // 수행평가 모드: 허슬 플레이어 선정 팝업
     const [hustleModalOpen, setHustleModalOpen] = useState(false);
 
@@ -64,9 +68,25 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
     const [isSwapped, setIsSwapped] = useState(false);
     const courtChangeAt8DoneRef = useRef(false);
     const latestIsTournamentModeRef = useRef(false);
+    const initialLineupRef = useRef<{ onCourtA: string[]; benchA: string[]; onCourtB: string[]; benchB: string[] } | null>(null);
     useEffect(() => {
         latestIsTournamentModeRef.current = isTournamentMode;
     }, [isTournamentMode]);
+    useEffect(() => {
+        if (!matchState || matchState.gameOver) {
+            initialLineupRef.current = null;
+            return;
+        }
+        if (entryMode !== 'club' || matchState.status !== 'in_progress' || matchState.currentSet !== 1 || initialLineupRef.current !== null) return;
+        const a = matchState.teamA;
+        const b = matchState.teamB;
+        initialLineupRef.current = {
+            onCourtA: [...(a.onCourtPlayerIds ?? [])],
+            benchA: [...(a.benchPlayerIds ?? [])],
+            onCourtB: [...(b.onCourtPlayerIds ?? [])],
+            benchB: [...(b.benchPlayerIds ?? [])],
+        };
+    }, [entryMode, matchState]);
     useEffect(() => {
         if (p2p.isHost && setHostTournamentMode) setHostTournamentMode(isTournamentMode);
     }, [isTournamentMode, p2p.isHost, setHostTournamentMode]);
@@ -158,6 +178,11 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
     const [qrZoomPin, setQrZoomPin] = useState<string | null>(null);
     const qrCanvasContainerRef = useRef<HTMLDivElement>(null);
     const [showTacticalBoard, setShowTacticalBoard] = useState(false);
+    const anyModalOpen = !!(matchState?.setEnded || serveOrderModalTeam || showTournamentPasswordModal || (showQRZoomModal && qrZoomPin));
+    useEffect(() => {
+        if (anyModalOpen) document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = ''; };
+    }, [anyModalOpen]);
     // UX 디테일: 소리 및 자동 저장 알림
     const [soundEnabled, setSoundEnabled] = useState(true);
     const [showAutoSaveToast, setShowAutoSaveToast] = useState(false);
@@ -431,23 +456,55 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
         if (matchState && !matchState.gameOver) setTimerOn(true);
     };
 
+    const handleHeatmapRecord = useCallback(
+        (coordinates: HeatmapCoordinates | null) => {
+            if (!heatmapRequest || !matchState) return;
+            const { playerId, statType, team } = heatmapRequest;
+            const actionPayload = {
+                type: statType,
+                team,
+                playerId,
+                ...(coordinates && { hitLocation: coordinates }),
+            } as Action;
+            dispatch(actionPayload);
+            const teamState = team === 'A' ? matchState.teamA : matchState.teamB;
+            const name = teamState?.players?.[playerId]?.originalName ?? '';
+            showToast(coordinates ? `🔔 [${name}] ${statType === 'SERVICE_ACE' ? '서브 득점' : '스파이크'} 기록됨 (위치 저장)` : `🔔 [${name}] ${statType === 'SERVICE_ACE' ? '서브 득점' : '스파이크'} 기록됨`, 'success');
+            setHeatmapRequest(null);
+            if (statType === 'SPIKE_SUCCESS') {
+                setPendingAssistTeam(team);
+                setAssistModalOpen(true);
+            }
+        },
+        [heatmapRequest, matchState, dispatch, showToast]
+    );
+
     const handlePlayerSelectAndDispatch = (playerId: string) => {
         if (!pendingAction) return;
-        
+
+        if (entryMode === 'club' && (pendingAction.actionType === 'SPIKE_SUCCESS' || pendingAction.actionType === 'SERVICE_ACE')) {
+            setHeatmapRequest({
+                playerId,
+                statType: pendingAction.actionType,
+                team: pendingAction.team,
+            });
+            setPendingAction(null);
+            return;
+        }
+
         const actionToDispatch = {
             type: pendingAction.actionType,
             team: pendingAction.team,
             playerId,
         } as Action;
-        
+
         dispatch(actionToDispatch);
-        
-        // Chain logic: If it was a SPIKE score, open Assist selection. Removed BLOCKING_POINT.
+
         if (pendingAction.actionType === 'SPIKE_SUCCESS') {
             setPendingAssistTeam(pendingAction.team);
             setAssistModalOpen(true);
         }
-        
+
         setPendingAction(null);
     };
 
@@ -575,9 +632,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                                     const idx = team.currentServerIndex ?? 0;
                                     const pid = team.onCourtPlayerIds?.[idx] ?? team.onCourtPlayerIds?.[0];
                                     if (pid) {
-                                        const name = team.players[pid]?.originalName ?? '';
-                                        dispatch({ type: 'SERVICE_ACE', team: teamKey, playerId: pid });
-                                        showToast(`🔔 [${name}] 서브 득점 기록됨!`, 'success');
+                                        setHeatmapRequest({ playerId: pid, statType: 'SERVICE_ACE', team: teamKey });
                                     } else {
                                         showToast('서버를 식별할 수 없습니다.', 'error');
                                     }
@@ -616,7 +671,19 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                         <button 
                             onClick={() => {
                                 playClickSound();
-                                setPendingAction({ actionType: 'SERVE_IN', team: teamKey });
+                                if (entryMode === 'club' && isServing) {
+                                    const idx = team.currentServerIndex ?? 0;
+                                    const pid = team.onCourtPlayerIds?.[idx] ?? team.onCourtPlayerIds?.[0];
+                                    if (pid) {
+                                        const name = team.players[pid]?.originalName ?? '';
+                                        dispatch({ type: 'SERVE_IN', team: teamKey, playerId: pid });
+                                        showToast(`🔔 [${name}] 서브 In 기록됨`, 'success');
+                                    } else {
+                                        setPendingAction({ actionType: 'SERVE_IN', team: teamKey });
+                                    }
+                                } else {
+                                    setPendingAction({ actionType: 'SERVE_IN', team: teamKey });
+                                }
                             }} 
                             disabled={!isServing || matchState.gameOver || !!matchState.timeout}
                             className="bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-2 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 flex items-center justify-center gap-1 sm:gap-2 min-h-[44px] active:scale-95 transition-transform"
@@ -1053,15 +1120,26 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
 
             {/* 세트 종료 모달 (다음 세트 진행 시 코트 체인지) */}
             {matchState?.setEnded && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
-                    <div className="bg-slate-900 rounded-2xl border-2 border-amber-500/60 shadow-2xl w-full max-w-sm p-6 text-center" onClick={(e) => e.stopPropagation()}>
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true">
+                    <div className="bg-slate-900 rounded-2xl border-2 border-amber-500/60 shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto p-6 text-center" onClick={(e) => e.stopPropagation()}>
                         <p className="text-xl sm:text-2xl font-bold text-amber-400 mb-2">🚨 {matchState.currentSet}세트 종료</p>
                         <p className="text-slate-300 text-lg mb-4">
                             {matchState.teamA.name} {matchState.completedSetScore?.a ?? 0} : {matchState.completedSetScore?.b ?? 0} {matchState.teamB.name}
                         </p>
                         <button
                             onClick={() => {
-                                dispatch({ type: 'START_NEXT_SET' });
+                                const init = initialLineupRef.current;
+                                if (entryMode === 'club' && init) {
+                                    dispatch({
+                                        type: 'START_NEXT_SET',
+                                        initialOnCourtA: init.onCourtA,
+                                        initialBenchA: init.benchA,
+                                        initialOnCourtB: init.onCourtB,
+                                        initialBenchB: init.benchB,
+                                    });
+                                } else {
+                                    dispatch({ type: 'START_NEXT_SET' });
+                                }
                                 setIsSwapped(prev => !prev);
                             }}
                             className="w-full py-4 px-6 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-lg transition-colors"
@@ -1076,6 +1154,13 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
             {entryMode === 'club' && <TacticalBoardModal isOpen={showTacticalBoard} onClose={() => setShowTacticalBoard(false)} appMode="CLUB" initialMatchState={matchState} />}
             {showRulesModal && <RulesModal onClose={() => setShowRulesModal(false)} />}
             {matchState.timeout && <TimeoutModal timeLeft={matchState.timeout.timeLeft} onClose={handleCloseTimeout} />}
+            {entryMode === 'club' && (
+                <HeatmapRecordModal
+                    isOpen={!!heatmapRequest}
+                    onRecord={handleHeatmapRecord}
+                    onClose={() => setHeatmapRequest(null)}
+                />
+            )}
             <PlayerSelectionModal
                 isOpen={!!pendingAction}
                 onClose={() => setPendingAction(null)}
@@ -1149,14 +1234,14 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
             {/* 서브 순서 뷰어 모달 (CLUB 모드) - 다크 테마 e스포츠 스타일 */}
             {serveOrderModalTeam && (
                 <div
-                    className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+                    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4"
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby="serve-order-modal-title"
                     onClick={() => setServeOrderModalTeam(null)}
                 >
                     <div
-                        className="bg-slate-900 rounded-2xl shadow-2xl border border-slate-700 w-full max-w-sm overflow-hidden"
+                        className="bg-slate-900 rounded-2xl shadow-2xl border border-slate-700 w-full max-w-sm max-h-[90vh] overflow-y-auto"
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div className="flex justify-between items-center px-5 py-4 border-b border-slate-700 bg-slate-800/50">
@@ -1177,11 +1262,14 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                             const ids = t.onCourtPlayerIds ?? [];
                             const currentIdx = t.currentServerIndex ?? 0;
                             const isTeamA = serveOrderModalTeam === 'A';
+                            const hasServe = matchState.servingTeam === serveOrderModalTeam;
                             const currentCardStyle = isTeamA
                                 ? 'bg-gradient-to-r from-blue-950 to-blue-900 border-2 border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.4)]'
                                 : 'bg-gradient-to-r from-red-950 to-red-900 border-2 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]';
                             const currentBadgeStyle = isTeamA ? 'bg-blue-500/20 text-blue-300' : 'bg-red-500/20 text-red-300';
-                            if (ids.length === 0) {
+                            const len = ids.length;
+                            const badgeIdx = hasServe ? currentIdx : (currentIdx + 1) % len;
+                            if (len === 0) {
                                 return (
                                     <div className="p-6 text-center">
                                         <p className="text-sm text-gray-500">출전 선수가 없습니다.</p>
@@ -1194,7 +1282,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                                         const player = t.players[pid];
                                         const name = player?.originalName ?? '???';
                                         const number = player?.studentNumber ?? '';
-                                        const isCurrent = idx === currentIdx;
+                                        const isCurrent = idx === badgeIdx;
                                         return (
                                             <div
                                                 key={pid}
@@ -1224,7 +1312,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                                                 {isCurrent && (
                                                     <span className={`flex-shrink-0 flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-semibold ${currentBadgeStyle}`}>
                                                         <span className="animate-pulse">🏐</span>
-                                                        <span>현재 서버</span>
+                                                        <span>{hasServe ? '현재 서버' : '다음 서버'}</span>
                                                     </span>
                                                 )}
                                             </div>
@@ -1244,8 +1332,8 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
 
             {/* 대회 모드 비밀번호 모달 (클럽 모드에서는 미노출) */}
             {showTournamentPasswordModal && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
-                    <div className="bg-slate-900 rounded-2xl border border-slate-600 shadow-2xl w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true">
+                    <div className="bg-slate-900 rounded-2xl border border-slate-600 shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
                         <h3 className="text-lg font-bold text-slate-200 mb-3">🏆 대회 전광판 모드</h3>
                         <p className="text-sm text-slate-400 mb-4">비밀번호를 입력하세요.</p>
                         <input
@@ -1272,14 +1360,14 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
             {/* QR 확대 모달 */}
             {showQRZoomModal && qrZoomPin && (
                 <div
-                    className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+                    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4"
                     onClick={() => { setShowQRZoomModal(false); setQrZoomPin(null); }}
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby="qr-zoom-title"
                 >
                     <div
-                        className="bg-slate-900 rounded-2xl border border-slate-600 shadow-2xl w-full max-w-sm flex flex-col items-center p-6"
+                        className="bg-slate-900 rounded-2xl border border-slate-600 shadow-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto flex flex-col items-center p-6"
                         onClick={(e) => e.stopPropagation()}
                     >
                         <h2 id="qr-zoom-title" className="text-lg font-bold text-sky-300 mb-4">실시간 참여 QR 코드</h2>

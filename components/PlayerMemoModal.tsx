@@ -20,6 +20,10 @@ export const PlayerMemoModal: React.FC<PlayerMemoModalProps> = ({
     useEffect(() => {
         if (isOpen) setMemo(initialMemo);
     }, [isOpen, initialMemo]);
+    useEffect(() => {
+        if (isOpen) document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = ''; };
+    }, [isOpen]);
 
     const handleSave = () => {
         onSave(memo);
@@ -29,8 +33,8 @@ export const PlayerMemoModal: React.FC<PlayerMemoModalProps> = ({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4" onClick={onClose}>
-            <div className="bg-slate-900 rounded-lg shadow-2xl p-5 w-full max-w-md border border-slate-700" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+            <div className="bg-slate-900 rounded-lg shadow-2xl p-5 w-full max-w-md max-h-[90vh] overflow-y-auto border border-slate-700" onClick={e => e.stopPropagation()}>
                 <h3 className="text-lg font-bold text-sky-400 mb-1">전력 분석 메모</h3>
                 <p className="text-slate-400 text-sm mb-3">{playerName}</p>
                 <textarea

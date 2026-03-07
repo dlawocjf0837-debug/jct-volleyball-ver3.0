@@ -14,6 +14,8 @@ interface LiveChatOverlayProps {
     isInputEnabled: boolean;
     showInputSection?: boolean;
     isHostInputAlwaysEnabled?: boolean;
+    /** 모바일(md 이하)에서 하단 리액션 버튼과 겹침 방지: true면 bottom-24로 상승 */
+    raiseOnMobile?: boolean;
     onSend?: (text: string) => void;
     sendCooldownRemaining?: number;
     maxLength?: number;
@@ -34,6 +36,7 @@ export const LiveChatOverlay: React.FC<LiveChatOverlayProps> = ({
     isInputEnabled,
     showInputSection = true,
     isHostInputAlwaysEnabled = false,
+    raiseOnMobile = false,
     onSend,
     sendCooldownRemaining = 0,
     maxLength = 30,
@@ -63,7 +66,7 @@ export const LiveChatOverlay: React.FC<LiveChatOverlayProps> = ({
     const isChatEnabled = (isInputEnabled || isHostInputAlwaysEnabled) && !isBlocked;
 
     return (
-        <div className={`fixed left-4 bottom-4 z-20 flex flex-col bg-black/70 backdrop-blur-sm rounded-xl border border-slate-600/60 overflow-hidden shadow-xl transition-all duration-300 ${isExpanded ? 'w-[min(28rem,90vw)] h-[min(600px,80vh)] max-h-[80vh]' : 'w-[min(320px,85vw)] max-h-[200px]'}`}>
+        <div className={`fixed left-4 z-20 flex flex-col bg-black/70 backdrop-blur-sm rounded-xl border border-slate-600/60 overflow-hidden shadow-xl transition-all duration-300 ${raiseOnMobile ? 'bottom-4 max-md:bottom-24' : 'bottom-4'} ${isExpanded ? 'w-[min(28rem,90vw)] h-[min(600px,80vh)] max-h-[80vh]' : 'w-[min(320px,85vw)] max-h-[200px]'}`}>
             <div className="px-3 py-2 border-b border-slate-600/60 text-xs font-semibold text-slate-300 flex items-center justify-between gap-2 shrink-0">
                 <span>💬 실시간 채팅</span>
                 <button
@@ -137,7 +140,7 @@ export const LiveChatOverlay: React.FC<LiveChatOverlayProps> = ({
             {/* 2. 입력창 또는 제한 안내 영역 (조건부 렌더링 완벽 분리) */}
             {showInputSection && (
                 !isBlocked ? (
-                    <div className="p-2 flex items-center gap-2 border-t border-slate-600/60 mt-0">
+                    <div className="p-2 flex flex-wrap items-center gap-2 border-t border-slate-600/60 mt-0 shrink-0 relative z-30 bg-black/80">
                         <input
                             type="text"
                             value={inputValue}

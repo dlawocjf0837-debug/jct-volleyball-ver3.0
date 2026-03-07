@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Player } from '../types';
 
 export interface MvpDetailData {
@@ -21,16 +21,17 @@ interface MvpDetailModalProps {
 }
 
 const MvpDetailModal: React.FC<MvpDetailModalProps> = ({ isOpen, onClose, mvpData }) => {
+    useEffect(() => {
+        if (isOpen) document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = ''; };
+    }, [isOpen]);
     if (!isOpen || !mvpData?.player) return null;
 
     const { player, teamName, totalPoints, sumPoints = 0, sumServiceAces = 0, sumBlockingPoints = 0, sumDigs = 0, sumAssists = 0, sumServeIn = 0, sumServiceFaults = 0 } = mvpData;
 
     return (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 animate-fade-in" onClick={onClose}>
-            <div
-                className="bg-slate-900 rounded-2xl border border-sky-500/40 shadow-2xl max-w-md w-full p-5 text-slate-100"
-                onClick={(e) => e.stopPropagation()}
-            >
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+            <div className="bg-slate-900 rounded-2xl border border-sky-500/40 shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-5 text-slate-100" onClick={(e) => e.stopPropagation()}>
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-amber-500">
                         🏆 MVP 상세

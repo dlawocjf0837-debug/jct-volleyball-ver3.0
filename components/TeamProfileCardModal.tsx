@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SavedTeamInfo, Player } from '../types';
 import TeamEmblem from './TeamEmblem';
 import { CrownIcon } from './icons';
@@ -15,21 +15,18 @@ interface TeamProfileCardModalProps {
 export const TeamProfileCardModal: React.FC<TeamProfileCardModalProps> = ({ isOpen, onClose, team, players }) => {
     const { t } = useTranslation();
     const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
-    
+    useEffect(() => {
+        if (isOpen) document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = ''; };
+    }, [isOpen]);
     if (!isOpen) return null;
 
     const teamColor = team.color || '#3b82f6';
 
     return (
         <>
-            <div 
-                className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 animate-fade-in"
-                onClick={onClose}
-            >
-                <div 
-                    className="bg-slate-900 rounded-lg shadow-2xl p-6 w-full max-w-lg text-white border border-slate-700 flex flex-col items-center"
-                    onClick={(e) => e.stopPropagation()}
-                >
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+                <div className="bg-slate-900 rounded-lg shadow-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto text-white border border-slate-700 flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
                     <h2 className="text-2xl font-bold text-[#00A3FF] mb-4">{t('profile_card_title')}</h2>
 
                     {/* Card Area */}

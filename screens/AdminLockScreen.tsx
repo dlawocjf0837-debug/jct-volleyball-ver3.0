@@ -22,6 +22,10 @@ const AdminLockScreen: React.FC<AdminLockScreenProps> = ({ onUnlock, onRequestSt
             setShowBetaModal(true);
         }
     }, [appMode]);
+    useEffect(() => {
+        if (showBetaModal) document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = ''; };
+    }, [showBetaModal]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -154,8 +158,8 @@ const AdminLockScreen: React.FC<AdminLockScreenProps> = ({ onUnlock, onRequestSt
             </div>
 
             {showBetaModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-                    <div className="bg-slate-800 p-6 rounded-xl shadow-2xl max-w-sm w-full text-center border-2 border-amber-500 animate-fade-in">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
+                    <div className="bg-slate-800 p-6 rounded-xl shadow-2xl max-w-sm w-full max-h-[90vh] overflow-y-auto text-center border-2 border-amber-500 animate-fade-in">
                         <div className="text-5xl mb-4">🛠️</div>
                         <h3 className="text-xl font-bold text-amber-400 mb-3">[스포츠클럽 모드 베타 테스트 중!]</h3>
                         <p className="text-gray-300 text-sm mb-6 leading-relaxed break-keep">

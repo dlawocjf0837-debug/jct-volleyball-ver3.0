@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { Player, STAT_KEYS } from '../types';
 import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Tooltip, ResponsiveContainer } from 'recharts';
 import { useTranslation } from '../hooks/useTranslation';
@@ -13,7 +13,10 @@ interface StatModalProps {
 
 const StatModal: React.FC<StatModalProps> = ({ player, onClose, showRealNames, allPlayers = [] }) => {
     const { t } = useTranslation();
-    
+    useEffect(() => {
+        document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = ''; };
+    }, []);
     // 데이터 안에 있는 라벨을 꺼내 씀 (없으면 기본값)
     const skill1Label = player.customLabel1 || "언더핸드";
     const skill2Label = player.customLabel2 || "서브";
@@ -31,14 +34,8 @@ const StatModal: React.FC<StatModalProps> = ({ player, onClose, showRealNames, a
     }, [player.stats, t, skill1Label, skill2Label]);
 
     return (
-        <div 
-            className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 animate-fade-in"
-            onClick={onClose}
-        >
-            <div 
-                className="bg-slate-900 rounded-lg shadow-2xl p-6 w-full max-w-lg mx-4 text-white border border-slate-700"
-                onClick={(e) => e.stopPropagation()}
-            >
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+            <div className="bg-slate-900 rounded-lg shadow-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto text-white border border-slate-700" onClick={(e) => e.stopPropagation()}>
                 <div className="flex justify-between items-start mb-4">
                     <div>
                         <h2 className="text-2xl font-bold text-[#00A3FF]">{player.anonymousName} 능력치</h2>

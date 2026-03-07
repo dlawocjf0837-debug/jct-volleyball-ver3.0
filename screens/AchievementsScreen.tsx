@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useData } from '../contexts/DataContext';
 import { BADGE_DEFINITIONS } from '../data/badges';
 import { Badge, Player, PlayerCumulativeStats } from '../types';
@@ -8,6 +8,10 @@ const AchievementsScreen: React.FC = () => {
     const { playerAchievements, teamSets, playerCumulativeStats } = useData();
     const { t } = useTranslation();
     const [selectedBadge, setSelectedBadge] = useState<Badge | null>(null);
+    useEffect(() => {
+        if (selectedBadge) document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = ''; };
+    }, [selectedBadge]);
 
     const allPlayersMap = useMemo(() => {
         const map = new Map<string, Player>();
@@ -71,14 +75,8 @@ const AchievementsScreen: React.FC = () => {
 
 
         return (
-            <div 
-                className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 animate-fade-in"
-                onClick={onClose}
-            >
-                <div 
-                    className="bg-slate-900 rounded-lg shadow-2xl p-6 w-full max-w-md text-white border border-[#00A3FF]"
-                    onClick={(e) => e.stopPropagation()}
-                >
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+                <div className="bg-slate-900 rounded-lg shadow-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto text-white border border-[#00A3FF]" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-start gap-4 mb-4">
                         <badge.icon className="w-16 h-16 text-[#00A3FF] flex-shrink-0" />
                         <div>

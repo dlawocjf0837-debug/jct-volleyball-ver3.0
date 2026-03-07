@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../contexts/DataContext';
 import { Player, TeamSet } from '../types';
 import { useTranslation } from '../hooks/useTranslation';
@@ -167,17 +167,16 @@ const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
     // 모달 제목 결정
     const modalTitle = title || (className ? t('player_selection_modal_title', { className }) : t('who_recorded'));
 
+    useEffect(() => {
+        if (isOpen) document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = ''; };
+    }, [isOpen]);
     if (!isOpen) return null;
 
     return (
-        <div 
-            className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 animate-fade-in"
-            onClick={onClose}
-        >
-            <div 
-                className={`bg-slate-900 rounded-lg shadow-2xl p-6 w-full text-white border flex flex-col max-h-[90vh] ${
-                    variant === 'grid' ? 'max-w-4xl' : 'max-w-2xl'
-                }`}
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+            <div
+                className={`bg-slate-900 rounded-lg shadow-2xl p-6 w-full max-h-[90vh] overflow-y-auto text-white border flex flex-col ${variant === 'grid' ? 'max-w-4xl' : 'max-w-2xl'}`}
                 style={{ borderColor: teamColor }}
                 onClick={(e) => e.stopPropagation()}
             >

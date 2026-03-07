@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { Badge, Player, PlayerCumulativeStats } from '../types';
 import { useData } from '../contexts/DataContext';
 import { useTranslation } from '../hooks/useTranslation';
@@ -129,17 +129,13 @@ export const BadgeDetailModal: React.FC<BadgeDetailModalProps> = ({ badge, playe
     // 획득 조건 설명 (translations의 descriptionKey 사용)
     const conditionText = t(badge.descriptionKey);
 
+    useEffect(() => {
+        document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = ''; };
+    }, []);
     return (
-        <div 
-            className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4 animate-fade-in"
-            onClick={onClose}
-            role="dialog"
-            aria-modal="true"
-        >
-            <div 
-                className="bg-slate-900 rounded-lg shadow-2xl p-6 w-full max-w-lg text-white border border-slate-700 max-h-[90vh] overflow-y-auto"
-                onClick={(e) => e.stopPropagation()}
-            >
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={onClose} role="dialog" aria-modal="true">
+            <div className="bg-slate-900 rounded-lg shadow-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto text-white border border-slate-700" onClick={(e) => e.stopPropagation()}>
                 {/* 헤더 */}
                 <div className="flex items-start justify-between mb-6">
                     <div className="flex items-center gap-4">

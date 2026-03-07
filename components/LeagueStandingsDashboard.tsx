@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { useData } from '../contexts/DataContext';
 import { LeagueStandingsData, LeagueStandingsMatch, getSetsWonFromMatch, SetScore, TeamSet, Player, PlayerStats, TeamMatchState } from '../types';
 
@@ -87,6 +88,10 @@ export const LeagueStandingsDashboard: React.FC<LeagueStandingsDashboardProps> =
     const [matchModal, setMatchModal] = useState<{ teamA: string; teamB: string; setScores: SetScore[] } | null>(null);
     const [editingMatchIndex, setEditingMatchIndex] = useState<number | null>(null);
     const [inputModeModal, setInputModeModal] = useState<{ teamA: string; teamB: string } | null>(null);
+    useEffect(() => {
+        if (inputModeModal || matchModal) document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = 'unset'; };
+    }, [inputModeModal, matchModal]);
 
     useEffect(() => {
         if (data) setTournamentNameLocal(data.tournamentName);
@@ -514,10 +519,15 @@ export const LeagueStandingsDashboard: React.FC<LeagueStandingsDashboardProps> =
                 )}
             </div>
 
-            {/* 경기 진행 방식 선택 모달 */}
-            {inputModeModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-                    <div className="bg-slate-900 rounded-xl shadow-2xl p-6 w-full max-w-sm border border-slate-700">
+            {/* 경기 진행 방식 선택 모달 - Portal로 body에 렌더하여 부모 위치/transform 영향 제거 */}
+            {inputModeModal && typeof document !== 'undefined' && ReactDOM.createPortal(
+                <div
+                    className="fixed top-0 left-0 w-screen h-screen z-[99999] flex items-center justify-center bg-black/80 m-0 p-0"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="경기 진행 방식 선택"
+                >
+                    <div className="bg-slate-900 rounded-xl shadow-2xl p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto border border-slate-700 mx-4">
                         <h3 className="text-lg font-bold text-amber-400 mb-2">경기 진행 방식 선택</h3>
                         <p className="text-slate-400 text-sm mb-6">
                             {inputModeModal.teamA} vs {inputModeModal.teamB}
@@ -541,7 +551,7 @@ export const LeagueStandingsDashboard: React.FC<LeagueStandingsDashboardProps> =
                                 }}
                                 className="w-full py-3 px-4 bg-amber-500 hover:bg-amber-600 text-slate-900 rounded-lg font-bold transition-colors"
                             >
-                                📺 라이브 전광판 켜기
+                                📺 실시간 점수 입력
                             </button>
                             <button
                                 type="button"
@@ -552,12 +562,20 @@ export const LeagueStandingsDashboard: React.FC<LeagueStandingsDashboardProps> =
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
-            {matchModal && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setMatchModal(null)}>
-                    <div className="bg-slate-900 rounded-xl shadow-2xl p-6 w-full max-w-sm border border-slate-700" onClick={e => e.stopPropagation()}>
+            {/* 경기 결과 입력 모달 - Portal로 body에 렌더 */}
+            {matchModal && typeof document !== 'undefined' && ReactDOM.createPortal(
+                <div
+                    className="fixed top-0 left-0 w-screen h-screen z-[99999] flex items-center justify-center bg-black/80 m-0 p-0"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="경기 결과 입력"
+                    onClick={() => setMatchModal(null)}
+                >
+                    <div className="bg-slate-900 rounded-xl shadow-2xl p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto border border-slate-700 mx-4" onClick={e => e.stopPropagation()}>
                         <h3 className="text-lg font-bold text-amber-400 mb-3">경기 결과 입력 (3판 2선승제)</h3>
                         <p className="text-slate-400 text-sm mb-3">{matchModal.teamA} vs {matchModal.teamB}</p>
                         <div className="space-y-3 mb-4">
@@ -595,7 +613,8 @@ export const LeagueStandingsDashboard: React.FC<LeagueStandingsDashboardProps> =
                             <button type="button" onClick={saveMatch} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-medium">저장</button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
         </>

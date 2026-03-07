@@ -180,6 +180,12 @@ export interface TeamMatchState {
 
 export type ScoreEventType = 'ACE' | 'FAULT' | 'BLOCK' | 'SPIKE' | 'SCORE' | 'TIMEOUT' | 'GAME_END' | 'SUB' | 'FAIRPLAY' | '3HIT' | 'SERVE_IN' | 'DIG' | 'ASSIST' | 'UNKNOWN';
 
+/** 스파이크/서브 에이스 득점 시 공이 떨어진 위치 (코트 상대 좌표 0~100%) */
+export interface HitLocation {
+    x: number;
+    y: number;
+}
+
 export interface ScoreEvent {
     score: { a: number; b: number };
     descriptionKey: string;
@@ -191,6 +197,10 @@ export interface ScoreEvent {
         playerOut: string;
     };
     type: ScoreEventType;
+    /** CLUB 모드: 스파이크/서브 에이스 득점 위치 (히트맵용) */
+    hitLocation?: HitLocation;
+    /** 팀 분석 히트맵용: 득점 팀 (eventHistory에서 누적 추출 시 사용) */
+    team?: 'A' | 'B';
 }
 
 export interface MatchState {
@@ -239,10 +249,10 @@ export type Action =
     | { type: 'RESET_STATE' }
     | { type: 'UNDO' } // New Undo Action
     | { type: 'SCORE'; team: 'A' | 'B'; amount: number }
-    | { type: 'SERVICE_ACE'; team: 'A' | 'B'; playerId: string }
+    | { type: 'SERVICE_ACE'; team: 'A' | 'B'; playerId: string; hitLocation?: HitLocation }
     | { type: 'SERVICE_FAULT'; team: 'A' | 'B'; playerId: string }
     | { type: 'BLOCKING_POINT'; team: 'A' | 'B'; playerId: string }
-    | { type: 'SPIKE_SUCCESS'; team: 'A' | 'B'; playerId: string }
+    | { type: 'SPIKE_SUCCESS'; team: 'A' | 'B'; playerId: string; hitLocation?: HitLocation }
     | { type: 'SERVE_IN'; team: 'A' | 'B'; playerId: string } // New
     | { type: 'DIG_SUCCESS'; team: 'A' | 'B'; playerId: string } // New
     | { type: 'ASSIST_SUCCESS'; team: 'A' | 'B'; playerId: string } // New
@@ -254,7 +264,7 @@ export type Action =
     | { type: 'SET_SERVING_TEAM'; team: 'A' | 'B' }
     | { type: 'SUBSTITUTE_PLAYER'; team: 'A' | 'B'; playerIn: string; playerOut: string }
     | { type: 'UPDATE_PLAYER_MEMO'; team: 'A' | 'B'; playerId: string; memo: string }
-    | { type: 'START_NEXT_SET' }; // 세트 종료 모달에서 [다음 세트 진행] 클릭 시
+    | { type: 'START_NEXT_SET'; initialOnCourtA?: string[]; initialBenchA?: string[]; initialOnCourtB?: string[]; initialBenchB?: string[] }; // 세트 종료 시 선발 라인업 복구용
 
 
 export interface Badge {

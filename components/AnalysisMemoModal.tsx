@@ -177,11 +177,15 @@ export const AnalysisMemoModal: React.FC<Props> = ({ isOpen, onClose }) => {
         showToast?.('메모가 성공적으로 저장되었습니다.', 'success');
     };
 
+    useEffect(() => {
+        if (isOpen) document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = ''; };
+    }, [isOpen]);
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/95 p-4" onClick={onClose} role="dialog" aria-modal="true" aria-label="전력 분석 메모">
-            <div className="bg-slate-800 rounded-xl border border-slate-600 w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={onClose} role="dialog" aria-modal="true" aria-label="전력 분석 메모">
+            <div className="bg-slate-800 rounded-xl border border-slate-600 w-full max-w-4xl max-h-[90vh] overflow-y-auto flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
                 <div className="p-4 border-b border-slate-600 font-semibold text-slate-200 text-center text-xl">📊 전력 분석 메모</div>
 
                 <div className="flex-1 flex min-h-0">

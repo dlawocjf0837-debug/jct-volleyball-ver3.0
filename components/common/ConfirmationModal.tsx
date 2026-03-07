@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useTranslation } from '../../hooks/useTranslation';
 
 interface ConfirmationModalProps {
@@ -15,20 +15,22 @@ interface ConfirmationModalProps {
 
 const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, onConfirm, title, message, confirmText, children, isConfirmDisabled, isCancelDisabled }) => {
     const { t } = useTranslation();
-    if (!isOpen) {
-        return null;
-    }
+    useEffect(() => {
+        if (isOpen) document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = ''; };
+    }, [isOpen]);
+    if (!isOpen) return null;
 
     return (
-        <div 
-            className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 animate-fade-in"
+        <div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4"
             onClick={onClose}
             role="dialog"
             aria-modal="true"
             aria-labelledby="confirmation-dialog-title"
         >
-            <div 
-                className="bg-slate-900 rounded-lg shadow-2xl p-6 w-full max-w-md text-white border border-slate-700"
+            <div
+                className="bg-slate-900 rounded-lg shadow-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto text-white border border-slate-700"
                 onClick={(e) => e.stopPropagation()}
             >
                 <h2 id="confirmation-dialog-title" className="text-2xl font-bold text-[#00A3FF] mb-4">{title}</h2>

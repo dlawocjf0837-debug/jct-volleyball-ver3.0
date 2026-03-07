@@ -7,6 +7,7 @@ import { LockClosedIcon, CrownIcon } from './icons';
 import { useTranslation } from '../hooks/useTranslation';
 import { BADGE_DEFINITIONS } from '../data/badges';
 import { BadgeDetailModal } from './BadgeDetailModal';
+import { HeatmapViewer, HitRecord } from './HeatmapViewer';
 
 type MatchPerformance = {
     match: MatchState & { date: string; _matchType?: 'regular' | 'practice' | 'tournament' };
@@ -78,6 +79,10 @@ const statOrder: (keyof PlayerStats | 'serveSuccessRate' | 'serveAceRate')[] = [
 export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, cumulativeStats, performanceHistory, onClose, teamSets, appMode = 'CLASS', currentMatchInfo }) => {
     const { coachingLogs, saveCoachingLog, requestPassword, playerAchievements, updatePlayerMemoInTeamSet, showToast, matchHistory, practiceMatchHistory, leagueMatchHistory } = useData();
     const { t } = useTranslation();
+    useEffect(() => {
+        document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = ''; };
+    }, []);
     const [newLog, setNewLog] = useState('');
     const [isLogUnlocked, setIsLogUnlocked] = useState(false);
     const [activeTab, setActiveTab] = useState<'analysis' | 'coaching' | 'memo'>('analysis');
@@ -122,9 +127,11 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
         setRosterToShow({ teamName: teamNameToShow, players: playerList, captainId });
     };
 
-    const RosterModal = ({ teamName, players, captainId, onClose }: { teamName: string, players: Player[], captainId?: string, onClose: () => void }) => (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4 animate-fade-in" onClick={onClose}>
-            <div className="bg-slate-800 rounded-lg shadow-2xl p-6 w-full max-w-sm text-white border border-slate-700 flex flex-col" onClick={e => e.stopPropagation()}>
+    const RosterModal = ({ teamName, players, captainId, onClose }: { teamName: string, players: Player[], captainId?: string, onClose: () => void }) => {
+        useEffect(() => { document.body.style.overflow = 'hidden'; return () => { document.body.style.overflow = ''; }; }, []);
+        return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+            <div className="bg-slate-800 rounded-lg shadow-2xl p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto text-white border border-slate-700 flex flex-col" onClick={e => e.stopPropagation()}>
                 <h3 className="text-xl font-bold text-sky-400 mb-4 text-center">{t('player_history_roster_title', { teamName })}</h3>
                 <div className="flex-grow overflow-y-auto pr-2 -mr-2">
                     <ul className="space-y-2">
@@ -150,6 +157,7 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
             </div>
         </div>
     );
+    };
 
     const handleSaveLog = async () => {
         if (newLog.trim() && player?.id) {
@@ -440,6 +448,21 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
         return (BADGE_DEFINITIONS || []).filter(badge => badge && badgeIds.has(badge.id));
     }, [playerAchievements, allPlayerIds]);
 
+    const playerHitRecords = useMemo((): HitRecord[] => {
+        const out: HitRecord[] = [];
+        (baseForFilter ?? []).forEach((entry: MatchPerformance) => {
+            const match = entry?.match as (MatchState & { scoreLocations?: { team: string; playerId: string; statType: string; x: number; y: number }[] }) | undefined;
+            const locs = match?.scoreLocations;
+            if (!locs || !Array.isArray(locs)) return;
+            locs.forEach((s: { playerId: string; statType: string; x: number; y: number }) => {
+                if (!allPlayerIds.has(s.playerId)) return;
+                if (s.statType !== 'SPIKE_SUCCESS' && s.statType !== 'SERVICE_ACE') return;
+                out.push({ x: s.x, y: s.y, statType: s.statType as 'SPIKE_SUCCESS' | 'SERVICE_ACE' });
+            });
+        });
+        return out;
+    }, [baseForFilter, allPlayerIds]);
+
     // Custom Tooltip Component
     const CustomTooltip = ({ active, payload, label }: any) => {
         if (active && payload && payload.length) {
@@ -476,12 +499,12 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
                     onClose={() => setSelectedBadgeDetail(null)}
                 />
             )}
-            <div 
-                className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4 animate-fade-in"
+            <div
+                className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4"
                 onClick={onClose}
             >
-                <div 
-                    className="bg-slate-900 rounded-lg shadow-2xl p-6 w-full max-w-4xl text-white border border-slate-700 max-h-[95vh] flex flex-col"
+                <div
+                    className="bg-slate-900 rounded-lg shadow-2xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto text-white border border-slate-700 flex flex-col"
                     onClick={(e) => e.stopPropagation()}
                 >
                     <div className="flex-shrink-0 flex justify-between items-start mb-4">
@@ -611,6 +634,17 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
                                         <p className="text-slate-400">{t('player_history_win_rate_details', { wins: winRateStats.wins, total: winRateStats.total })}</p>
                                     </div>
                                 </div>
+
+                                {appMode === 'CLUB' && (
+                                    <div className="bg-slate-800/50 p-4 rounded-lg">
+                                        <h3 className="font-semibold text-slate-300 mb-3">🔥 공격/서브 성공 위치</h3>
+                                        {playerHitRecords.length > 0 ? (
+                                            <HeatmapViewer scoreRecords={playerHitRecords} concedeRecords={[]} maxHeight={260} />
+                                        ) : (
+                                            <p className="text-slate-500 text-sm">기록된 득점 위치가 없습니다.</p>
+                                        )}
+                                    </div>
+                                )}
 
                                 <div className="space-y-3">
                                     <h3 className="text-lg font-bold text-slate-300">{t('player_history_detailed_records')}</h3>

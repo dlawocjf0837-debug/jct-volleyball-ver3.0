@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from '../hooks/useTranslation';
 
 interface AddNewPlayerModalProps {
@@ -22,11 +22,15 @@ const AddNewPlayerModal: React.FC<AddNewPlayerModalProps> = ({ isOpen, onClose, 
         }
     };
 
+    useEffect(() => {
+        if (isOpen) document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = ''; };
+    }, [isOpen]);
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4 animate-fade-in" onClick={onClose}>
-            <div className="bg-slate-900 rounded-lg shadow-2xl p-6 w-full max-w-sm text-white border border-sky-500" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+            <div className="bg-slate-900 rounded-lg shadow-2xl p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto text-white border border-sky-500" onClick={e => e.stopPropagation()}>
                 <h2 className="text-2xl font-bold text-sky-400 mb-4">{t('new_player_registration')}</h2>
                 <div className="space-y-4">
                     <div>

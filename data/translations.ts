@@ -83,6 +83,7 @@ export const translations: Record<string, Record<Language, string>> = {
   referee_scoreboard_title: { ko: "주심용 스코어보드", id: "PAPAN SKOR WASIT" },
   team_management_title: { ko: "팀 관리", id: "MANAJEMEN TIM" },
   team_analysis_title: { ko: "팀 분석", id: "ANALISIS TIM" },
+  heatmap_analysis_title: { ko: "히트맵 분석", id: "ANALISIS PETA PANAS" },
   cheer_song_title: { ko: "응원가 관리", id: "MANAJEMEN LAGU SORAK" },
   settings_title: { ko: "환경설정", id: "PENGATURAN" },
   tournament_title: { ko: "토너먼트", id: "TURNAMEN" },

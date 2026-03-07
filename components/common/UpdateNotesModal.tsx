@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
 export interface ReleaseNoteItem {
     version: string;
@@ -91,18 +91,22 @@ const UpdateNotesModal: React.FC<UpdateNotesModalProps> = ({
     onClose,
     releaseNotes = DEFAULT_RELEASE_NOTES,
 }) => {
+    useEffect(() => {
+        if (isOpen) document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = ''; };
+    }, [isOpen]);
     if (!isOpen) return null;
 
     return (
         <div
-            className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 animate-fade-in"
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4"
             onClick={onClose}
             role="dialog"
             aria-modal="true"
             aria-labelledby="update-notes-title"
         >
             <div
-                className="bg-slate-900 rounded-2xl border border-slate-600 shadow-2xl w-full max-w-md max-h-[85vh] flex flex-col text-slate-100"
+                className="bg-slate-900 rounded-2xl border border-slate-600 shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto flex flex-col text-slate-100"
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="flex items-center justify-between p-4 border-b border-slate-700">

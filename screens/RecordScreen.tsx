@@ -5,6 +5,7 @@ import { CrownIcon, TrophyIcon, FireIcon, SparklesIcon, MedalIcon, PhotoIcon, Ta
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 // Fix: Changed import to be a named import as PlayerHistoryModal is not a default export.
 import { PlayerHistoryModal } from '../components/PlayerHistoryModal';
+import { HeatmapViewer, HitRecord } from '../components/HeatmapViewer';
 import TeamEmblem from '../components/TeamEmblem';
 import { generateMatchResultImage } from '../utils/canvasUtils';
 import { useTranslation } from '../hooks/useTranslation';
@@ -183,11 +184,15 @@ const RankingsModal: React.FC<{
     onClose: () => void;
     rankings: { rank: number | string; teamName: string; totalPoints: number }[];
 }> = ({ isOpen, onClose, rankings }) => {
+    useEffect(() => {
+        if (isOpen) document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = ''; };
+    }, [isOpen]);
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 animate-fade-in" onClick={onClose}>
-            <div className="bg-slate-900 rounded-lg shadow-2xl p-6 w-full max-w-md text-white border border-[#00A3FF]" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+            <div className="bg-slate-900 rounded-lg shadow-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto text-white border border-[#00A3FF]" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-2xl font-bold text-[#00A3FF]">팀 순위</h2>
                     <button onClick={onClose} className="text-2xl font-bold text-slate-500 hover:text-white">&times;</button>
@@ -1495,6 +1500,29 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContin
                                         t={t}
                                     />
                                 </div>
+                                {appMode === 'CLUB' && enrichedSelectedMatch.status === 'completed' && (() => {
+                                    const scoreLocations = (enrichedSelectedMatch as EnrichedMatch & { scoreLocations?: { team: string; playerId: string; statType: string; x: number; y: number }[] }).scoreLocations;
+                                    if (!scoreLocations || !Array.isArray(scoreLocations)) return null;
+                                    const toHitRecord = (s: { x: number; y: number; statType: string }): HitRecord | null =>
+                                        (s.statType === 'SPIKE_SUCCESS' || s.statType === 'SERVICE_ACE') ? { x: s.x, y: s.y, statType: s.statType as 'SPIKE_SUCCESS' | 'SERVICE_ACE' } : null;
+                                    const teamAHits = scoreLocations.filter((s: { team: string }) => s.team === 'A').map(toHitRecord).filter(Boolean) as HitRecord[];
+                                    const teamBHits = scoreLocations.filter((s: { team: string }) => s.team === 'B').map(toHitRecord).filter(Boolean) as HitRecord[];
+                                    return (
+                                        <div className="mt-6 space-y-6 no-print">
+                                            <h3 className="text-lg font-bold text-slate-200">📊 개별 경기 득점/실점 위치 (풀 코트)</h3>
+                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                                <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                                                    <h4 className="font-semibold text-slate-300 mb-3" style={{ color: enrichedSelectedMatch.teamA.color }}>{enrichedSelectedMatch.teamA.name}</h4>
+                                                    <HeatmapViewer scoreRecords={teamAHits} concedeRecords={teamBHits} maxHeight={300} position="LEFT" title="" />
+                                                </div>
+                                                <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                                                    <h4 className="font-semibold text-slate-300 mb-3" style={{ color: enrichedSelectedMatch.teamB.color }}>{enrichedSelectedMatch.teamB.name}</h4>
+                                                    <HeatmapViewer scoreRecords={teamBHits} concedeRecords={teamAHits} maxHeight={300} position="RIGHT" title="" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
                     ) : (

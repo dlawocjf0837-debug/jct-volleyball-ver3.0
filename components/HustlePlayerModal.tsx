@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Player } from '../types';
 
 interface HustlePlayerModalProps {
@@ -73,9 +73,13 @@ export const HustlePlayerModal: React.FC<HustlePlayerModalProps> = ({
         </div>
     );
 
+    useEffect(() => {
+        if (isOpen) document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = ''; };
+    }, [isOpen]);
     return (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4" onClick={onClose}>
-            <div className="bg-slate-900 rounded-2xl shadow-2xl border-2 border-amber-500/50 w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+            <div className="bg-slate-900 rounded-2xl shadow-2xl border-2 border-amber-500/50 w-full max-w-lg max-h-[90vh] overflow-y-auto flex flex-col" onClick={e => e.stopPropagation()}>
                 <div className="px-5 py-4 border-b border-slate-700 bg-amber-900/20">
                     <h3 className="text-xl font-bold text-amber-400">🔥 오늘의 허슬 플레이어(노력상) 선정</h3>
                     <p className="text-sm text-slate-400 mt-1">가장 열심히 한 학생을 선택해 주세요. (다중 선택·미선택 가능)</p>

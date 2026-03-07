@@ -12,6 +12,7 @@ import RecordScreen from './screens/RecordScreen';
 import RefereeScreen from './screens/RefereeScreen';
 import TeamManagementScreen from './screens/TeamManagementScreen';
 import TeamAnalysisScreen from './screens/TeamAnalysisScreen';
+import HeatmapAnalysisScreen from './screens/HeatmapAnalysisScreen';
 import AttendanceScreen from './screens/AttendanceScreen';
 import AchievementsScreen from './screens/AchievementsScreen';
 import SkillDrillScreen from './screens/SkillDrillScreen';
@@ -57,7 +58,7 @@ const getInitialPendingJoinCodeFromUrl = (): string | null => {
 };
 
 const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | 'CLUB'; onReturnToInitialScreen?: () => void }) => {
-    const [view, setView] = useState<'menu' | 'teamBuilder' | 'matchSetup' | 'attendance' | 'scoreboard' | 'history' | 'referee' | 'teamManagement' | 'teamAnalysis' | 'achievements' | 'skillDrill' | 'playerRecords' | 'cheerSong' | 'settings' | 'tournament' | 'leagueLobby' | 'league' | 'announcer' | 'cameraDirector' | 'competition' | 'roleRecord' | 'assessmentRanking'>(getInitialViewFromUrl);
+    const [view, setView] = useState<'menu' | 'teamBuilder' | 'matchSetup' | 'attendance' | 'scoreboard' | 'history' | 'referee' | 'teamManagement' | 'teamAnalysis' | 'heatmapAnalysis' | 'achievements' | 'skillDrill' | 'playerRecords' | 'cheerSong' | 'settings' | 'tournament' | 'leagueLobby' | 'league' | 'announcer' | 'cameraDirector' | 'competition' | 'roleRecord' | 'assessmentRanking'>(getInitialViewFromUrl);
     const [scoreboardMode, setScoreboardMode] = useState<'record' | 'referee'>('record');
     const [entryMode, setEntryMode] = useState<'class' | 'club'>('class');
     const { 
@@ -312,6 +313,8 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
                 return <TeamManagementScreen appMode={appMode} />;
             case 'teamAnalysis':
                 return <TeamAnalysisScreen appMode={appMode} />;
+            case 'heatmapAnalysis':
+                return <HeatmapAnalysisScreen appMode={appMode} onBack={() => setView('menu')} />;
             case 'achievements':
                 return <AchievementsScreen />;
             case 'skillDrill':
@@ -400,6 +403,7 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
                         onShowAchievements={() => setView('achievements')}
                         onStartSkillDrill={() => setView('skillDrill')}
                         onStartTeamAnalysis={() => setView('teamAnalysis')}
+                        onStartHeatmapAnalysis={() => setView('heatmapAnalysis')}
                         onStartTeamManagement={() => setView('teamManagement')}
                         onExportData={exportData}
                         onStartCheerSongManagement={() => setView('cheerSong')}
@@ -429,6 +433,7 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
             case 'referee': return 'referee_scoreboard_title';
             case 'teamManagement': return 'team_management_title';
             case 'teamAnalysis': return 'team_analysis_title';
+            case 'heatmapAnalysis': return 'heatmap_analysis_title';
             case 'cheerSong': return 'cheer_song_title';
             case 'settings': return 'settings_title';
             case 'competition': return 'competition_title';

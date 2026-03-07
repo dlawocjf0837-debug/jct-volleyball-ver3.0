@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { TeamMatchState, Player, Action } from '../types';
 import { useTranslation } from '../hooks/useTranslation';
 import { PlayerMemoModal } from './PlayerMemoModal';
@@ -45,18 +45,16 @@ const SubstitutionModal: React.FC<SubstitutionModalProps> = ({ isOpen, onClose, 
         onClose();
     }
 
+    useEffect(() => {
+        if (isOpen) document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = ''; };
+    }, [isOpen]);
     if (!isOpen) return null;
 
     return (
         <>
-            <div 
-                className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 animate-fade-in"
-                onClick={handleClose}
-            >
-                <div 
-                    className="bg-slate-900 rounded-lg shadow-2xl p-6 w-full max-w-2xl text-white border border-slate-700 flex flex-col"
-                    onClick={(e) => e.stopPropagation()}
-                >
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={handleClose}>
+                <div className="bg-slate-900 rounded-lg shadow-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto text-white border border-slate-700 flex flex-col" onClick={(e) => e.stopPropagation()}>
                     <div className="flex justify-between items-center mb-4">
                         <h2 className="text-2xl font-bold text-[#00A3FF]">{t('substitute_player')}</h2>
                         <button onClick={handleClose} className="text-2xl font-bold text-slate-500 hover:text-white">&times;</button>

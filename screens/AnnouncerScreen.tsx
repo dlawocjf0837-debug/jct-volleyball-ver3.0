@@ -649,6 +649,7 @@ const AnnouncerScreen: React.FC<AnnouncerScreenProps> = ({ onNavigateToHistory, 
                     messages={receivedChatMessages}
                     isInputEnabled={true}
                     showInputSection={true}
+                    raiseOnMobile={true}
                     myViewerLabel={p2p.viewerLabel}
                     onSend={(text) => {
                         if (sendChat && chatCooldownRemaining <= 0) {

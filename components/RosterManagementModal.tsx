@@ -107,17 +107,15 @@ const RosterManagementModal: React.FC<RosterManagementModalProps> = ({ isOpen, o
         setIsEditingName(false);
     };
 
+    useEffect(() => {
+        if (isOpen) document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = ''; };
+    }, [isOpen]);
     if (!isOpen || !teamConfig) return null;
 
     return (
-        <div 
-            className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 animate-fade-in"
-            onClick={onClose}
-        >
-            <div 
-                className="bg-slate-900 rounded-lg shadow-2xl p-6 w-full max-w-md text-white border border-sky-500 flex flex-col max-h-[90vh]"
-                onClick={(e) => e.stopPropagation()}
-            >
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+            <div className="bg-slate-900 rounded-lg shadow-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto text-white border border-sky-500 flex flex-col" onClick={(e) => e.stopPropagation()}>
                 {isEditingName ? (
                     <div className="flex items-center gap-2 mb-4 flex-shrink-0">
                         <input

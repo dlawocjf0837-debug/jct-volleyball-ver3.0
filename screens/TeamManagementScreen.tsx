@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../contexts/DataContext';
 import { SavedTeamInfo, Player, TeamSet } from '../types';
 import EmblemModal from '../components/EmblemModal';
@@ -95,6 +95,11 @@ const TeamManagementScreen: React.FC<TeamManagementScreenProps> = ({ appMode = '
     const [selectingForTeamKey, setSelectingForTeamKey] = useState<string | null>(null);
     const [isLoadTeamModalOpen, setIsLoadTeamModalOpen] = useState(false);
     const [loadTeamTargetSetId, setLoadTeamTargetSetId] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (isLoadTeamModalOpen) document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = ''; };
+    }, [isLoadTeamModalOpen]);
 
     React.useEffect(() => {
         const initialConfigs: Record<string, Config> = {};
@@ -506,8 +511,8 @@ const TeamManagementScreen: React.FC<TeamManagementScreenProps> = ({ appMode = '
             </ConfirmationModal>
 
             {isLoadTeamModalOpen && loadTeamTargetSetId && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => { setIsLoadTeamModalOpen(false); setLoadTeamTargetSetId(null); }}>
-                    <div className="bg-slate-800 border border-slate-600 rounded-xl shadow-2xl w-full max-w-md max-h-[70vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={() => { setIsLoadTeamModalOpen(false); setLoadTeamTargetSetId(null); }}>
+                    <div className="bg-slate-800 border border-slate-600 rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                         <div className="p-4 border-b border-slate-600 font-bold text-slate-200">기존 팀 불러오기</div>
                         <div className="p-4 overflow-auto max-h-[50vh] space-y-2">
                             {(() => {

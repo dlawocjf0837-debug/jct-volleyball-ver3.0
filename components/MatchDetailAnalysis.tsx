@@ -4,6 +4,7 @@ import { useData } from '../contexts/DataContext';
 import { CrownIcon, TrophyIcon, FireIcon, MedalIcon, TargetIcon, WallIcon, ShieldIcon, BoltIcon, HandshakeIcon, LinkIcon, StopwatchIcon, VolleyballIcon } from './icons';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 import TeamEmblem from './TeamEmblem';
+import { HeatmapViewer, HitRecord } from './HeatmapViewer';
 import { useTranslation } from '../hooks/useTranslation';
 
 interface MatchDetailAnalysisProps {
@@ -604,6 +605,29 @@ const MatchDetailAnalysis: React.FC<MatchDetailAnalysisProps> = ({ matchData, te
                     />
                 </div>
             </div>
+{(() => {
+                const scoreLocations = (enrichedMatch as EnrichedMatch & { scoreLocations?: { team: string; statType: string; x: number; y: number }[] }).scoreLocations;
+                if (!scoreLocations || !Array.isArray(scoreLocations)) return null;
+                const toHitRecord = (s: { x: number; y: number; statType: string }): HitRecord | null =>
+                    (s.statType === 'SPIKE_SUCCESS' || s.statType === 'SERVICE_ACE') ? { x: s.x, y: s.y, statType: s.statType as 'SPIKE_SUCCESS' | 'SERVICE_ACE' } : null;
+                const teamAHits = scoreLocations.filter((s: { team: string }) => s.team === 'A').map(toHitRecord).filter(Boolean) as HitRecord[];
+                const teamBHits = scoreLocations.filter((s: { team: string }) => s.team === 'B').map(toHitRecord).filter(Boolean) as HitRecord[];
+                return (
+                    <div className="pt-6 mt-6 border-t border-slate-700">
+                        <h3 className="text-lg font-bold text-slate-300 mb-4">📊 개별 경기 득점/실점 위치 (풀 코트)</h3>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                                <h4 className="font-semibold text-slate-300 mb-3" style={{ color: enrichedMatch.teamA.color }}>{enrichedMatch.teamA.name}</h4>
+                                <HeatmapViewer scoreRecords={teamAHits} concedeRecords={teamBHits} maxHeight={300} position="LEFT" title="" />
+                            </div>
+                            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                                <h4 className="font-semibold text-slate-300 mb-3" style={{ color: enrichedMatch.teamB.color }}>{enrichedMatch.teamB.name}</h4>
+                                <HeatmapViewer scoreRecords={teamBHits} concedeRecords={teamAHits} maxHeight={300} position="RIGHT" title="" />
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
         </div>
     );
 };

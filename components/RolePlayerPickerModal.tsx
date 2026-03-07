@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useData } from '../contexts/DataContext';
 import { Player, TeamSet } from '../types';
 
@@ -82,11 +82,15 @@ export const RolePlayerPickerModal: React.FC<RolePlayerPickerModalProps> = ({
         }
     };
 
+    useEffect(() => {
+        if (isOpen) document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = ''; };
+    }, [isOpen]);
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onClose}>
-            <div className="bg-slate-900 rounded-2xl shadow-2xl border border-slate-700 w-full max-w-md max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+            <div className="bg-slate-900 rounded-2xl shadow-2xl border border-slate-700 w-full max-w-md max-h-[90vh] overflow-y-auto flex flex-col" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center px-5 py-4 border-b border-slate-700">
                     <h3 className="text-lg font-bold text-white">🎭 {roleLabel} - 학생 선택</h3>
                     <button type="button" onClick={onClose} className="p-2 rounded-lg hover:bg-slate-700 text-gray-400 hover:text-white">✕</button>
