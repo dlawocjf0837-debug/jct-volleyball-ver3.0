@@ -1,5 +1,5 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
 import { Player, SavedTeamInfo, SavedOpponentTeam, Stats, MatchRoles } from '../types';
 import TeamEmblem from '../components/TeamEmblem';
@@ -56,8 +56,12 @@ interface AttendanceScreenProps {
 }
 
 const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', teamSelection, onStartMatch }) => {
-    const { teamSetsMap, updatePlayerMemoInTeamSet, showToast } = useData();
+    const location = useLocation();
+    const isClubMode = location.pathname.startsWith('/club');
+    const { teamSetsMap, updatePlayerMemoInTeamSet, showToast, settings } = useData();
     const { t } = useTranslation();
+    const requiredCount = isClubMode ? ((settings?.volleyballRuleSystem === 6) ? 6 : 9) : 0;
+    const [liberoByPlayerId, setLiberoByPlayerId] = useState<Record<string, boolean>>({});
 
     const { teamAInfo, teamAPlayers, teamBInfo, teamBPlayers } = useMemo(() => {
         let teamAInfo: SavedTeamInfo | null = null;
@@ -106,10 +110,14 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
     const [rolePickerTarget, setRolePickerTarget] = useState<'announcer' | 'referee' | 'lineJudge' | 'cameraDirector' | 'recorder' | null>(null);
 
     useEffect(() => {
-        const aOrder = Object.values(teamAPlayers).sort((a: Player, b: Player) => parseInt(a.studentNumber || '0') - parseInt(b.studentNumber || '0')).map(p => p.id);
-        const bOrder = Object.values(teamBPlayers).sort((a: Player, b: Player) => parseInt(a.studentNumber || '0') - parseInt(b.studentNumber || '0')).map(p => p.id);
-        setOnCourtOrdered({ teamA: aOrder, teamB: bOrder });
-    }, [teamAPlayers, teamBPlayers]);
+        if (isClubMode) {
+            setOnCourtOrdered({ teamA: [], teamB: [] });
+        } else {
+            const aOrder = Object.values(teamAPlayers).sort((a: Player, b: Player) => parseInt(a.studentNumber || '0') - parseInt(b.studentNumber || '0')).map(p => p.id);
+            const bOrder = Object.values(teamBPlayers).sort((a: Player, b: Player) => parseInt(a.studentNumber || '0') - parseInt(b.studentNumber || '0')).map(p => p.id);
+            setOnCourtOrdered({ teamA: aOrder, teamB: bOrder });
+        }
+    }, [teamAPlayers, teamBPlayers, isClubMode]);
 
     const handleToggleOnCourt = (playerId: string, team: 'teamA' | 'teamB') => {
         setOnCourtOrdered(prev => {
@@ -141,6 +149,10 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
     const handleDragEnd = (e: React.DragEvent) => {
         (e.target as HTMLElement).classList.remove('opacity-60');
     };
+    const handleLiberoToggle = (playerId: string) => {
+        setLiberoByPlayerId(prev => ({ ...prev, [playerId]: !(prev[playerId] ?? false) }));
+    };
+
     const handleDrop = (team: 'teamA' | 'teamB', dropIndex: number) => (e: React.DragEvent) => {
         e.preventDefault();
         (e.currentTarget as HTMLElement).classList.remove('opacity-60');
@@ -170,7 +182,11 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
             const out: Record<string, Player> = {};
             for (const id of Object.keys(players)) {
                 const p = players[id];
-                out[id] = { ...p, memo: memoOverrides[id] ?? p.memo };
+                out[id] = {
+                    ...p,
+                    memo: memoOverrides[id] ?? p.memo,
+                    ...(isClubMode && { isLibero: liberoByPlayerId[id] ?? p.isLibero ?? false }),
+                };
             }
             return out;
         };
@@ -194,8 +210,12 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
     
     const onCourtSetA = useMemo(() => new Set(onCourtOrdered.teamA), [onCourtOrdered.teamA]);
     const onCourtSetB = useMemo(() => new Set(onCourtOrdered.teamB), [onCourtOrdered.teamB]);
-    const isStartDisabled = onCourtOrdered.teamA.length < 1 || onCourtOrdered.teamB.length < 1;
+    const isStartDisabled = isClubMode
+        ? (onCourtOrdered.teamA.length !== requiredCount || onCourtOrdered.teamB.length !== requiredCount)
+        : (onCourtOrdered.teamA.length < 1 || onCourtOrdered.teamB.length < 1);
     const lineupComplete = onCourtOrdered.teamA.length > 0 && onCourtOrdered.teamB.length > 0;
+    const homeCountOk = !isClubMode || onCourtOrdered.teamA.length === requiredCount;
+    const awayCountOk = !isClubMode || onCourtOrdered.teamB.length === requiredCount;
 
     const selectedClasses = useMemo(() => {
         const classes: string[] = [];
@@ -224,18 +244,23 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
         showMemoButton: boolean;
         showServeOrder: boolean;
         teamColor: string;
+        showLiberoCheckbox: boolean;
+        liberoChecked: Record<string, boolean>;
+        onLiberoToggle: (playerId: string) => void;
         onDragStart: (team: 'teamA' | 'teamB', index: number) => (e: React.DragEvent) => void;
         onDragOver: (e: React.DragEvent) => void;
         onDragEnter: (e: React.DragEvent) => void;
         onDragLeave: (e: React.DragEvent) => void;
         onDragEnd: (e: React.DragEvent) => void;
         onDrop: (team: 'teamA' | 'teamB', index: number) => (e: React.DragEvent) => void;
-    }> = ({ orderedIds, team, allPlayers, onToggle, onMemoClick, showMemoButton, showServeOrder, teamColor, onDragStart, onDragOver, onDragEnter, onDragLeave, onDragEnd, onDrop }) => (
+    }> = ({ orderedIds, team, allPlayers, onToggle, onMemoClick, showMemoButton, showServeOrder, teamColor, showLiberoCheckbox, liberoChecked, onLiberoToggle, onDragStart, onDragOver, onDragEnter, onDragLeave, onDragEnd, onDrop }) => (
         <div className="space-y-1.5">
             {showServeOrder && <p className="text-xs text-slate-400 mb-2">체크한 선수가 주전(1번~6번 서버 순서), ▲▼ 또는 드래그로 서브 순서 변경</p>}
+            {showLiberoCheckbox && <p className="text-xs text-pink-400/90 mb-2">L: 리베로 지정 (공격/서브 불가, 전용 색상 표시)</p>}
             {orderedIds.map((id, idx) => {
                 const player = playerById[id];
                 if (!player) return null;
+                const isLibero = showLiberoCheckbox && (liberoChecked[id] ?? player.isLibero);
                 return (
                     <label
                         key={id}
@@ -248,11 +273,17 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
                         onDrop={showServeOrder ? onDrop(team, idx) : undefined}
                         className={`flex items-center gap-3 p-2.5 rounded-lg cursor-pointer hover:opacity-90 transition-all border-l-4 ${
                             team === 'teamA' ? 'bg-blue-900/30 border-blue-500/60' : 'bg-red-900/30 border-red-500/60'
-                        } ${showServeOrder ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                        } ${isLibero ? 'bg-pink-500/20 border-pink-500/60' : ''} ${showServeOrder ? 'cursor-grab active:cursor-grabbing' : ''}`}
                         style={{ borderLeftColor: teamColor }}
                     >
                         <input type="checkbox" checked onChange={() => onToggle(id)} className="h-5 w-5 rounded flex-shrink-0" style={{ accentColor: teamColor }} />
-                        <span className="font-medium text-slate-200 flex-1">{player.originalName}</span>
+                        <span className="font-medium text-slate-200 flex-1">{player.originalName}{isLibero ? ' [L]' : ''}</span>
+                        {showLiberoCheckbox && (
+                            <label className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+                                <input type="checkbox" checked={liberoChecked[id] ?? player.isLibero ?? false} onChange={() => onLiberoToggle(id)} className="h-4 w-4 rounded" />
+                                <span className="text-xs text-pink-400/90">L</span>
+                            </label>
+                        )}
                         {showServeOrder && (
                             <div className="flex flex-col gap-0.5 opacity-70">
                                 <button type="button" onClick={e => { e.preventDefault(); handleMoveCourtOrder(team, idx, 'up'); }} disabled={idx === 0} className="p-0.5 rounded hover:bg-slate-600/50 disabled:opacity-30 text-slate-400 leading-none text-xs">▲</button>
@@ -265,12 +296,21 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
                     </label>
                 );
             })}
-            {allPlayers.filter(p => !orderedIds.includes(p.id)).map(player => (
-                <label key={player.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-slate-800/50 cursor-pointer hover:bg-slate-700/50 transition-colors border-l-4 border-transparent">
-                    <input type="checkbox" checked={false} onChange={() => onToggle(player.id)} className="h-5 w-5 rounded flex-shrink-0" style={{ accentColor: teamColor }} />
-                    <span className="text-slate-500 flex-1">+ {player.originalName}</span>
-                </label>
-            ))}
+            {allPlayers.filter(p => !orderedIds.includes(p.id)).map(player => {
+                const isLiberoBench = showLiberoCheckbox && (liberoChecked[player.id] ?? player.isLibero);
+                return (
+                    <label key={player.id} className={`flex items-center gap-3 p-2.5 rounded-lg bg-slate-800/50 cursor-pointer hover:bg-slate-700/50 transition-colors border-l-4 border-transparent ${isLiberoBench ? 'bg-pink-500/10 border-pink-500/40' : ''}`}>
+                        <input type="checkbox" checked={false} onChange={() => onToggle(player.id)} className="h-5 w-5 rounded flex-shrink-0" style={{ accentColor: teamColor }} />
+                        <span className="text-slate-500 flex-1">+ {player.originalName}{isLiberoBench ? ' [L]' : ''}</span>
+                        {showLiberoCheckbox && (
+                            <label className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+                                <input type="checkbox" checked={liberoChecked[player.id] ?? player.isLibero ?? false} onChange={() => onLiberoToggle(player.id)} className="h-4 w-4 rounded" />
+                                <span className="text-xs text-pink-400/90">L</span>
+                            </label>
+                        )}
+                    </label>
+                );
+            })}
         </div>
     );
 
@@ -284,20 +324,39 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
             <p className="text-slate-400 mt-1 text-center">
                 {t('attendance_desc')}
             </p>
+            {isClubMode && (
+                <p className="text-slate-400 text-sm text-center">
+                    💡 서브 순서대로 선수를 터치하여 선발 명단을 구성해주세요.
+                </p>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-slate-900/50 p-4 rounded-lg border-2 border-slate-700">
                     <div className="flex flex-col items-center text-center gap-2 mb-4">
                         {teamAInfo && <TeamEmblem emblem={teamAInfo.emblem} color={teamAInfo.color || '#3b82f6'} className="w-16 h-16" />}
-                        <h3 className="text-2xl font-bold" style={{ color: teamAInfo?.color || '#3b82f6' }}>{teamAInfo?.teamName || 'Team A'} ({onCourtOrdered.teamA.length}{t('attendance_count_suffix')})</h3>
+                        <h3 className="text-2xl font-bold" style={{ color: teamAInfo?.color || '#3b82f6' }}>{teamAInfo?.teamName || 'Team A'}</h3>
+                        {isClubMode ? (
+                            <p className={`text-sm font-semibold ${homeCountOk ? 'text-green-400' : 'text-red-400'}`}>
+                                선발 명단 ( {onCourtOrdered.teamA.length} / {requiredCount} 명 )
+                            </p>
+                        ) : (
+                            <p className="text-slate-400 text-sm">({onCourtOrdered.teamA.length}{t('attendance_count_suffix')})</p>
+                        )}
                     </div>
-                    <CourtOrderList orderedIds={onCourtOrdered.teamA} team="teamA" allPlayers={sortedTeamAPlayers} onToggle={(id) => handleToggleOnCourt(id, 'teamA')} onMemoClick={(id, name) => setMemoModalPlayer({ playerId: id, name, side: 'teamA' })} showMemoButton={showPlayerMemo} showServeOrder={showServeOrder} teamColor={teamAInfo?.color || '#3b82f6'} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragEnd={handleDragEnd} onDrop={handleDrop} />
+                    <CourtOrderList orderedIds={onCourtOrdered.teamA} team="teamA" allPlayers={sortedTeamAPlayers} onToggle={(id) => handleToggleOnCourt(id, 'teamA')} onMemoClick={(id, name) => setMemoModalPlayer({ playerId: id, name, side: 'teamA' })} showMemoButton={showPlayerMemo} showServeOrder={showServeOrder} teamColor={teamAInfo?.color || '#3b82f6'} showLiberoCheckbox={isClubMode} liberoChecked={liberoByPlayerId} onLiberoToggle={handleLiberoToggle} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragEnd={handleDragEnd} onDrop={handleDrop} />
                 </div>
                 <div className="bg-slate-900/50 p-4 rounded-lg border-2 border-slate-700">
                     <div className="flex flex-col items-center text-center gap-2 mb-4">
                         {teamBInfo && <TeamEmblem emblem={teamBInfo.emblem} color={teamBInfo.color || '#ef4444'} className="w-16 h-16" />}
-                        <h3 className="text-2xl font-bold" style={{ color: teamBInfo?.color || '#ef4444' }}>{teamBInfo?.teamName || 'Team B'} ({onCourtOrdered.teamB.length}{t('attendance_count_suffix')})</h3>
+                        <h3 className="text-2xl font-bold" style={{ color: teamBInfo?.color || '#ef4444' }}>{teamBInfo?.teamName || 'Team B'}</h3>
+                        {isClubMode ? (
+                            <p className={`text-sm font-semibold ${awayCountOk ? 'text-green-400' : 'text-red-400'}`}>
+                                선발 명단 ( {onCourtOrdered.teamB.length} / {requiredCount} 명 )
+                            </p>
+                        ) : (
+                            <p className="text-slate-400 text-sm">({onCourtOrdered.teamB.length}{t('attendance_count_suffix')})</p>
+                        )}
                     </div>
-                    <CourtOrderList orderedIds={onCourtOrdered.teamB} team="teamB" allPlayers={sortedTeamBPlayers} onToggle={(id) => handleToggleOnCourt(id, 'teamB')} onMemoClick={(id, name) => setMemoModalPlayer({ playerId: id, name, side: 'teamB' })} showMemoButton={showPlayerMemo} showServeOrder={showServeOrder} teamColor={teamBInfo?.color || '#ef4444'} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragEnd={handleDragEnd} onDrop={handleDrop} />
+                    <CourtOrderList orderedIds={onCourtOrdered.teamB} team="teamB" allPlayers={sortedTeamBPlayers} onToggle={(id) => handleToggleOnCourt(id, 'teamB')} onMemoClick={(id, name) => setMemoModalPlayer({ playerId: id, name, side: 'teamB' })} showMemoButton={showPlayerMemo} showServeOrder={showServeOrder} teamColor={teamBInfo?.color || '#ef4444'} showLiberoCheckbox={isClubMode} liberoChecked={liberoByPlayerId} onLiberoToggle={handleLiberoToggle} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragEnd={handleDragEnd} onDrop={handleDrop} />
                 </div>
             </div>
             {appMode === 'CLASS' && lineupComplete && (
@@ -376,13 +435,16 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
                     }}
                 />
             )}
-            <div className="flex justify-center pt-6">
+            <div className="flex flex-col items-center gap-2 pt-6">
+                {isClubMode && isStartDisabled && (
+                    <p className="text-red-400 text-sm font-medium">각 팀 선발 {requiredCount}명을 정확히 선택해 주세요.</p>
+                )}
                 <button
                     onClick={handleStart}
                     disabled={isStartDisabled}
                     className="w-full sm:w-auto bg-[#00A3FF] hover:bg-[#0082cc] text-white font-bold py-3 px-12 rounded-lg transition duration-200 text-xl disabled:bg-slate-600 disabled:cursor-not-allowed"
                 >
-                    {isStartDisabled ? t('select_min_one_player_per_team') : t('start_match')}
+                    {isStartDisabled ? (isClubMode ? `선발 ${requiredCount}명 선택` : t('select_min_one_player_per_team')) : t('start_match')}
                 </button>
             </div>
         </div>

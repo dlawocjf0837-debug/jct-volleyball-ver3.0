@@ -42,7 +42,7 @@ const Header: React.FC<HeaderProps> = ({ title, showBackButton, onBack, showLang
                 </button>
             )}
             {showReturnToInitial && onReturnToInitial && (
-                <button 
+                <button
                     onClick={onReturnToInitial}
                     className="absolute left-0 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-3 sm:px-4 rounded-lg transition duration-200 z-10 text-sm sm:text-base"
                     aria-label="초기 화면으로"

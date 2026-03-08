@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
 import { AppSettings } from '../types';
 import { useTranslation } from '../hooks/useTranslation';
@@ -6,6 +7,8 @@ import { isAdminPasswordCorrect, setAdminPassword } from '../utils/adminPassword
 
 interface SettingsScreenProps { appMode?: 'CLASS' | 'CLUB'; }
 const SettingsScreen: React.FC<SettingsScreenProps> = ({ appMode = 'CLASS' }) => {
+    const location = useLocation();
+    const isClassMode = location.pathname.startsWith('/class');
     const { settings, saveSettings, showToast } = useData();
     const { t } = useTranslation();
     const [currentSettings, setCurrentSettings] = useState<AppSettings>(settings);
@@ -65,7 +68,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ appMode = 'CLASS' }) =>
             ...currentSettings,
             tournamentTargetScore: [21, 25].includes(Number(currentSettings.tournamentTargetScore)) ? currentSettings.tournamentTargetScore : 21,
             tournamentMaxSets: [3, 5].includes(Number(currentSettings.tournamentMaxSets)) ? currentSettings.tournamentMaxSets : 3,
-            volleyballRuleSystem: [6, 9].includes(Number(currentSettings.volleyballRuleSystem)) ? (currentSettings.volleyballRuleSystem as 6 | 9) : 6,
+            volleyballRuleSystem: [6, 9].includes(Number(currentSettings.volleyballRuleSystem)) ? (currentSettings.volleyballRuleSystem as 6 | 9) : 9,
         };
         saveSettings(toSave);
     };
@@ -123,6 +126,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ appMode = 'CLASS' }) =>
                 </div>
             </div>
 
+            {!isClassMode && (
             <div className="space-y-4 pt-6 border-t border-slate-700">
                 <h3 className="text-xl font-bold text-slate-300">🏆 스포츠클럽 대회 룰 설정</h3>
                 <p className="text-slate-400 text-sm">
@@ -168,25 +172,26 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ appMode = 'CLASS' }) =>
                 </div>
                 <div className="space-y-3 pt-4 border-t border-slate-600/50 mt-4">
                     <p className="text-slate-300 font-semibold text-sm">🏐 배구 경기 인원 룰</p>
-                    <p className="text-slate-400 text-xs">로테이션·서브 순서 트래커 등에 사용됩니다.</p>
+                    <p className="text-slate-400 text-xs">서브 순서 트래커 등에 사용됩니다.</p>
                     <div className="flex flex-wrap gap-3">
                         <button
                             type="button"
                             onClick={() => handleSettingChange('volleyballRuleSystem', 6)}
-                            className={`px-5 py-2.5 rounded-lg font-semibold transition-colors ${(currentSettings.volleyballRuleSystem ?? 6) === 6 ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}
+                            className={`px-5 py-2.5 rounded-lg font-semibold transition-colors ${(currentSettings.volleyballRuleSystem ?? 9) === 6 ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}
                         >
-                            6인제 (로테이션/서브)
+                            6인제 (서브 순서)
                         </button>
                         <button
                             type="button"
                             onClick={() => handleSettingChange('volleyballRuleSystem', 9)}
-                            className={`px-5 py-2.5 rounded-lg font-semibold transition-colors ${(currentSettings.volleyballRuleSystem ?? 6) === 9 ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}
+                            className={`px-5 py-2.5 rounded-lg font-semibold transition-colors ${(currentSettings.volleyballRuleSystem ?? 9) === 9 ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}
                         >
                             9인제 (서브 순서만)
                         </button>
                     </div>
                 </div>
             </div>
+            )}
 
             {appMode !== 'CLUB' && (
             <div className="space-y-4 pt-6 border-t border-slate-700">

@@ -1,5 +1,5 @@
-
 import React, { useState, useCallback, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { DataProvider, useData } from './contexts/DataContext';
 import Header from './components/common/Header';
 import Toast from './components/common/Toast';
@@ -46,19 +46,107 @@ type LeagueInfo = {
 };
 
 
-const getInitialViewFromUrl = (): 'menu' | 'announcer' => {
-    const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
-    const liveCode = params.get('liveCode') ?? params.get('code');
-    return liveCode ? 'announcer' : 'menu';
-};
 const getInitialPendingJoinCodeFromUrl = (): string | null => {
     const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
     const liveCode = params.get('liveCode') ?? params.get('code');
     return liveCode ? liveCode.trim().toUpperCase() : null;
 };
 
+type ViewKey = 'menu' | 'teamBuilder' | 'matchSetup' | 'attendance' | 'scoreboard' | 'history' | 'referee' | 'teamManagement' | 'teamAnalysis' | 'heatmapAnalysis' | 'achievements' | 'skillDrill' | 'playerRecords' | 'cheerSong' | 'settings' | 'tournament' | 'leagueLobby' | 'league' | 'announcer' | 'cameraDirector' | 'competition' | 'roleRecord' | 'assessmentRanking';
+
+const VIEW_TO_SEGMENT: Record<ViewKey, string> = {
+    menu: '',
+    teamBuilder: 'team-builder',
+    matchSetup: 'match-setup',
+    attendance: 'attendance',
+    scoreboard: 'scoreboard',
+    history: 'history',
+    referee: 'referee',
+    teamManagement: 'team-management',
+    teamAnalysis: 'team-analysis',
+    heatmapAnalysis: 'heatmap-analysis',
+    achievements: 'achievements',
+    skillDrill: 'skill-drill',
+    playerRecords: 'player-records',
+    cheerSong: 'cheer-song',
+    settings: 'settings',
+    tournament: 'tournament',
+    leagueLobby: 'league-lobby',
+    league: 'league',
+    announcer: 'announcer',
+    cameraDirector: 'camera-director',
+    competition: 'competition',
+    roleRecord: 'role-record',
+    assessmentRanking: 'assessment-ranking',
+};
+
+const SEGMENT_TO_VIEW: Record<string, ViewKey> = Object.fromEntries(
+    (Object.entries(VIEW_TO_SEGMENT) as [ViewKey, string][]).map(([k, v]) => [v || 'menu', k])
+) as Record<string, ViewKey>;
+
+function getViewFromPathname(pathname: string, base: 'class' | 'club'): ViewKey {
+    const prefix = `/${base}`;
+    if (!pathname.startsWith(prefix)) return 'menu';
+    const rest = pathname.slice(prefix.length).replace(/^\//, '') || 'menu';
+    return SEGMENT_TO_VIEW[rest] ?? 'menu';
+}
+
+function getPathFromView(view: ViewKey, base: 'class' | 'club'): string {
+    const seg = VIEW_TO_SEGMENT[view];
+    return seg ? `/${base}/${seg}` : `/${base}`;
+}
+
+/** 루트(/) 게이트: 로그인/모드 선택 후 /class 또는 /club으로 이동 */
+const Gate = () => {
+    const navigate = useNavigate();
+    const pendingCode = getInitialPendingJoinCodeFromUrl();
+
+    if (pendingCode) {
+        return (
+            <DataProvider appMode="CLASS">
+                <StudentJoinScreen
+                    onBackToLock={() => navigate('/', { replace: true })}
+                    appMode="CLASS"
+                    pendingJoinCode={pendingCode}
+                    clearPendingJoinCode={() => window.history.replaceState({}, '', window.location.pathname || '/')}
+                />
+            </DataProvider>
+        );
+    }
+    return (
+        <AdminLockScreen
+            onUnlock={(mode) => navigate(mode === 'CLASS' ? '/class' : '/club')}
+            onRequestStudentJoin={() => navigate('/join')}
+        />
+    );
+};
+
+/** 학생 참여 화면 전용 라우트 (/join) */
+const StudentJoinRoute = () => {
+    const navigate = useNavigate();
+    const pendingCode = getInitialPendingJoinCodeFromUrl();
+    return (
+        <DataProvider appMode="CLASS">
+            <StudentJoinScreen
+                onBackToLock={() => navigate('/', { replace: true })}
+                appMode="CLASS"
+                pendingJoinCode={pendingCode}
+                clearPendingJoinCode={() => window.history.replaceState({}, '', window.location.pathname || '/')}
+            />
+        </DataProvider>
+    );
+};
+
 const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | 'CLUB'; onReturnToInitialScreen?: () => void }) => {
-    const [view, setView] = useState<'menu' | 'teamBuilder' | 'matchSetup' | 'attendance' | 'scoreboard' | 'history' | 'referee' | 'teamManagement' | 'teamAnalysis' | 'heatmapAnalysis' | 'achievements' | 'skillDrill' | 'playerRecords' | 'cheerSong' | 'settings' | 'tournament' | 'leagueLobby' | 'league' | 'announcer' | 'cameraDirector' | 'competition' | 'roleRecord' | 'assessmentRanking'>(getInitialViewFromUrl);
+    const navigate = useNavigate();
+    const location = useLocation();
+    const base = appMode === 'CLASS' ? 'class' : 'club';
+    const view = getViewFromPathname(location.pathname, base);
+
+    const setView = useCallback((v: ViewKey) => {
+        navigate(getPathFromView(v, base));
+    }, [navigate, base]);
+
     const [scoreboardMode, setScoreboardMode] = useState<'record' | 'referee'>('record');
     const [entryMode, setEntryMode] = useState<'class' | 'club'>('class');
     const { 
@@ -90,10 +178,18 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
         }
     };
 
+    // URL에 liveCode가 있으면 애너운서 화면으로 이동
+    useEffect(() => {
+        const code = getInitialPendingJoinCodeFromUrl();
+        if (code && (location.pathname === `/${base}` || location.pathname === `/${base}/`)) {
+            setView('announcer');
+        }
+    }, [base, location.pathname, setView]);
+
     // 클럽 모드에서는 팀 빌더 화면 진입 시 메뉴로 리다이렉트
     useEffect(() => {
         if (appMode === 'CLUB' && view === 'teamBuilder') setView('menu');
-    }, [appMode, view]);
+    }, [appMode, view, setView]);
 
     // 잠금 모드일 때 body 스크롤 비활성화
     useEffect(() => {
@@ -449,7 +545,7 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
     const showLanguageToggle = !['teamBuilder', 'matchSetup', 'scoreboard', 'referee'].includes(view);
 
     // Special logic for Main Menu branding
-    const headerProps = view === 'menu' 
+    const headerProps = view === 'menu'
         ? {
             brand: "J-ive",
             title: t('app_title_volleyball'),
@@ -547,42 +643,23 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
 };
 
 
-/** 최상단 인증 방어막: 잠금 해제 전에는 AdminLockScreen만 표시, 선택한 모드(수업/클럽)로 진입 */
-const AppWithGate = () => {
-    const [isUnlocked, setIsUnlocked] = useState(false);
-    const [appMode, setAppMode] = useState<'CLASS' | 'CLUB'>('CLASS');
-    const [showStudentJoin, setShowStudentJoin] = useState(() => !!getInitialPendingJoinCodeFromUrl());
-
-    if (!isUnlocked && showStudentJoin) {
-        const pendingCode = getInitialPendingJoinCodeFromUrl();
-        return (
-            <DataProvider appMode={appMode}>
-                <StudentJoinScreen
-                    onBackToLock={() => setShowStudentJoin(false)}
-                    appMode={appMode}
-                    pendingJoinCode={pendingCode}
-                    clearPendingJoinCode={() => window.history.replaceState({}, '', window.location.pathname)}
-                />
-            </DataProvider>
-        );
-    }
-    if (!isUnlocked) {
-        return (
-            <AdminLockScreen
-                onUnlock={(mode) => { setAppMode(mode); setIsUnlocked(true); }}
-                onRequestStudentJoin={() => setShowStudentJoin(true)}
-            />
-        );
-    }
-    return (
-        <DataProvider appMode={appMode}>
-            <AppContent appMode={appMode} onReturnToInitialScreen={() => setIsUnlocked(false)} />
-        </DataProvider>
-    );
+/** 모드별 레이아웃: 초기 화면으로 = navigate('/') */
+const ModeLayout = ({ appMode }: { appMode: 'CLASS' | 'CLUB' }) => {
+    const navigate = useNavigate();
+    return <AppContent appMode={appMode} onReturnToInitialScreen={() => navigate('/')} />;
 };
 
 const App = () => {
-    return <AppWithGate />;
+    return (
+        <BrowserRouter>
+            <Routes>
+                <Route path="/" element={<Gate />} />
+                <Route path="/join" element={<StudentJoinRoute />} />
+                <Route path="/class/*" element={<DataProvider appMode="CLASS"><ModeLayout appMode="CLASS" /></DataProvider>} />
+                <Route path="/club/*" element={<DataProvider appMode="CLUB"><ModeLayout appMode="CLUB" /></DataProvider>} />
+            </Routes>
+        </BrowserRouter>
+    );
 };
 
 export default App;

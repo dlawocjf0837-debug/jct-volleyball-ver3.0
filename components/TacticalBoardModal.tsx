@@ -126,7 +126,7 @@ export const TacticalBoardModal: React.FC<Props> = ({ isOpen, onClose, appMode =
     const prevRef = useRef<Token[]>([]);
     const lastClickRef = useRef<{ id: string; t: number } | null>(null);
 
-    const rule = appMode === 'CLUB' && [6, 9].includes(Number(settings?.volleyballRuleSystem)) ? (settings!.volleyballRuleSystem as 6 | 9) : 6;
+    const rule = appMode === 'CLUB' && [6, 9].includes(Number(settings?.volleyballRuleSystem)) ? (settings!.volleyballRuleSystem as 6 | 9) : 9;
     const leagueItems = leagueStandingsList?.list ?? [];
     const clubTeams = appMode === 'CLUB' ? (teamSets ?? []) : [];
     const cats = useMemo(() => {

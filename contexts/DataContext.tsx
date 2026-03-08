@@ -160,7 +160,7 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
     const [toast, setToast] = useState<ToastState>({ message: '', type: 'success' });
     const [recoveryData, setRecoveryData] = useState<any | null>(null);
     const [settings, setSettings] = useState<AppSettings>(
-        { winningScore: 11, includeBonusPointsInWinner: true, googleSheetUrl: '', tournamentTargetScore: 21, tournamentMaxSets: 3, volleyballRuleSystem: 6 }
+        { winningScore: 11, includeBonusPointsInWinner: true, googleSheetUrl: '', tournamentTargetScore: 21, tournamentMaxSets: 3, volleyballRuleSystem: 9 }
     );
     
     const [matchTime, setMatchTime] = useState(0);
@@ -1834,7 +1834,7 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
 
         const defaultPlayerIds: string[] = [];
         if (options?.createDefaultPlayers) {
-            const count = (settings?.volleyballRuleSystem === 9) ? 9 : 6;
+            const count = (settings?.volleyballRuleSystem === 6) ? 6 : 9;
             const ZERO_STATS = { height: 0, shuttleRun: 0, flexibility: 0, fiftyMeterDash: 0, underhand: 0, serve: 0 };
             for (let i = 1; i <= count; i++) {
                 const id = `temp_${setId}_${finalTeamName}_${i}`.replace(/\s/g, '_');
@@ -2025,7 +2025,7 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                     googleSheetUrl: typeof parsedSettings.googleSheetUrl === 'string' ? parsedSettings.googleSheetUrl : '',
                     tournamentTargetScore: [21, 25].includes(Number(parsedSettings.tournamentTargetScore)) ? parsedSettings.tournamentTargetScore : 21,
                     tournamentMaxSets: [3, 5].includes(Number(parsedSettings.tournamentMaxSets)) ? parsedSettings.tournamentMaxSets : 3,
-                    volleyballRuleSystem: [6, 9].includes(Number(parsedSettings.volleyballRuleSystem)) ? parsedSettings.volleyballRuleSystem : 6,
+                    volleyballRuleSystem: (parsedSettings.volleyballRuleSystem === 6 || parsedSettings.volleyballRuleSystem === 9) ? parsedSettings.volleyballRuleSystem : 9,
                 }));
             }
             
@@ -2600,7 +2600,7 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
             setPracticeMatchHistory([]);
             setLeagueMatchHistory([]);
             practiceMatchHistoryRef.current = [];
-            setSettings({ winningScore: 11, includeBonusPointsInWinner: true, googleSheetUrl: '', tournamentTargetScore: 21, tournamentMaxSets: 3, volleyballRuleSystem: 6 });
+            setSettings({ winningScore: 11, includeBonusPointsInWinner: true, googleSheetUrl: '', tournamentTargetScore: 21, tournamentMaxSets: 3, volleyballRuleSystem: 9 });
             await setLanguage('ko');
             showToast('모든 데이터가 초기화되었습니다.', 'success');
         } catch (error) {

@@ -37,6 +37,8 @@ export interface Player {
     memo?: string;
     /** 수업 모드: 경기 역할 수행 이력 (아나운서, 주심, 선심 등). teamCount: 해당 경기의 팀 구성(2/3/4팀제). */
     roleHistory?: Array<{ role: string; date: string; matchInfo: string; teamCount?: number }>;
+    /** 스포츠클럽 모드 전용: 리베로 여부. true일 때 공격/서브 불가, 시선 강탈 유니폼([L] 배지) 표시 */
+    isLibero?: boolean;
 }
 
 /** 수업 모드: 경기 역할 배정 데이터 (MatchSetup → Scoreboard 전달) - 모든 역할 최대 4명 배열 */

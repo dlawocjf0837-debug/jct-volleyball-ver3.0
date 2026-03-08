@@ -17,11 +17,13 @@ interface PlayerSelectionModalProps {
     title?: string;
     // UI variant
     variant?: 'list' | 'grid';
+    /** 클럽 모드 스파이크/서브 득점 시: 리베로 선수 선택 불가 */
+    disallowLiberoForAttack?: boolean;
 }
 
-const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({ 
-    isOpen, 
-    onClose, 
+const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
+    isOpen,
+    onClose,
     onSelect,
     teamKey = null,
     className = null,
@@ -29,7 +31,8 @@ const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
     teamName,
     teamColor = '#00A3FF',
     title,
-    variant = 'list'
+    variant = 'list',
+    disallowLiberoForAttack = false,
 }) => {
     const { teamSets, teamSetsMap } = useData();
     const { t } = useTranslation();
@@ -183,7 +186,9 @@ const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
                 <h2 className="text-2xl font-bold mb-4 flex-shrink-0" style={{ color: teamColor }}>
                     {modalTitle}
                 </h2>
-                
+                {disallowLiberoForAttack && (
+                    <p className="text-amber-400/90 text-sm mb-3">*리베로는 공격/서브 불가</p>
+                )}
                 {/* 검색창: list variant일 때만 표시 */}
                 {variant === 'list' && (
                     <div className="mb-4 flex-shrink-0">
@@ -242,7 +247,7 @@ const PlayerSelectionModal: React.FC<PlayerSelectionModalProps> = ({
                                     >
                                         <div className="flex items-center gap-1.5">
                                             <span className={`font-bold text-2xl ${textClasses} break-words leading-tight px-2`}>
-                                                {player.originalName}
+                                                {player.originalName}{player.isLibero ? ' [L]' : ''}
                                             </span>
                                             {(isMale || isFemale) && (
                                                 <span className={`text-xs ${subTextClasses} font-semibold opacity-70`}>

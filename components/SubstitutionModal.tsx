@@ -11,9 +11,11 @@ interface SubstitutionModalProps {
     dispatch: React.Dispatch<Action>;
     /** 스포츠클럽 모드에서만 선수별 메모(📝) 버튼 표시 */
     showPlayerMemo?: boolean;
+    /** 클럽 모드: 리베로 [L] 배지 및 전용 색상(핑크 배경) 표시 */
+    isClubMode?: boolean;
 }
 
-const SubstitutionModal: React.FC<SubstitutionModalProps> = ({ isOpen, onClose, teamA, teamB, dispatch, showPlayerMemo = false }) => {
+const SubstitutionModal: React.FC<SubstitutionModalProps> = ({ isOpen, onClose, teamA, teamB, dispatch, showPlayerMemo = false, isClubMode = false }) => {
     const { t } = useTranslation();
     const [selectedTeam, setSelectedTeam] = useState<'A' | 'B'>('A');
     const [playerOut, setPlayerOut] = useState<string | null>(null);
@@ -71,7 +73,7 @@ const SubstitutionModal: React.FC<SubstitutionModalProps> = ({ isOpen, onClose, 
                             <div className="space-y-2 bg-slate-800 p-2 rounded-lg">
                                 {onCourtPlayers.map(p => (
                                     <div key={p.id} className="flex items-center gap-2">
-                                        <button onClick={() => setPlayerOut(p.id)} className={`flex-1 text-left p-3 rounded-md ${playerOut === p.id ? 'bg-red-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>{p.originalName}</button>
+                                        <button onClick={() => setPlayerOut(p.id)} className={`flex-1 text-left p-3 rounded-md ${playerOut === p.id ? 'bg-red-600 text-white' : 'bg-slate-700 hover:bg-slate-600'} ${isClubMode && p.isLibero ? 'bg-pink-500/30 border border-pink-500/60' : ''}`}>{p.originalName}{isClubMode && p.isLibero ? ' [L]' : ''}</button>
                                         {showPlayerMemo && (
                                             <button type="button" onClick={e => { e.stopPropagation(); setMemoPlayer({ team: selectedTeam, player: p }); }} className="p-1.5 rounded hover:bg-slate-600 text-amber-400/90 shrink-0" title="전력 분석 메모">📝</button>
                                         )}
@@ -84,7 +86,7 @@ const SubstitutionModal: React.FC<SubstitutionModalProps> = ({ isOpen, onClose, 
                             <div className="space-y-2 bg-slate-800 p-2 rounded-lg">
                                 {benchPlayers.map(p => (
                                     <div key={p.id} className="flex items-center gap-2">
-                                        <button onClick={() => setPlayerIn(p.id)} className={`flex-1 text-left p-3 rounded-md ${playerIn === p.id ? 'bg-green-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>{p.originalName}</button>
+                                        <button onClick={() => setPlayerIn(p.id)} className={`flex-1 text-left p-3 rounded-md ${playerIn === p.id ? 'bg-green-600 text-white' : 'bg-slate-700 hover:bg-slate-600'} ${isClubMode && p.isLibero ? 'bg-pink-500/30 border border-pink-500/60' : ''}`}>{p.originalName}{isClubMode && p.isLibero ? ' [L]' : ''}</button>
                                         {showPlayerMemo && (
                                             <button type="button" onClick={e => { e.stopPropagation(); setMemoPlayer({ team: selectedTeam, player: p }); }} className="p-1.5 rounded hover:bg-slate-600 text-amber-400/90 shrink-0" title="전력 분석 메모">📝</button>
                                         )}

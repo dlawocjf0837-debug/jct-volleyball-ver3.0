@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 import { useData } from '../contexts/DataContext';
 import { VolleyballIcon, StopwatchIcon, QuestionMarkCircleIcon, SwitchHorizontalIcon, ShieldIcon, BoltIcon, TargetIcon, FireIcon, WallIcon, LinkIcon, HandshakeIcon, MagnifyingGlassIcon } from '../components/icons';
@@ -14,8 +15,128 @@ import { PlayerHistoryModal } from '../components/PlayerHistoryModal';
 import { HustlePlayerModal } from '../components/HustlePlayerModal';
 import AutoSaveToast from '../components/AutoSaveToast';
 import { HeatmapRecordModal, HeatmapCoordinates } from '../components/HeatmapRecordModal';
-import { Action, MatchState, Player, ScoreEvent, ScoreEventType } from '../types';
+import { Action, MatchState, Player, ScoreEvent, ScoreEventType, TeamMatchState } from '../types';
 import TeamEmblem from '../components/TeamEmblem';
+
+/** 리베로 퀵 교체: 코트 리베로↔벤치 일반, 또는 코트 일반↔벤치 리베로 한 번에 스왑 (클럽 모드 전용) */
+const LiberoQuickSwapModal: React.FC<{
+    teamA: TeamMatchState;
+    teamB: TeamMatchState;
+    dispatch: React.Dispatch<Action>;
+    onClose: () => void;
+}> = ({ teamA, teamB, dispatch, onClose }) => {
+    const [selectedTeam, setSelectedTeam] = useState<'A' | 'B'>('A');
+    const [courtId, setCourtId] = useState<string | null>(null);
+    const [benchId, setBenchId] = useState<string | null>(null);
+    const team = selectedTeam === 'A' ? teamA : teamB;
+    const onCourt = (team.onCourtPlayerIds ?? []).map(id => team.players[id]).filter(Boolean) as Player[];
+    const bench = (team.benchPlayerIds ?? []).map(id => team.players[id]).filter(Boolean) as Player[];
+
+    // 리베로 자동 스캔 및 선택 고정: 팀/탭 변경 시 해당 팀 리베로를 찾아 한쪽만 자동 지정
+    useEffect(() => {
+        const courtLibero = onCourt.find(p => p.isLibero);
+        const benchLibero = bench.find(p => p.isLibero);
+        if (courtLibero) {
+            setCourtId(courtLibero.id);
+            setBenchId(null);
+        } else if (benchLibero) {
+            setBenchId(benchLibero.id);
+            setCourtId(null);
+        } else {
+            setCourtId(null);
+            setBenchId(null);
+        }
+    }, [selectedTeam, onCourt, bench]);
+
+    const courtPlayer = courtId ? team.players[courtId] : null;
+    const benchPlayer = benchId ? team.players[benchId] : null;
+    const canSwap = courtId && benchId && courtPlayer && benchPlayer &&
+        ((courtPlayer.isLibero && !benchPlayer.isLibero) || (!courtPlayer.isLibero && benchPlayer.isLibero));
+
+    const liberoOnCourt = courtPlayer?.isLibero === true;
+    const liberoOnBench = benchPlayer?.isLibero === true;
+    const courtListFixed = liberoOnCourt;
+    const benchListFixed = liberoOnBench;
+
+    const doSwap = () => {
+        if (!canSwap) return;
+        dispatch({ type: 'SUBSTITUTE_PLAYER', team: selectedTeam, playerIn: benchId!, playerOut: courtId! });
+        onClose();
+    };
+
+    useEffect(() => {
+        document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = ''; };
+    }, []);
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+            <div className="bg-slate-900 rounded-xl border-2 border-pink-500/50 shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-bold text-pink-400">🔄 리베로 퀵 교체</h2>
+                    <button onClick={onClose} className="text-slate-400 hover:text-white text-2xl">&times;</button>
+                </div>
+                <p className="text-slate-400 text-sm mb-4">리베로가 코트/벤치 중 한쪽에 자동 선택됩니다. 반대편에서 자리를 바꿀 선수만 선택하세요.</p>
+                <div className="flex gap-2 mb-4">
+                    <button onClick={() => setSelectedTeam('A')} className={`flex-1 py-2 rounded-lg font-semibold ${selectedTeam === 'A' ? 'bg-sky-600 text-white' : 'bg-slate-700 text-slate-400'}`}>{teamA.name}</button>
+                    <button onClick={() => setSelectedTeam('B')} className={`flex-1 py-2 rounded-lg font-semibold ${selectedTeam === 'B' ? 'bg-red-600 text-white' : 'bg-slate-700 text-slate-400'}`}>{teamB.name}</button>
+                </div>
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <h3 className="text-sm font-semibold text-slate-300 mb-2">코트 (빼낼 선수)</h3>
+                        {courtListFixed && <p className="text-xs text-pink-400/90 mb-1.5">리베로 고정</p>}
+                        {benchListFixed && <p className="text-xs text-slate-400 mb-1.5">💡 리베로와 자리를 바꿀 선수를 선택하세요.</p>}
+                        <div className="space-y-1">
+                            {onCourt.map(p => {
+                                const isSelected = courtId === p.id;
+                                const isDisabled = courtListFixed && !p.isLibero;
+                                return (
+                                    <button
+                                        key={p.id}
+                                        type="button"
+                                        onClick={isDisabled ? undefined : () => setCourtId(isSelected ? null : p.id)}
+                                        className={`w-full text-left p-2 rounded-lg text-sm border-2 transition-all ${
+                                            isDisabled ? 'pointer-events-none opacity-80 bg-slate-800 text-slate-500 border-transparent' : ''
+                                        } ${!isDisabled && isSelected ? 'bg-pink-600 text-white ring-4 ring-pink-500 border-pink-400' : ''} ${!isDisabled && !isSelected ? 'bg-slate-700 hover:bg-slate-600 border-transparent' : ''} ${p.isLibero && !isDisabled ? 'border-pink-500/60' : ''}`}
+                                    >
+                                        {p.originalName}{p.isLibero ? ' [L]' : ''}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    <div>
+                        <h3 className="text-sm font-semibold text-slate-300 mb-2">벤치 (넣을 선수)</h3>
+                        {benchListFixed && <p className="text-xs text-pink-400/90 mb-1.5">리베로 고정</p>}
+                        {courtListFixed && <p className="text-xs text-slate-400 mb-1.5">💡 리베로와 자리를 바꿀 선수를 선택하세요.</p>}
+                        <div className="space-y-1">
+                            {bench.map(p => {
+                                const isSelected = benchId === p.id;
+                                const isDisabled = benchListFixed && !p.isLibero;
+                                return (
+                                    <button
+                                        key={p.id}
+                                        type="button"
+                                        onClick={isDisabled ? undefined : () => setBenchId(isSelected ? null : p.id)}
+                                        className={`w-full text-left p-2 rounded-lg text-sm border-2 transition-all ${
+                                            isDisabled ? 'pointer-events-none opacity-80 bg-slate-800 text-slate-500 border-transparent' : ''
+                                        } ${!isDisabled && isSelected ? 'bg-pink-600 text-white ring-4 ring-pink-500 border-pink-400' : ''} ${!isDisabled && !isSelected ? 'bg-slate-700 hover:bg-slate-600 border-transparent' : ''} ${p.isLibero && !isDisabled ? 'border-pink-500/60' : ''}`}
+                                    >
+                                        {p.originalName}{p.isLibero ? ' [L]' : ''}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+                <div className="flex gap-2">
+                    <button onClick={onClose} className="flex-1 py-2 rounded-lg bg-slate-600 hover:bg-slate-500 font-medium">취소</button>
+                    <button onClick={doSwap} disabled={!canSwap} className="flex-1 py-2 rounded-lg bg-pink-600 hover:bg-pink-500 font-medium disabled:opacity-50 disabled:cursor-not-allowed">교체 실행</button>
+                </div>
+            </div>
+        </div>
+    );
+};
 import { useTranslation } from '../hooks/useTranslation';
 import confetti from 'canvas-confetti';
 
@@ -34,7 +155,9 @@ type PendingAction = {
 };
 
 export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode, entryMode = 'class' }) => {
-    const { 
+    const location = useLocation();
+    const isClubMode = location.pathname.startsWith('/club');
+    const {
         matchState, matchTime, timerOn, dispatch, setTimerOn,
         matchHistory, saveMatchHistory, saveRoleHistoryAfterMatch, showToast, p2p, clearInProgressMatch,
         settings, setHostTournamentMode, sendTicker, sendEffect,
@@ -47,6 +170,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
     const [showRulesModal, setShowRulesModal] = useState(false);
     const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
     const [isSubModalOpen, setIsSubModalOpen] = useState(false);
+    const [isLiberoQuickSwapOpen, setIsLiberoQuickSwapOpen] = useState(false);
     const [serveOrderModalTeam, setServeOrderModalTeam] = useState<'A' | 'B' | null>(null);
     const [selectedPlayerForRecord, setSelectedPlayerForRecord] = useState<{ player: Player; cumulativeStats: any; performanceHistory: any[] } | null>(null);
     
@@ -1023,7 +1147,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                     >
                         <span className="text-xl">{soundEnabled ? '🔊' : '🔇'}</span>
                     </button>
-                    
+
                     <button 
                         onClick={() => setIsSubModalOpen(true)} 
                         className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center flex-shrink-0" 
@@ -1031,7 +1155,16 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                     >
                         <SwitchHorizontalIcon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                     </button>
-                    
+                    {isClubMode && (
+                        <button
+                            type="button"
+                            onClick={() => setIsLiberoQuickSwapOpen(true)}
+                            className="bg-pink-600/90 hover:bg-pink-500 p-2 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center flex-shrink-0 border border-pink-500/50"
+                            title="리베로 퀵 교체"
+                        >
+                            <span className="text-white font-bold text-sm">🔄 L</span>
+                        </button>
+                    )}
                     <button 
                         onClick={() => setShowRulesModal(true)} 
                         className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center flex-shrink-0" 
@@ -1170,6 +1303,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                 teamColor={pendingAction ? (matchState[pendingAction.team === 'A' ? 'teamA' : 'teamB'].color || '#00A3FF') : '#00A3FF'}
                 title={pendingAction ? getActionTitle(pendingAction.actionType) : ''}
                 variant="grid"
+                disallowLiberoForAttack={isClubMode && !!pendingAction && (pendingAction.actionType === 'SPIKE_SUCCESS' || pendingAction.actionType === 'SERVICE_ACE')}
             />
             {/* Assist Selection Modal */}
             <PlayerSelectionModal
@@ -1196,16 +1330,27 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                     onDeleteMessage={removeChatMessage}
                 />
             )}
-            <SubstitutionModal
+<SubstitutionModal
                 isOpen={isSubModalOpen}
                 onClose={() => setIsSubModalOpen(false)}
                 teamA={matchState.teamA}
                 teamB={matchState.teamB}
                 dispatch={dispatch}
                 showPlayerMemo={entryMode === 'club'}
+                isClubMode={isClubMode}
             />
 
-            {/* 선수 상세 기록/메모 모달 (서브 로테이션에서 클릭 시) - z-[100]로 스코어보드/서브 로테이션 위에 표시 */}
+            {/* 리베로 퀵 교체 모달 (클럽 모드 전용) */}
+            {isClubMode && isLiberoQuickSwapOpen && matchState && (
+                <LiberoQuickSwapModal
+                    teamA={matchState.teamA}
+                    teamB={matchState.teamB}
+                    dispatch={dispatch}
+                    onClose={() => setIsLiberoQuickSwapOpen(false)}
+                />
+            )}
+
+                {/* 선수 상세 기록/메모 모달 (서브 로테이션에서 클릭 시) - z-[100]로 스코어보드/서브 로테이션 위에 표시 */}
             {selectedPlayerForRecord && (
                 <div className="fixed inset-0 z-[100]" aria-modal="true" role="dialog">
                     <PlayerHistoryModal
@@ -1283,6 +1428,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                                         const name = player?.originalName ?? '???';
                                         const number = player?.studentNumber ?? '';
                                         const isCurrent = idx === badgeIdx;
+                                        const showLibero = isClubMode && player?.isLibero;
                                         return (
                                             <div
                                                 key={pid}
@@ -1291,6 +1437,8 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                                                 onClick={(e) => { e.stopPropagation(); if (player) handleServeOrderPlayerClick(player); }}
                                                 onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && player) { e.preventDefault(); handleServeOrderPlayerClick(player); } }}
                                                 className={`flex items-center justify-between gap-3 p-4 rounded-lg border transition-all cursor-pointer hover:bg-slate-700/50 hover:scale-[1.02] ${
+                                                    showLibero ? 'bg-pink-500/20 border-pink-500/50' : ''
+                                                } ${
                                                     isCurrent
                                                         ? `${currentCardStyle} text-white font-extrabold`
                                                         : 'border border-slate-700/50 bg-slate-800 text-gray-200'
@@ -1303,7 +1451,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                                                         {idx + 1}
                                                     </span>
                                                     <div className="flex flex-col min-w-0">
-                                                        <span className={`truncate ${isCurrent ? 'font-extrabold' : ''}`}>{name}</span>
+                                                        <span className={`truncate ${isCurrent ? 'font-extrabold' : ''}`}>{name}{showLibero ? ' [L]' : ''}</span>
                                                         {number && (
                                                             <span className={`text-xs ${isCurrent ? 'text-white/80' : 'text-gray-500'}`}>{number}번</span>
                                                         )}
