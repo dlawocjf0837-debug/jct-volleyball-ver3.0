@@ -61,6 +61,8 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
     const { teamSetsMap, updatePlayerMemoInTeamSet, showToast, settings } = useData();
     const { t } = useTranslation();
     const requiredCount = isClubMode ? ((settings?.volleyballRuleSystem === 6) ? 6 : 9) : 0;
+    const is6v6 = settings?.volleyballRuleSystem === 6;
+    const liberoEnabled = isClubMode && is6v6;
     const [liberoByPlayerId, setLiberoByPlayerId] = useState<Record<string, boolean>>({});
 
     const { teamAInfo, teamAPlayers, teamBInfo, teamBPlayers } = useMemo(() => {
@@ -185,7 +187,7 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
                 out[id] = {
                     ...p,
                     memo: memoOverrides[id] ?? p.memo,
-                    ...(isClubMode && { isLibero: liberoByPlayerId[id] ?? p.isLibero ?? false }),
+                    ...(liberoEnabled && { isLibero: liberoByPlayerId[id] ?? p.isLibero ?? false }),
                 };
             }
             return out;
@@ -342,7 +344,7 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
                             <p className="text-slate-400 text-sm">({onCourtOrdered.teamA.length}{t('attendance_count_suffix')})</p>
                         )}
                     </div>
-                    <CourtOrderList orderedIds={onCourtOrdered.teamA} team="teamA" allPlayers={sortedTeamAPlayers} onToggle={(id) => handleToggleOnCourt(id, 'teamA')} onMemoClick={(id, name) => setMemoModalPlayer({ playerId: id, name, side: 'teamA' })} showMemoButton={showPlayerMemo} showServeOrder={showServeOrder} teamColor={teamAInfo?.color || '#3b82f6'} showLiberoCheckbox={isClubMode} liberoChecked={liberoByPlayerId} onLiberoToggle={handleLiberoToggle} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragEnd={handleDragEnd} onDrop={handleDrop} />
+                    <CourtOrderList orderedIds={onCourtOrdered.teamA} team="teamA" allPlayers={sortedTeamAPlayers} onToggle={(id) => handleToggleOnCourt(id, 'teamA')} onMemoClick={(id, name) => setMemoModalPlayer({ playerId: id, name, side: 'teamA' })} showMemoButton={showPlayerMemo} showServeOrder={showServeOrder} teamColor={teamAInfo?.color || '#3b82f6'} showLiberoCheckbox={liberoEnabled} liberoChecked={liberoByPlayerId} onLiberoToggle={handleLiberoToggle} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragEnd={handleDragEnd} onDrop={handleDrop} />
                 </div>
                 <div className="bg-slate-900/50 p-4 rounded-lg border-2 border-slate-700">
                     <div className="flex flex-col items-center text-center gap-2 mb-4">
@@ -356,7 +358,7 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
                             <p className="text-slate-400 text-sm">({onCourtOrdered.teamB.length}{t('attendance_count_suffix')})</p>
                         )}
                     </div>
-                    <CourtOrderList orderedIds={onCourtOrdered.teamB} team="teamB" allPlayers={sortedTeamBPlayers} onToggle={(id) => handleToggleOnCourt(id, 'teamB')} onMemoClick={(id, name) => setMemoModalPlayer({ playerId: id, name, side: 'teamB' })} showMemoButton={showPlayerMemo} showServeOrder={showServeOrder} teamColor={teamBInfo?.color || '#ef4444'} showLiberoCheckbox={isClubMode} liberoChecked={liberoByPlayerId} onLiberoToggle={handleLiberoToggle} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragEnd={handleDragEnd} onDrop={handleDrop} />
+                    <CourtOrderList orderedIds={onCourtOrdered.teamB} team="teamB" allPlayers={sortedTeamBPlayers} onToggle={(id) => handleToggleOnCourt(id, 'teamB')} onMemoClick={(id, name) => setMemoModalPlayer({ playerId: id, name, side: 'teamB' })} showMemoButton={showPlayerMemo} showServeOrder={showServeOrder} teamColor={teamBInfo?.color || '#ef4444'} showLiberoCheckbox={liberoEnabled} liberoChecked={liberoByPlayerId} onLiberoToggle={handleLiberoToggle} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragEnd={handleDragEnd} onDrop={handleDrop} />
                 </div>
             </div>
             {appMode === 'CLASS' && lineupComplete && (

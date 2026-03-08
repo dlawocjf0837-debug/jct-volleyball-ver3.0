@@ -166,6 +166,8 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
         practiceMatchHistory = [], leagueMatchHistory = [], playerCumulativeStats = {}, teamSets = []
     } = useData();
     const { t } = useTranslation();
+    const is6v6 = settings?.volleyballRuleSystem === 6;
+    const liberoEnabled = isClubMode && is6v6;
 
     const [showRulesModal, setShowRulesModal] = useState(false);
     const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
@@ -926,7 +928,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                 <div className="flex-1 flex items-center justify-start min-w-0">
                     {matchState.status === 'in_progress' && p2p.isHost && p2p.peerId && (() => {
                         const pin = p2p.peerId.replace(/^jive-/, '');
-                        const joinUrl = `${window.location.origin}${window.location.pathname || '/'}?liveCode=${encodeURIComponent(pin)}`;
+                        const joinUrl = `${window.location.origin}/?code=${encodeURIComponent(pin)}`;
                         return (
                             <div className="hidden md:flex items-center gap-2 bg-slate-800 border-2 border-yellow-500/50 rounded-lg px-3 py-2 flex-shrink-0">
                                 <button
@@ -955,7 +957,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                     })()}
                     {matchState.status === 'in_progress' && p2p.isHost && p2p.peerId && (() => {
                         const pin = p2p.peerId.replace(/^jive-/, '');
-                        const joinUrl = `${window.location.origin}${window.location.pathname || '/'}?liveCode=${encodeURIComponent(pin)}`;
+                        const joinUrl = `${window.location.origin}/?code=${encodeURIComponent(pin)}`;
                         return (
                             <div className="md:hidden flex items-center gap-2 bg-slate-800 border-2 border-yellow-500/50 rounded-lg p-2 flex-shrink-0">
                                 <button
@@ -1155,7 +1157,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                     >
                         <SwitchHorizontalIcon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                     </button>
-                    {isClubMode && (
+                    {liberoEnabled && (
                         <button
                             type="button"
                             onClick={() => setIsLiberoQuickSwapOpen(true)}
@@ -1303,7 +1305,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                 teamColor={pendingAction ? (matchState[pendingAction.team === 'A' ? 'teamA' : 'teamB'].color || '#00A3FF') : '#00A3FF'}
                 title={pendingAction ? getActionTitle(pendingAction.actionType) : ''}
                 variant="grid"
-                disallowLiberoForAttack={isClubMode && !!pendingAction && (pendingAction.actionType === 'SPIKE_SUCCESS' || pendingAction.actionType === 'SERVICE_ACE')}
+                disallowLiberoForAttack={liberoEnabled && !!pendingAction && (pendingAction.actionType === 'SPIKE_SUCCESS' || pendingAction.actionType === 'SERVICE_ACE')}
             />
             {/* Assist Selection Modal */}
             <PlayerSelectionModal
@@ -1337,11 +1339,11 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                 teamB={matchState.teamB}
                 dispatch={dispatch}
                 showPlayerMemo={entryMode === 'club'}
-                isClubMode={isClubMode}
+                isClubMode={liberoEnabled}
             />
 
-            {/* 리베로 퀵 교체 모달 (클럽 모드 전용) */}
-            {isClubMode && isLiberoQuickSwapOpen && matchState && (
+            {/* 리베로 퀵 교체 모달 (클럽 6인제 전용) */}
+            {liberoEnabled && isLiberoQuickSwapOpen && matchState && (
                 <LiberoQuickSwapModal
                     teamA={matchState.teamA}
                     teamB={matchState.teamB}
@@ -1428,7 +1430,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                                         const name = player?.originalName ?? '???';
                                         const number = player?.studentNumber ?? '';
                                         const isCurrent = idx === badgeIdx;
-                                        const showLibero = isClubMode && player?.isLibero;
+                                        const showLibero = liberoEnabled && player?.isLibero;
                                         return (
                                             <div
                                                 key={pid}
@@ -1521,7 +1523,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                         <h2 id="qr-zoom-title" className="text-lg font-bold text-sky-300 mb-4">실시간 참여 QR 코드</h2>
                         <div ref={qrCanvasContainerRef} className="bg-white p-3 rounded-lg flex-shrink-0">
                             <QRCodeCanvas
-                                value={`${window.location.origin}${window.location.pathname || '/'}?liveCode=${encodeURIComponent(qrZoomPin)}`}
+                                value={`${window.location.origin}/?code=${encodeURIComponent(qrZoomPin)}`}
                                 size={260}
                                 level="M"
                             />

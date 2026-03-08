@@ -34,6 +34,7 @@ import ConfirmationModal from './components/common/ConfirmationModal';
 import PasswordModal from './components/common/PasswordModal';
 import { useTranslation } from './hooks/useTranslation';
 import { isAdminPasswordCorrect } from './utils/adminPassword';
+import LockScreen, { SESSION_UNLOCK_KEY } from './components/LockScreen';
 
 type TournamentInfo = {
     tournamentId: string;
@@ -45,6 +46,27 @@ type LeagueInfo = {
     leagueMatchId: string;
 };
 
+
+/** 라우트 가드: 인증 없으면 제자리 잠금 오버레이(LockScreen)만 표시. 리다이렉트 없음. /, /join 은 Public. */
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const [unlocked, setUnlocked] = useState(false);
+
+    useEffect(() => {
+        setUnlocked(typeof window !== 'undefined' && sessionStorage.getItem(SESSION_UNLOCK_KEY) === 'true');
+    }, []);
+
+    const handleUnlock = useCallback(() => {
+        if (typeof window !== 'undefined') sessionStorage.setItem(SESSION_UNLOCK_KEY, 'true');
+        setUnlocked(true);
+    }, []);
+
+    return (
+        <>
+            {children}
+            {!unlocked && <LockScreen onUnlock={handleUnlock} />}
+        </>
+    );
+};
 
 const getInitialPendingJoinCodeFromUrl = (): string | null => {
     const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
@@ -115,7 +137,10 @@ const Gate = () => {
     }
     return (
         <AdminLockScreen
-            onUnlock={(mode) => navigate(mode === 'CLASS' ? '/class' : '/club')}
+            onUnlock={(mode) => {
+                if (typeof window !== 'undefined') sessionStorage.setItem(SESSION_UNLOCK_KEY, 'true');
+                navigate(mode === 'CLASS' ? '/class' : '/club');
+            }}
             onRequestStudentJoin={() => navigate('/join')}
         />
     );
@@ -552,9 +577,7 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
             subtitle: t('app_subtitle'),
             showUpdateNotesIcon: true,
             appMode,
-            showModeToggle: false,
-            showReturnToInitial: true,
-            onReturnToInitial: onReturnToInitialScreen
+            showModeToggle: false
         }
         : {
             title: t(getHeaderTitleKey())
@@ -643,10 +666,14 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
 };
 
 
-/** 모드별 레이아웃: 초기 화면으로 = navigate('/') */
+/** 모드별 레이아웃: 초기 화면으로 = 세션 해제 후 navigate('/') */
 const ModeLayout = ({ appMode }: { appMode: 'CLASS' | 'CLUB' }) => {
     const navigate = useNavigate();
-    return <AppContent appMode={appMode} onReturnToInitialScreen={() => navigate('/')} />;
+    const handleReturnToInitial = useCallback(() => {
+        if (typeof window !== 'undefined') sessionStorage.removeItem(SESSION_UNLOCK_KEY);
+        navigate('/', { replace: true });
+    }, [navigate]);
+    return <AppContent appMode={appMode} onReturnToInitialScreen={handleReturnToInitial} />;
 };
 
 const App = () => {
@@ -655,8 +682,8 @@ const App = () => {
             <Routes>
                 <Route path="/" element={<Gate />} />
                 <Route path="/join" element={<StudentJoinRoute />} />
-                <Route path="/class/*" element={<DataProvider appMode="CLASS"><ModeLayout appMode="CLASS" /></DataProvider>} />
-                <Route path="/club/*" element={<DataProvider appMode="CLUB"><ModeLayout appMode="CLUB" /></DataProvider>} />
+                <Route path="/class/*" element={<ProtectedRoute><DataProvider appMode="CLASS"><ModeLayout appMode="CLASS" /></DataProvider></ProtectedRoute>} />
+                <Route path="/club/*" element={<ProtectedRoute><DataProvider appMode="CLUB"><ModeLayout appMode="CLUB" /></DataProvider></ProtectedRoute>} />
             </Routes>
         </BrowserRouter>
     );

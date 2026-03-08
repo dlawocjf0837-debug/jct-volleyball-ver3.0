@@ -41,15 +41,6 @@ const Header: React.FC<HeaderProps> = ({ title, showBackButton, onBack, showLang
                     {t('back_to_main')}
                 </button>
             )}
-            {showReturnToInitial && onReturnToInitial && (
-                <button
-                    onClick={onReturnToInitial}
-                    className="absolute left-0 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-3 sm:px-4 rounded-lg transition duration-200 z-10 text-sm sm:text-base"
-                    aria-label="초기 화면으로"
-                >
-                    🏠 초기 화면
-                </button>
-            )}
             <div className="flex-grow flex flex-col items-center">
                 <h1 className={`text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-wider uppercase transform -skew-x-12 ${isClub ? 'text-amber-400' : 'text-[#00A3FF]'}`}>
                     {brand} <span className="text-white">{title}</span>

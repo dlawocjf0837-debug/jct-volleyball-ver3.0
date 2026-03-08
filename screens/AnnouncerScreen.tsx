@@ -12,7 +12,8 @@ import TeamEmblem from '../components/TeamEmblem';
 import { useTranslation } from '../hooks/useTranslation';
 
 interface AnnouncerScreenProps {
-    onNavigateToHistory: () => void;
+    /** 제공 시 '지난 경기 기록 보기' 버튼 표시. 학생/관중 키오스크에서는 생략하여 탈출 차단 */
+    onNavigateToHistory?: () => void;
     pendingJoinCode?: string | null;
     clearPendingJoinCode?: () => void;
     /** CLASS = 수업 모드(응원가 패널 표시), CLUB = 스포츠클럽 모드(응원가 오디오 숨김) */
@@ -630,9 +631,11 @@ const AnnouncerScreen: React.FC<AnnouncerScreenProps> = ({ onNavigateToHistory, 
                             <p className="mt-2">{t('host_will_display')}</p>
                         </>
                     )}
-                    <button onClick={onNavigateToHistory} className="mt-6 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg">
-                        {t('view_past_games')}
-                    </button>
+                    {onNavigateToHistory && (
+                        <button onClick={onNavigateToHistory} className="mt-6 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg">
+                            {t('view_past_games')}
+                        </button>
+                    )}
                 </div>
             )}
 

@@ -51,6 +51,7 @@ export const LiveChatOverlay: React.FC<LiveChatOverlayProps> = ({
     const scrollRef = useRef<HTMLDivElement>(null);
     const [inputValue, setInputValue] = React.useState('');
     const [isExpanded, setIsExpanded] = React.useState(false);
+    const [isChatMinimized, setIsChatMinimized] = React.useState(false);
 
     useEffect(() => {
         scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -65,18 +66,41 @@ export const LiveChatOverlay: React.FC<LiveChatOverlayProps> = ({
 
     const isChatEnabled = (isInputEnabled || isHostInputAlwaysEnabled) && !isBlocked;
 
+    if (isChatMinimized) {
+        return (
+            <button
+                type="button"
+                onClick={() => setIsChatMinimized(false)}
+                className={`fixed right-4 bottom-4 z-20 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-600/60 shadow-xl text-slate-200 font-semibold text-sm transition-all ${raiseOnMobile ? 'max-md:bottom-24' : ''}`}
+                title="채팅 열기"
+            >
+                💬 채팅 열기
+            </button>
+        );
+    }
+
     return (
         <div className={`fixed left-4 z-20 flex flex-col bg-black/70 backdrop-blur-sm rounded-xl border border-slate-600/60 overflow-hidden shadow-xl transition-all duration-300 ${raiseOnMobile ? 'bottom-4 max-md:bottom-24' : 'bottom-4'} ${isExpanded ? 'w-[min(28rem,90vw)] h-[min(600px,80vh)] max-h-[80vh]' : 'w-[min(320px,85vw)] max-h-[200px]'}`}>
             <div className="px-3 py-2 border-b border-slate-600/60 text-xs font-semibold text-slate-300 flex items-center justify-between gap-2 shrink-0">
                 <span>💬 실시간 채팅</span>
-                <button
-                    type="button"
-                    onClick={() => setIsExpanded((e) => !e)}
-                    className="shrink-0 px-2 py-1 rounded bg-slate-600/80 hover:bg-slate-500 text-slate-200 text-xs"
-                    title={isExpanded ? '작게 보기' : '크게 보기'}
-                >
-                    {isExpanded ? '🗗 작게 보기' : '🗖 크게 보기'}
-                </button>
+                <div className="flex items-center gap-1">
+                    <button
+                        type="button"
+                        onClick={() => setIsChatMinimized(true)}
+                        className="shrink-0 px-2 py-1 rounded bg-slate-600/80 hover:bg-slate-500 text-slate-200 text-xs"
+                        title="채팅 접기"
+                    >
+                        🔽 최소화
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setIsExpanded((e) => !e)}
+                        className="shrink-0 px-2 py-1 rounded bg-slate-600/80 hover:bg-slate-500 text-slate-200 text-xs"
+                        title={isExpanded ? '작게 보기' : '크게 보기'}
+                    >
+                        {isExpanded ? '🗗 작게 보기' : '🗖 크게 보기'}
+                    </button>
+                </div>
                 {myViewerLabel && (
                     <span className="shrink-0 font-medium px-1.5 py-0.5 rounded" style={{ color: myViewerLabel.color }}>
                         당신: {myViewerLabel.displayName}

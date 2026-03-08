@@ -49,20 +49,11 @@ const StudentJoinScreen: React.FC<StudentJoinScreenProps> = ({ onBackToLock, app
     if (p2p.isConnected) {
         return (
             <div className="min-h-screen flex flex-col bg-slate-900">
-                <div className="flex-shrink-0 flex justify-between items-center p-3 bg-slate-800/80 border-b border-slate-700">
-                    <button
-                        onClick={onBackToLock}
-                        className="text-slate-400 hover:text-white text-sm font-medium"
-                    >
-                        ← 관리자 화면으로
-                    </button>
+                <div className="flex-shrink-0 flex justify-end items-center p-3 bg-slate-800/80 border-b border-slate-700">
                     <span className="text-emerald-400 text-sm font-semibold">✓ 연결됨</span>
                 </div>
                 <div className="flex-grow overflow-auto">
-                    <AnnouncerScreen
-                        onNavigateToHistory={onBackToLock}
-                        appMode={appMode}
-                    />
+                    <AnnouncerScreen appMode={appMode} />
                 </div>
             </div>
         );
@@ -103,12 +94,6 @@ const StudentJoinScreen: React.FC<StudentJoinScreenProps> = ({ onBackToLock, app
                         </button>
                     </div>
                 </div>
-                <button
-                    onClick={onBackToLock}
-                    className="mt-6 w-full py-2 text-slate-500 hover:text-slate-300 text-sm transition-colors"
-                >
-                    ← 관리자 화면으로
-                </button>
             </div>
         </div>
     );
