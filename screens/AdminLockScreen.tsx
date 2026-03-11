@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { isAdminPasswordCorrect } from '../utils/adminPassword';
 import { loadBackupFromFile } from '../utils/loadBackupOnLockScreen';
+import { UNLOCKED_MODE_KEY } from '../components/LockScreen';
 
 interface AdminLockScreenProps {
     onUnlock: (mode: 'CLASS' | 'CLUB') => void;
@@ -30,13 +30,29 @@ const AdminLockScreen: React.FC<AdminLockScreenProps> = ({ onUnlock, onRequestSt
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
-        if (isAdminPasswordCorrect(pin)) {
-            setPin('');
-            onUnlock(appMode);
-        } else {
+
+        const password = pin.trim();
+        let grantedMode: 'master' | 'class' | 'club' | null = null;
+
+        if (password === '0819') {
+            grantedMode = 'master'; // 마스터키: 어느 경로든 프리패스
+        } else if (appMode === 'CLASS' && password === '0000') {
+            grantedMode = 'class'; // 수업 모드 선택 + 0000 입력
+        } else if (appMode === 'CLUB' && password === '9999') {
+            grantedMode = 'club'; // 클럽 모드 선택 + 9999 입력
+        }
+
+        if (!grantedMode) {
             setError('비밀번호가 일치하지 않습니다.');
             setPin('');
+            return;
         }
+
+        setPin('');
+        if (typeof window !== 'undefined') {
+            sessionStorage.setItem(UNLOCKED_MODE_KEY, grantedMode);
+        }
+        onUnlock(appMode);
     };
 
     const handleLoadDataClick = () => {
@@ -59,7 +75,12 @@ const AdminLockScreen: React.FC<AdminLockScreenProps> = ({ onUnlock, onRequestSt
         }
     };
 
-    const handleModeChange = (newMode: 'CLASS' | 'CLUB') => setAppMode(newMode);
+    const handleModeChange = (newMode: 'CLASS' | 'CLUB') => {
+        setAppMode(newMode);
+        // 모드 전환 시 기존 비밀번호/에러 초기화 (혼란 방지)
+        setPin('');
+        setError('');
+    };
 
     return (
         <div className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800 flex flex-col items-center justify-center p-6">

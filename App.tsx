@@ -34,7 +34,7 @@ import ConfirmationModal from './components/common/ConfirmationModal';
 import PasswordModal from './components/common/PasswordModal';
 import { useTranslation } from './hooks/useTranslation';
 import { isAdminPasswordCorrect } from './utils/adminPassword';
-import LockScreen, { SESSION_UNLOCK_KEY } from './components/LockScreen';
+import LockScreen, { UNLOCKED_MODE_KEY } from './components/LockScreen';
 
 type TournamentInfo = {
     tournamentId: string;
@@ -49,23 +49,41 @@ type LeagueInfo = {
 
 /** 라우트 가드: 인증 없으면 제자리 잠금 오버레이(LockScreen)만 표시. 리다이렉트 없음. /, /join 은 Public. */
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [unlocked, setUnlocked] = useState(false);
-
-    useEffect(() => {
-        setUnlocked(typeof window !== 'undefined' && sessionStorage.getItem(SESSION_UNLOCK_KEY) === 'true');
-    }, []);
+    const location = useLocation();
+    const [, setVersion] = useState(0); // 잠금 해제 시 강제 리렌더용
 
     const handleUnlock = useCallback(() => {
-        if (typeof window !== 'undefined') sessionStorage.setItem(SESSION_UNLOCK_KEY, 'true');
-        setUnlocked(true);
+        // LockScreen 내부에서 sessionStorage.setItem('unlockedMode', ...) 를 수행하므로,
+        // 여기서는 단순히 렌더를 다시 트리거만 하면 됨.
+        setVersion(v => v + 1);
     }, []);
 
-    return (
-        <>
-            {children}
-            {!unlocked && <LockScreen onUnlock={handleUnlock} />}
-        </>
-    );
+    const unlockedMode =
+        typeof window !== 'undefined' ? sessionStorage.getItem(UNLOCKED_MODE_KEY) : null;
+    const path = location.pathname || '';
+
+    // 1. 권한이 아예 없으면 무조건 잠금 화면
+    if (!unlockedMode) {
+        return <LockScreen onUnlock={handleUnlock} />;
+    }
+
+    // 2. 마스터 권한은 묻지도 따지지도 않고 프리패스
+    if (unlockedMode === 'master') {
+        return <>{children}</>;
+    }
+
+    // 3. 수업 권한은 /class 로 시작하는 경로만 허용
+    if (unlockedMode === 'class' && path.startsWith('/class')) {
+        return <>{children}</>;
+    }
+
+    // 4. 클럽 권한은 /club 로 시작하는 경로만 허용
+    if (unlockedMode === 'club' && path.startsWith('/club')) {
+        return <>{children}</>;
+    }
+
+    // 5. 위 조건에 하나도 맞지 않으면 다시 잠금 화면
+    return <LockScreen onUnlock={handleUnlock} />;
 };
 
 const getInitialPendingJoinCodeFromUrl = (): string | null => {
@@ -138,7 +156,6 @@ const Gate = () => {
     return (
         <AdminLockScreen
             onUnlock={(mode) => {
-                if (typeof window !== 'undefined') sessionStorage.setItem(SESSION_UNLOCK_KEY, 'true');
                 navigate(mode === 'CLASS' ? '/class' : '/club');
             }}
             onRequestStudentJoin={() => navigate('/join')}
@@ -670,7 +687,7 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
 const ModeLayout = ({ appMode }: { appMode: 'CLASS' | 'CLUB' }) => {
     const navigate = useNavigate();
     const handleReturnToInitial = useCallback(() => {
-        if (typeof window !== 'undefined') sessionStorage.removeItem(SESSION_UNLOCK_KEY);
+        if (typeof window !== 'undefined') sessionStorage.removeItem(UNLOCKED_MODE_KEY);
         navigate('/', { replace: true });
     }, [navigate]);
     return <AppContent appMode={appMode} onReturnToInitialScreen={handleReturnToInitial} />;
