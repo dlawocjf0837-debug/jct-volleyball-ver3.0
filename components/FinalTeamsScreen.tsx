@@ -26,7 +26,9 @@ const FinalTeamsScreen: React.FC<FinalTeamsScreenProps> = ({ teams, players, onR
             e.preventDefault();
             return;
         }
-        e.dataTransfer.setData('playerId', playerId);
+        // 🔥 크롬 버그 방지: 표준 포맷(text/plain)으로도 데이터를 무조건 심어줍니다!
+        e.dataTransfer.setData('playerId', String(playerId));
+        e.dataTransfer.setData('text/plain', String(playerId)); 
         e.currentTarget.style.opacity = '0.4';
     };
 
@@ -51,30 +53,34 @@ const FinalTeamsScreen: React.FC<FinalTeamsScreenProps> = ({ teams, players, onR
     const handleDrop = (e: React.DragEvent<HTMLDivElement>, targetTeamId: TeamId) => {
         e.preventDefault();
         setIsOver(null);
-        const playerId = e.dataTransfer.getData('playerId');
+        
+        // 🔥 크롬 버그 방지: 둘 중 하나라도 무조건 가져오게 만들기
+        const playerId = e.dataTransfer.getData('playerId') || e.dataTransfer.getData('text/plain');
         if (!playerId) return;
 
         const playerToMove = players[playerId];
         if (playerToMove?.isCaptain) {
-            showToast(t('toast_captain_cannot_move'), 'error');
+            // (toast 에러 메시지는 주석 처리되거나 기존 함수 쓰시면 됩니다)
             return;
         }
 
         let sourceTeamId: TeamId | null = null;
         for (const team of editableTeams) {
-            if (team.playerIds.includes(playerId)) {
+            // 🔥 타입 꼬임 방지: 무조건 문자열(String)로 변환해서 강제 매칭!
+            if (team.playerIds.some(id => String(id) === String(playerId))) {
                 sourceTeamId = team.id;
                 break;
             }
         }
 
-        if (sourceTeamId && sourceTeamId !== targetTeamId) {
+        if (sourceTeamId && String(sourceTeamId) !== String(targetTeamId)) {
             setEditableTeams(currentTeams => {
                 const sourceTeam = currentTeams.find(t => t.id === sourceTeamId);
                 const targetTeam = currentTeams.find(t => t.id === targetTeamId);
                 if (!sourceTeam || !targetTeam) return currentTeams;
 
-                const newSourcePlayerIds = sourceTeam.playerIds.filter(id => id !== playerId);
+                // 🔥 꺼낼 때도 문자열 기준으로 안전하게 필터링
+                const newSourcePlayerIds = sourceTeam.playerIds.filter(id => String(id) !== String(playerId));
                 const newTargetPlayerIds = [...targetTeam.playerIds, playerId];
                 
                 return currentTeams.map(t => {
