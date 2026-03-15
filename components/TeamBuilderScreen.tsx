@@ -139,7 +139,7 @@ const TeamBuilderScreen: React.FC<TeamBuilderScreenProps> = ({ initialPlayers, o
         const extraSlots = totalPlayers % numberOfTeams;
         
         const initialDraftOrder = captainPlayers
-            .sort((a, b) => b.totalScore - a.totalScore)
+            .sort((a, b) => a.totalScore - b.totalScore)
             .map(c => newTeams.find(t => t.captainId === c.id)!.id);
 
         const slotsMap = new Map<TeamId, number>();

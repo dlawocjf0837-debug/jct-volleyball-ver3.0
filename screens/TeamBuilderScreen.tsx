@@ -136,9 +136,14 @@ const TeamBuilderScreen: React.FC<TeamBuilderScreenProps> = ({ initialPlayers, o
         const baseSlots = Math.floor(totalPlayers / numberOfTeams);
         const extraSlots = totalPlayers % numberOfTeams;
         
-        const initialDraftOrder = captainPlayers
-            .sort((a, b) => b.totalScore - a.totalScore)
-            .map(c => newTeams.find(t => t.captainId === c.id)!.id);
+        // 고정 초기 순서: 팀(Team) 기준 팀 총점 오름차순(가장 낮은 팀 = index 0). 드래프트 전체의 절대 기준이며 이후 변경하지 않음.
+        const initialDraftOrder = [...newTeams]
+            .sort((a, b) => {
+                const sumA = a.playerIds.reduce((s, pid) => s + (updatedPlayers[pid]?.totalScore ?? 0), 0);
+                const sumB = b.playerIds.reduce((s, pid) => s + (updatedPlayers[pid]?.totalScore ?? 0), 0);
+                return sumA - sumB;
+            })
+            .map(t => t.id);
 
         const slotsMap = new Map<TeamId, number>();
         initialDraftOrder.forEach((teamId, index) => {
@@ -174,28 +179,32 @@ const TeamBuilderScreen: React.FC<TeamBuilderScreenProps> = ({ initialPlayers, o
         setDraftHistory(prev => [...prev, move]);
 
         const newUnassignedPlayerIds = unassignedPlayerIds.filter(id => id !== playerId);
-        
-        setTeams(currentTeams => currentTeams.map(t =>
+        const updatedTeams = teams.map(t =>
             t.id === targetTeamId
-            ? { ...t, playerIds: [...t.playerIds, playerId] }
-            : t
-        ));
-        
+                ? { ...t, playerIds: [...t.playerIds, playerId] }
+                : t
+        );
+
+        setTeams(updatedTeams);
         setUnassignedPlayerIds(newUnassignedPlayerIds);
 
         if (newUnassignedPlayerIds.length === 0) {
             setPhase('final');
         } else {
-            const nextPickIndex = currentPickIndex + 1;
-            if (nextPickIndex >= draftOrder.length) {
-                setDraftRound(prev => prev + 1);
-                setDraftOrder(prev => [...prev].reverse());
-                setCurrentPickIndex(0);
-            } else {
-                setCurrentPickIndex(nextPickIndex);
-            }
+            // 정통 스네이크: 주장 배정 제외한 '순수 드래프트로 뽑힌 인원 수' 기준 턴 계산 (실시간 점수 비교 없음)
+            const numberOfTeams = draftOrder.length;
+            const totalAssigned = initialPlayers.length - newUnassignedPlayerIds.length;
+            const currentPickedCount = Math.max(0, totalAssigned - numberOfTeams); // 주장 4명(또는 n명) 제외
+            const currentRound = Math.floor(currentPickedCount / numberOfTeams);
+            const isEvenRound = currentRound % 2 === 0;
+            const nextTeamIndex = isEvenRound
+                ? currentPickedCount % numberOfTeams
+                : numberOfTeams - 1 - (currentPickedCount % numberOfTeams);
+
+            setDraftRound(currentRound + 1);
+            setCurrentPickIndex(nextTeamIndex);
         }
-    }, [unassignedPlayerIds, teams, draftOrder, currentPickIndex, draftRound]);
+    }, [unassignedPlayerIds, teams, draftOrder, initialPlayers.length]);
 
     const handleDrop = useCallback((playerId: string, targetTeamId: TeamId) => {
         const currentPickingTeamId = draftOrder[currentPickIndex];
