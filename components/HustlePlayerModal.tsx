@@ -20,8 +20,16 @@ export const HustlePlayerModal: React.FC<HustlePlayerModalProps> = ({
     teamBName,
     onConfirm,
 }) => {
+    // 1. 상태 선언
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+    // 2. 훅(useEffect) 무조건 위로 배치! (이제 76번째 줄이 아니라 26번째 줄입니다!)
+    useEffect(() => {
+        if (isOpen) document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = ''; };
+    }, [isOpen]);
+
+    // 3. 일반 함수들
     const toggle = (playerId: string) => {
         setSelectedIds(prev => {
             const next = new Set(prev);
@@ -43,8 +51,10 @@ export const HustlePlayerModal: React.FC<HustlePlayerModalProps> = ({
         onClose();
     };
 
+    // 4. 모든 훅이 끝난 뒤에 비로소 조기 퇴근(if문) 확인!
     if (!isOpen) return null;
 
+    // 5. 화면 그리기 컴포넌트
     const PlayerList: React.FC<{ players: Player[]; teamName: string; teamColor: string }> = ({ players, teamName, teamColor }) => (
         <div className="space-y-2">
             <h4 className="text-sm font-bold text-slate-400">{teamName}</h4>
@@ -73,10 +83,7 @@ export const HustlePlayerModal: React.FC<HustlePlayerModalProps> = ({
         </div>
     );
 
-    useEffect(() => {
-        if (isOpen) document.body.style.overflow = 'hidden';
-        return () => { document.body.style.overflow = ''; };
-    }, [isOpen]);
+    // 6. 메인 화면 출력
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
             <div className="bg-slate-900 rounded-2xl shadow-2xl border-2 border-amber-500/50 w-full max-w-lg max-h-[90vh] overflow-y-auto flex flex-col" onClick={e => e.stopPropagation()}>
