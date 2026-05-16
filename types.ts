@@ -148,6 +148,12 @@ export interface PlayerStats {
     serviceFaults: number;
     blockingPoints: number;
     spikeSuccesses: number;
+    /** 스포츠클럽 모드: 다이렉트 공격 득점 */
+    directSuccesses?: number;
+    /** 스포츠클럽 모드: 수비 범실 횟수 */
+    defenseFaults?: number;
+    /** 스포츠클럽 모드: 수비 범실 상세(선택 메모 포함) */
+    defenseFaultRecords?: { id: string; note?: string; createdAt: string }[];
     // New stats
     serveIn: number;
     digs: number;
@@ -172,6 +178,8 @@ export interface TeamMatchState {
     serviceFaults: number;
     blockingPoints: number;
     spikeSuccesses: number;
+    /** 스포츠클럽 모드: 다이렉트 공격 득점 */
+    directSuccesses?: number;
     players: Record<string, Player>;
     playerStats: Record<string, PlayerStats>;
     onCourtPlayerIds: string[];
@@ -180,7 +188,7 @@ export interface TeamMatchState {
     currentServerIndex?: number;
 }
 
-export type ScoreEventType = 'ACE' | 'FAULT' | 'BLOCK' | 'SPIKE' | 'SCORE' | 'TIMEOUT' | 'GAME_END' | 'SUB' | 'FAIRPLAY' | '3HIT' | 'SERVE_IN' | 'DIG' | 'ASSIST' | 'UNKNOWN';
+export type ScoreEventType = 'ACE' | 'FAULT' | 'BLOCK' | 'SPIKE' | 'DIRECT' | 'DEFENSE_FAULT' | 'SCORE' | 'MANUAL_SCORE' | 'TIMEOUT' | 'GAME_END' | 'SUB' | 'FAIRPLAY' | '3HIT' | 'SERVE_IN' | 'DIG' | 'ASSIST' | 'UNKNOWN';
 
 /** 스파이크/서브 에이스 득점 시 공이 떨어진 위치 (코트 상대 좌표 0~100%) */
 export interface HitLocation {
@@ -255,6 +263,8 @@ export type Action =
     | { type: 'SERVICE_FAULT'; team: 'A' | 'B'; playerId: string }
     | { type: 'BLOCKING_POINT'; team: 'A' | 'B'; playerId: string }
     | { type: 'SPIKE_SUCCESS'; team: 'A' | 'B'; playerId: string; hitLocation?: HitLocation }
+    | { type: 'DIRECT_SUCCESS'; team: 'A' | 'B'; playerId: string }
+    | { type: 'DEFENSE_FAULT'; team: 'A' | 'B'; playerId: string; note?: string }
     | { type: 'SERVE_IN'; team: 'A' | 'B'; playerId: string } // New
     | { type: 'DIG_SUCCESS'; team: 'A' | 'B'; playerId: string } // New
     | { type: 'ASSIST_SUCCESS'; team: 'A' | 'B'; playerId: string } // New
@@ -265,6 +275,7 @@ export type Action =
     | { type: 'INCREMENT_3_HIT'; team: 'A' | 'B' }
     | { type: 'SET_SERVING_TEAM'; team: 'A' | 'B' }
     | { type: 'SUBSTITUTE_PLAYER'; team: 'A' | 'B'; playerIn: string; playerOut: string }
+    | { type: 'SUBSTITUTE_PLAYERS'; team: 'A' | 'B'; substitutions: { playerIn: string; playerOut: string }[] }
     | { type: 'UPDATE_PLAYER_MEMO'; team: 'A' | 'B'; playerId: string; memo: string }
     | { type: 'START_NEXT_SET'; initialOnCourtA?: string[]; initialBenchA?: string[]; initialOnCourtB?: string[]; initialBenchB?: string[] }; // 세트 종료 시 선발 라인업 복구용
 
@@ -551,10 +562,13 @@ export interface DataContextType {
     deletePlayerFromSet: (setId: string, playerId: string) => Promise<void>;
     bulkAddPlayersToTeam: (teamKey: string, playerNames: string[], overwrite: boolean) => Promise<void>;
     createTeamSet: (name: string) => Promise<void>;
+    deleteTeamSet: (setId: string) => Promise<void>;
     addTeamToSet: (setId: string, teamName: string, options?: { createDefaultPlayers?: boolean }) => Promise<void>;
     copyTeamFromOtherSet: (targetSetId: string, sourceTeamKey: string) => Promise<void>;
     setTeamCaptain: (teamKey: string, playerId: string) => Promise<void>;
     updatePlayerMemoInTeamSet: (setId: string, playerId: string, memo: string) => Promise<void>;
+    updatePlayerNameInTeamSet: (setId: string, playerId: string, name: string) => Promise<void>;
+    updatePlayerNumberInTeamSet: (setId: string, playerId: string, studentNumber: string) => Promise<void>;
     reloadData: () => void;
     exportData: () => void;
     saveImportedData: (data: any) => void;

@@ -15,10 +15,12 @@ interface RosterManagementModalProps {
     tradeSource?: { player: Player; teamKey: string } | null;
     onPlayerClick?: (player: Player, teamKey: string) => void;
     onSetCaptain?: (playerId: string) => void;
+    /** 스포츠클럽 모드: 선수 이름 인라인 수정 */
+    enableInlinePlayerRename?: boolean;
 }
 
-const RosterManagementModal: React.FC<RosterManagementModalProps> = ({ isOpen, onClose, teamKey, teamConfig, onTeamNameChange, isTradeMode = false, tradeSource = null, onPlayerClick, onSetCaptain }) => {
-    const { teamSetsMap, addPlayerToTeam, removePlayerFromTeam, deletePlayerFromSet, bulkAddPlayersToTeam } = useData();
+const RosterManagementModal: React.FC<RosterManagementModalProps> = ({ isOpen, onClose, teamKey, teamConfig, onTeamNameChange, isTradeMode = false, tradeSource = null, onPlayerClick, onSetCaptain, enableInlinePlayerRename = false }) => {
+    const { teamSetsMap, addPlayerToTeam, removePlayerFromTeam, deletePlayerFromSet, bulkAddPlayersToTeam, updatePlayerNameInTeamSet, updatePlayerNumberInTeamSet, showToast } = useData();
     const { t } = useTranslation();
     const [newPlayerName, setNewPlayerName] = useState('');
     const [isEditingName, setIsEditingName] = useState(false);
@@ -28,6 +30,9 @@ const RosterManagementModal: React.FC<RosterManagementModalProps> = ({ isOpen, o
     const [bulkOverwrite, setBulkOverwrite] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{ playerId: string; playerName: string } | null>(null);
+    const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
+    const [editingPlayerName, setEditingPlayerName] = useState('');
+    const [editingPlayerNumber, setEditingPlayerNumber] = useState('');
 
     const { players, captainId } = useMemo(() => {
         if (!teamKey || !teamConfig) return { players: [], captainId: null };
@@ -57,8 +62,26 @@ const RosterManagementModal: React.FC<RosterManagementModalProps> = ({ isOpen, o
             setMode('single'); // Reset mode on close
             setBulkPlayerNames('');
             setBulkOverwrite(false);
+            setEditingPlayerId(null);
         }
     }, [isOpen, teamConfig]);
+
+    const handlePlayerNameSave = async (playerId: string) => {
+        if (!teamKey || !editingPlayerName.trim()) {
+            setEditingPlayerId(null);
+            return;
+        }
+        const setId = teamKey.split('___')[0];
+        if (!setId) return;
+        const trimmed = editingPlayerName.trim();
+        await updatePlayerNameInTeamSet(setId, playerId, trimmed);
+        if (enableInlinePlayerRename && editingPlayerNumber.trim()) {
+            await updatePlayerNumberInTeamSet(setId, playerId, editingPlayerNumber.trim());
+        }
+        showToast?.('선수 정보가 저장되었습니다.');
+        setEditingPlayerId(null);
+        setEditingPlayerNumber('');
+    };
 
     const handleAddPlayer = () => {
         if (newPlayerName.trim() && teamKey) {
@@ -179,7 +202,67 @@ const RosterManagementModal: React.FC<RosterManagementModalProps> = ({ isOpen, o
                                         >
                                             <CrownIcon className="w-5 h-5" />
                                         </button>
-                                        <span className="font-semibold text-slate-200">{player.originalName}</span>
+                                        {enableInlinePlayerRename && editingPlayerId === player.id ? (
+                                            <div className="flex flex-col sm:flex-row gap-2 flex-grow min-w-0" onClick={(e) => e.stopPropagation()}>
+                                                <input
+                                                    type="text"
+                                                    value={editingPlayerName}
+                                                    onChange={(e) => setEditingPlayerName(e.target.value)}
+                                                    placeholder="이름"
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') void handlePlayerNameSave(player.id);
+                                                        if (e.key === 'Escape') { setEditingPlayerId(null); setEditingPlayerNumber(''); }
+                                                    }}
+                                                    autoFocus
+                                                    className="flex-grow min-w-0 bg-slate-700 text-white rounded px-2 py-1 text-sm font-semibold outline-none ring-1 ring-sky-500"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    value={editingPlayerNumber}
+                                                    onChange={(e) => setEditingPlayerNumber(e.target.value.replace(/[^\d]/g, ''))}
+                                                    placeholder="등번호"
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') void handlePlayerNameSave(player.id);
+                                                        if (e.key === 'Escape') { setEditingPlayerId(null); setEditingPlayerNumber(''); }
+                                                    }}
+                                                    onBlur={() => void handlePlayerNameSave(player.id)}
+                                                    className="w-20 shrink-0 bg-slate-700 text-white rounded px-2 py-1 text-sm font-semibold outline-none ring-1 ring-sky-500/70"
+                                                />
+                                            </div>
+                                        ) : (
+                                            <span
+                                                className={`font-semibold text-slate-200 ${enableInlinePlayerRename && !isTradeMode ? 'cursor-pointer hover:text-sky-300' : ''}`}
+                                                onClick={(e) => {
+                                                    if (!enableInlinePlayerRename || isTradeMode) return;
+                                                    e.stopPropagation();
+                                                    setEditingPlayerId(player.id);
+                                                    setEditingPlayerName(player.originalName);
+                                                    setEditingPlayerNumber(player.studentNumber === '??' ? '' : (player.studentNumber ?? ''));
+                                                }}
+                                            >
+                                                {player.originalName}
+                                                {enableInlinePlayerRename && player.studentNumber && player.studentNumber !== '??' && (
+                                                    <span className="ml-2 text-xs text-slate-400 font-normal">#{player.studentNumber}</span>
+                                                )}
+                                            </span>
+                                        )}
+                                        {enableInlinePlayerRename && !isTradeMode && editingPlayerId !== player.id && (
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setEditingPlayerId(player.id);
+                                                    setEditingPlayerName(player.originalName);
+                                                    setEditingPlayerNumber(player.studentNumber === '??' ? '' : (player.studentNumber ?? ''));
+                                                }}
+                                                className="p-1 rounded text-slate-500 hover:text-sky-400 transition-colors"
+                                                title="이름·등번호 수정"
+                                                aria-label={`${player.originalName} 이름 수정`}
+                                            >
+                                                <PencilIcon className="w-4 h-4" />
+                                            </button>
+                                        )}
                                         {isSelected && <span className="text-xs text-green-400 font-bold">✓ 선택됨</span>}
                                     </div>
                                     {!isTradeMode && (

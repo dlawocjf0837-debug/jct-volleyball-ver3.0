@@ -141,6 +141,10 @@ import { useTranslation } from '../hooks/useTranslation';
 import confetti from 'canvas-confetti';
 
 import { isAdminPasswordCorrect } from '../utils/adminPassword';
+import { formatJerseyLabel } from '../utils/formatJerseyNumber';
+import { AnalysisMemoModal, AnalysisMemoFocusTarget } from '../components/AnalysisMemoModal';
+
+const CLUB_DEFENSE_FAULT_QUICK_CHIPS = ['준비 안 함', '집중력 저하', '콜 미스', '판단 미스'] as const;
 
 interface ScoreboardProps {
     onBackToMenu: () => void;
@@ -150,7 +154,7 @@ interface ScoreboardProps {
 }
 
 type PendingAction = {
-    actionType: 'SERVICE_ACE' | 'SERVICE_FAULT' | 'BLOCKING_POINT' | 'SPIKE_SUCCESS' | 'SERVE_IN' | 'DIG_SUCCESS' | 'ASSIST_SUCCESS';
+    actionType: 'SERVICE_ACE' | 'SERVICE_FAULT' | 'BLOCKING_POINT' | 'SPIKE_SUCCESS' | 'DIRECT_SUCCESS' | 'DEFENSE_FAULT' | 'SERVE_IN' | 'DIG_SUCCESS' | 'ASSIST_SUCCESS';
     team: 'A' | 'B';
 };
 
@@ -174,6 +178,10 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
     const [isSubModalOpen, setIsSubModalOpen] = useState(false);
     const [isLiberoQuickSwapOpen, setIsLiberoQuickSwapOpen] = useState(false);
     const [serveOrderModalTeam, setServeOrderModalTeam] = useState<'A' | 'B' | null>(null);
+    const [defenseFaultPending, setDefenseFaultPending] = useState<{ team: 'A' | 'B'; playerId: string } | null>(null);
+    const [defenseFaultNote, setDefenseFaultNote] = useState('');
+    const [analysisMemoOpen, setAnalysisMemoOpen] = useState(false);
+    const [analysisMemoFocus, setAnalysisMemoFocus] = useState<AnalysisMemoFocusTarget | null>(null);
     const [selectedPlayerForRecord, setSelectedPlayerForRecord] = useState<{ player: Player; cumulativeStats: any; performanceHistory: any[] } | null>(null);
     
     // Logic for Assist selection modal chain
@@ -229,8 +237,9 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
 
     const handleServeOrderPlayerClick = useCallback((player: Player, teamKey?: string) => {
         if (!player) return;
+        setServeOrderModalTeam(null);
         const baseStats = {
-            points: 0, serviceAces: 0, serviceFaults: 0, blockingPoints: 0, spikeSuccesses: 0, matchesPlayed: 0,
+            points: 0, serviceAces: 0, serviceFaults: 0, blockingPoints: 0, spikeSuccesses: 0, directSuccesses: 0, defenseFaults: 0, matchesPlayed: 0,
             serveIn: 0, digs: 0, assists: 0
         };
         const cumulativeStats: any = { ...baseStats, ...(playerCumulativeStats?.[player.id] ?? {}) };
@@ -608,6 +617,13 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
     const handlePlayerSelectAndDispatch = (playerId: string) => {
         if (!pendingAction) return;
 
+        if (entryMode === 'club' && pendingAction.actionType === 'DEFENSE_FAULT') {
+            setDefenseFaultPending({ team: pendingAction.team, playerId });
+            setDefenseFaultNote('');
+            setPendingAction(null);
+            return;
+        }
+
         if (entryMode === 'club' && (pendingAction.actionType === 'SPIKE_SUCCESS' || pendingAction.actionType === 'SERVICE_ACE')) {
             setHeatmapRequest({
                 playerId,
@@ -647,16 +663,44 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
     };
 
     const getActionTitle = (actionType: string) => {
+        const serveWho = entryMode === 'club' ? t('select_player_serve_who') : null;
         switch(actionType) {
-            case 'SERVICE_ACE': return t('select_player_service_ace');
-            case 'SERVICE_FAULT': return t('select_player_service_fault');
+            case 'SERVICE_ACE': return serveWho ?? t('select_player_service_ace');
+            case 'SERVICE_FAULT': return serveWho ?? t('select_player_service_fault');
+            case 'SERVE_IN': return serveWho ?? t('select_player_serve_in');
             case 'SPIKE_SUCCESS': return t('select_player_spike');
+            case 'DIRECT_SUCCESS': return t('select_player_direct');
+            case 'DEFENSE_FAULT': return t('select_player_defense_fault');
             case 'BLOCKING_POINT': return t('select_player_block');
-            case 'SERVE_IN': return t('select_player_serve_in');
             case 'DIG_SUCCESS': return t('select_player_dig');
             case 'ASSIST_SUCCESS': return t('select_player_assist');
             default: return t('who_recorded');
         }
+    };
+
+    const clubActionBtnBase = 'font-semibold py-2 sm:py-3 px-2 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 min-h-[44px] active:scale-95 transition-transform';
+    const getActionBtnClass = (_kind: 'default' | 'fault' = 'default') => {
+        if (entryMode !== 'club') return `bg-slate-700 hover:bg-slate-600 ${clubActionBtnBase}`;
+        return `bg-slate-700 hover:bg-slate-600 text-slate-200 ${clubActionBtnBase}`;
+    };
+
+    const openPlayerAnalysisMemo = useCallback((player: Player, teamKey: 'A' | 'B') => {
+        if (!matchState) return;
+        const team = teamKey === 'A' ? matchState.teamA : matchState.teamB;
+        const setId = team.key?.split('___')[0];
+        const category = setId ? teamSets.find((s) => s.id === setId)?.className : undefined;
+        setAnalysisMemoFocus({ playerId: player.id, teamName: team.name, category });
+        setAnalysisMemoOpen(true);
+    }, [matchState, teamSets]);
+
+    const handleDefenseFaultSave = () => {
+        if (!defenseFaultPending) return;
+        const { team, playerId } = defenseFaultPending;
+        dispatch({ type: 'DEFENSE_FAULT', team, playerId, note: defenseFaultNote.trim() || undefined });
+        const name = matchState?.[team === 'A' ? 'teamA' : 'teamB']?.players?.[playerId]?.originalName ?? '';
+        showToast(`🔔 [${name}] 수비 범실 기록됨`, 'success');
+        setDefenseFaultPending(null);
+        setDefenseFaultNote('');
     };
 
     const handleUndo = () => {
@@ -682,21 +726,8 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
         const isServing = matchState.servingTeam === teamKey;
         const color = team.color || (teamKey === 'A' ? '#38bdf8' : '#f87171');
         const servingClasses = isServing && !matchState.gameOver ? 'glowing-border' : 'border-solid border-slate-700';
-        const serverName = entryMode === 'club' && isServing && !matchState.gameOver
-            ? (() => {
-                const idx = team.currentServerIndex ?? 0;
-                const pid = team.onCourtPlayerIds?.[idx];
-                return pid ? team.players[pid]?.originalName : '';
-            })()
-            : '';
-
         return (
             <div className={`p-3 sm:p-4 flex flex-col items-center justify-between gap-4 sm:gap-4 bg-slate-900/50 rounded-lg border-2 transition-all duration-300 ${servingClasses} flex-grow`} style={{ borderColor: isServing && !matchState.gameOver ? color : '#334155' }}>
-                {serverName && (
-                    <span className="text-xs sm:text-sm font-semibold px-2.5 py-1 rounded-full border shadow-sm" style={{ backgroundColor: `${color}20`, borderColor: `${color}60`, color }}>
-                        🏐 서브: {serverName}
-                    </span>
-                )}
                 <div className="flex items-center gap-3 sm:gap-3">
                     <TeamEmblem emblem={team.emblem} color={color} className="w-12 h-12 sm:w-16 sm:h-16"/>
                     <div className="text-center">
@@ -754,77 +785,34 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                         <button 
                             onClick={() => {
                                 playClickSound();
-                                if (entryMode === 'club' && isServing) {
-                                    const idx = team.currentServerIndex ?? 0;
-                                    const pid = team.onCourtPlayerIds?.[idx] ?? team.onCourtPlayerIds?.[0];
-                                    if (pid) {
-                                        setHeatmapRequest({ playerId: pid, statType: 'SERVICE_ACE', team: teamKey });
-                                    } else {
-                                        showToast('서버를 식별할 수 없습니다.', 'error');
-                                    }
-                                } else {
-                                    setPendingAction({ actionType: 'SERVICE_ACE', team: teamKey });
-                                }
+                                setPendingAction({ actionType: 'SERVICE_ACE', team: teamKey });
                             }} 
                             disabled={!isServing || matchState.gameOver || !!matchState.timeout} 
-                            className="bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-2 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 min-h-[44px] active:scale-95 transition-transform"
+                            className={getActionBtnClass('default')}
                         >
                             {t('serve_ace')}
                         </button>
                         <button 
                             onClick={() => {
                                 playClickSound();
-                                if (entryMode === 'club' && isServing) {
-                                    const idx = team.currentServerIndex ?? 0;
-                                    const pid = team.onCourtPlayerIds?.[idx] ?? team.onCourtPlayerIds?.[0];
-                                    if (pid) {
-                                        const name = team.players[pid]?.originalName ?? '';
-                                        dispatch({ type: 'SERVICE_FAULT', team: teamKey, playerId: pid });
-                                        showToast(`🔔 [${name}] 서브 범실 기록됨`, 'success');
-                                    } else {
-                                        showToast('서버를 식별할 수 없습니다.', 'error');
-                                    }
-                                } else {
-                                    setPendingAction({ actionType: 'SERVICE_FAULT', team: teamKey });
-                                }
-                            }} 
-                            disabled={!isServing || matchState.gameOver || !!matchState.timeout} 
-                            className="w-full bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-2 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 min-h-[44px] active:scale-95 transition-transform"
-                        >
-                            {t('serve_fault')}
-                        </button>
-                        
-                        <button 
-                            onClick={() => {
-                                playClickSound();
-                                if (entryMode === 'club' && isServing) {
-                                    const idx = team.currentServerIndex ?? 0;
-                                    const pid = team.onCourtPlayerIds?.[idx] ?? team.onCourtPlayerIds?.[0];
-                                    if (pid) {
-                                        const name = team.players[pid]?.originalName ?? '';
-                                        dispatch({ type: 'SERVE_IN', team: teamKey, playerId: pid });
-                                        showToast(`🔔 [${name}] 서브 In 기록됨`, 'success');
-                                    } else {
-                                        setPendingAction({ actionType: 'SERVE_IN', team: teamKey });
-                                    }
-                                } else {
-                                    setPendingAction({ actionType: 'SERVE_IN', team: teamKey });
-                                }
+                                setPendingAction({ actionType: 'SERVE_IN', team: teamKey });
                             }} 
                             disabled={!isServing || matchState.gameOver || !!matchState.timeout}
-                            className="bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-2 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 flex items-center justify-center gap-1 sm:gap-2 min-h-[44px] active:scale-95 transition-transform"
+                            className={`${getActionBtnClass('default')} flex items-center justify-center gap-1 sm:gap-2`}
                         >
-                            <BoltIcon className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" />
+                            <BoltIcon className={`w-4 h-4 sm:w-5 sm:h-5 ${entryMode === 'club' ? 'text-yellow-400' : 'text-yellow-400'}`} />
                             <span className="hidden sm:inline">{t('btn_serve_in')}</span>
                             <span className="sm:hidden text-xs">서브</span>
                         </button>
+                        {entryMode !== 'club' && (
+                            <>
                         <button 
                             onClick={() => {
                                 playClickSound();
                                 setPendingAction({ actionType: 'SPIKE_SUCCESS', team: teamKey });
                             }} 
                             disabled={matchState.gameOver || !!matchState.timeout} 
-                            className="w-full bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-2 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 min-h-[44px] active:scale-95 transition-transform"
+                            className={`w-full ${getActionBtnClass('default')}`}
                         >
                             {t('spike_success')}
                         </button>
@@ -835,23 +823,45 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                                 setPendingAction({ actionType: 'BLOCKING_POINT', team: teamKey });
                             }} 
                             disabled={matchState.gameOver || !!matchState.timeout} 
-                            className="w-full bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-2 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 min-h-[44px] active:scale-95 transition-transform"
+                            className={`w-full ${getActionBtnClass('default')}`}
                         >
                             {t('blocking_point')}
                         </button>
-                        <button 
-                            onClick={() => {
-                                playClickSound();
-                                setPendingAction({ actionType: 'DIG_SUCCESS', team: teamKey });
-                            }} 
-                            disabled={matchState.gameOver || !!matchState.timeout} 
-                            className="w-full bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-2 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 flex justify-center items-center gap-1 sm:gap-2 min-h-[44px] active:scale-95 transition-transform"
-                        >
-                            <ShieldIcon className="w-4 h-4 sm:w-5 sm:h-5 text-green-400" /> 
-                            <span className="hidden sm:inline">{t('btn_nice_defense')}</span>
-                            <span className="sm:hidden text-xs">디그</span>
-                        </button>
+                            <button 
+                                onClick={() => {
+                                    playClickSound();
+                                    setPendingAction({ actionType: 'DIG_SUCCESS', team: teamKey });
+                                }} 
+                                disabled={matchState.gameOver || !!matchState.timeout} 
+                                className={`w-full ${getActionBtnClass('default')} flex justify-center items-center gap-1 sm:gap-2`}
+                            >
+                                <ShieldIcon className="w-4 h-4 sm:w-5 sm:h-5 text-green-400" /> 
+                                <span className="hidden sm:inline">{t('btn_nice_defense')}</span>
+                                <span className="sm:hidden text-xs">디그</span>
+                            </button>
+                            </>
+                        )}
                     </div>
+                    {entryMode === 'club' && (
+                        <>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button onClick={() => { playClickSound(); setPendingAction({ actionType: 'SERVICE_FAULT', team: teamKey }); }} disabled={!isServing || matchState.gameOver || !!matchState.timeout} className={`w-full ${getActionBtnClass('default')}`}>{t('serve_fault')}</button>
+                                <button onClick={() => { playClickSound(); setPendingAction({ actionType: 'DEFENSE_FAULT', team: teamKey }); }} disabled={matchState.gameOver || !!matchState.timeout} className={`w-full ${getActionBtnClass('default')}`}>{t('defense_fault')}</button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button onClick={() => { playClickSound(); setPendingAction({ actionType: 'SPIKE_SUCCESS', team: teamKey }); }} disabled={matchState.gameOver || !!matchState.timeout} className={`w-full ${getActionBtnClass('default')}`}>{t('spike_success')}</button>
+                                <button onClick={() => { playClickSound(); setPendingAction({ actionType: 'BLOCKING_POINT', team: teamKey }); }} disabled={matchState.gameOver || !!matchState.timeout} className={`w-full ${getActionBtnClass('default')}`}>{t('blocking_point')}</button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button onClick={() => { playClickSound(); setPendingAction({ actionType: 'DIRECT_SUCCESS', team: teamKey }); }} disabled={matchState.gameOver || !!matchState.timeout} className={`w-full ${getActionBtnClass('default')}`}>{t('direct_success')}</button>
+                                <button onClick={() => { playClickSound(); setPendingAction({ actionType: 'DIG_SUCCESS', team: teamKey }); }} disabled={matchState.gameOver || !!matchState.timeout} className={`w-full ${getActionBtnClass('default')} flex justify-center items-center gap-1 sm:gap-2`}>
+                                    <ShieldIcon className="w-4 h-4 sm:w-5 sm:h-5 text-green-400" />
+                                    <span className="hidden sm:inline">{t('btn_nice_defense')}</span>
+                                    <span className="sm:hidden text-xs">디그</span>
+                                </button>
+                            </div>
+                        </>
+                    )}
                     
                      <button onClick={() => handleTimeout(teamKey)} disabled={team.timeouts === 0 || matchState.gameOver || !!matchState.timeout} className="w-full flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 font-semibold py-2 sm:py-3 px-3 sm:px-4 rounded-lg text-sm sm:text-base lg:text-lg disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"><StopwatchIcon className="w-5 h-5 sm:w-6 sm:h-6" /> {t('timeout')} ({team.timeouts})</button>
                      {entryMode !== 'club' && settings.includeBonusPointsInWinner && (
@@ -1167,6 +1177,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                             <span className="text-white font-bold text-sm">🔄 L</span>
                         </button>
                     )}
+                    {entryMode !== 'club' && (
                     <button 
                         onClick={() => setShowRulesModal(true)} 
                         className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center flex-shrink-0" 
@@ -1174,6 +1185,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                     >
                         <QuestionMarkCircleIcon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                     </button>
+                    )}
                     </div>
                 </div>
             </div>
@@ -1261,33 +1273,58 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                         <p className="text-slate-300 text-lg mb-4">
                             {matchState.teamA.name} {matchState.completedSetScore?.a ?? 0} : {matchState.completedSetScore?.b ?? 0} {matchState.teamB.name}
                         </p>
-                        <button
-                            onClick={() => {
-                                const init = initialLineupRef.current;
-                                if (entryMode === 'club' && init) {
-                                    dispatch({
-                                        type: 'START_NEXT_SET',
-                                        initialOnCourtA: init.onCourtA,
-                                        initialBenchA: init.benchA,
-                                        initialOnCourtB: init.onCourtB,
-                                        initialBenchB: init.benchB,
-                                    });
-                                } else {
-                                    dispatch({ type: 'START_NEXT_SET' });
-                                }
-                                setIsSwapped(prev => !prev);
-                            }}
-                            className="w-full py-4 px-6 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-lg transition-colors"
-                        >
-                            다음 세트 진행
-                        </button>
+                        {entryMode === 'club' && matchState.matchType === 'practice' ? (
+                            <div className="flex flex-col gap-3">
+                                <button
+                                    type="button"
+                                    onClick={handleSaveFinalResult}
+                                    className="w-full py-4 px-6 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-lg transition-colors"
+                                >
+                                    결과 저장
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        dispatch({ type: 'START_NEXT_SET' });
+                                        setIsSwapped(prev => !prev);
+                                    }}
+                                    className="w-full py-4 px-6 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-lg transition-colors"
+                                >
+                                    다음 세트 시작 (코트 체인지)
+                                </button>
+                                <p className="text-slate-500 text-xs">출전 명단·서브 순서는 유지됩니다. 세트 수 제한 없음.</p>
+                            </div>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const init = initialLineupRef.current;
+                                    const restoreInitialLineup = entryMode === 'club' && init && matchState.matchType !== 'practice';
+                                    if (restoreInitialLineup) {
+                                        dispatch({
+                                            type: 'START_NEXT_SET',
+                                            initialOnCourtA: init.onCourtA,
+                                            initialBenchA: init.benchA,
+                                            initialOnCourtB: init.onCourtB,
+                                            initialBenchB: init.benchB,
+                                        });
+                                    } else {
+                                        dispatch({ type: 'START_NEXT_SET' });
+                                    }
+                                    setIsSwapped(prev => !prev);
+                                }}
+                                className="w-full py-4 px-6 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-lg transition-colors"
+                            >
+                                다음 세트 진행
+                            </button>
+                        )}
                     </div>
                 </div>
             )}
 
             {/* Modals */}
             {entryMode === 'club' && <TacticalBoardModal isOpen={showTacticalBoard} onClose={() => setShowTacticalBoard(false)} appMode="CLUB" initialMatchState={matchState} />}
-            {showRulesModal && <RulesModal onClose={() => setShowRulesModal(false)} />}
+            {entryMode !== 'club' && showRulesModal && <RulesModal onClose={() => setShowRulesModal(false)} />}
             {matchState.timeout && <TimeoutModal timeLeft={matchState.timeout.timeLeft} onClose={handleCloseTimeout} />}
             {entryMode === 'club' && (
                 <HeatmapRecordModal
@@ -1305,7 +1342,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                 teamColor={pendingAction ? (matchState[pendingAction.team === 'A' ? 'teamA' : 'teamB'].color || '#00A3FF') : '#00A3FF'}
                 title={pendingAction ? getActionTitle(pendingAction.actionType) : ''}
                 variant="grid"
-                disallowLiberoForAttack={liberoEnabled && !!pendingAction && (pendingAction.actionType === 'SPIKE_SUCCESS' || pendingAction.actionType === 'SERVICE_ACE')}
+                disallowLiberoForAttack={liberoEnabled && !!pendingAction && (pendingAction.actionType === 'SPIKE_SUCCESS' || pendingAction.actionType === 'SERVICE_ACE' || pendingAction.actionType === 'DIRECT_SUCCESS')}
             />
             {/* Assist Selection Modal */}
             <PlayerSelectionModal
@@ -1339,8 +1376,17 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                 teamB={matchState.teamB}
                 dispatch={dispatch}
                 showPlayerMemo={entryMode === 'club'}
-                isClubMode={liberoEnabled}
+                isClubMode={entryMode === 'club'}
+                onOpenPlayerAnalysisMemo={entryMode === 'club' ? openPlayerAnalysisMemo : undefined}
             />
+            {entryMode === 'club' && (
+                <AnalysisMemoModal
+                    isOpen={analysisMemoOpen}
+                    onClose={() => { setAnalysisMemoOpen(false); setAnalysisMemoFocus(null); }}
+                    focusTarget={analysisMemoFocus}
+                    onFocusComplete={() => setAnalysisMemoFocus(null)}
+                />
+            )}
 
             {/* 리베로 퀵 교체 모달 (클럽 6인제 전용) */}
             {liberoEnabled && isLiberoQuickSwapOpen && matchState && (
@@ -1393,7 +1439,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                     >
                         <div className="flex justify-between items-center px-5 py-4 border-b border-slate-700 bg-slate-800/50">
                             <h3 id="serve-order-modal-title" className="text-xl font-bold text-white">
-                                📋 {(serveOrderModalTeam === 'A' ? matchState.teamA : matchState.teamB).name} 서브 로테이션
+                                📋 {(serveOrderModalTeam === 'A' ? matchState.teamA : matchState.teamB).name} 서브 순서
                             </h3>
                             <button
                                 type="button"
@@ -1415,7 +1461,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                                 : 'bg-gradient-to-r from-red-950 to-red-900 border-2 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)]';
                             const currentBadgeStyle = isTeamA ? 'bg-blue-500/20 text-blue-300' : 'bg-red-500/20 text-red-300';
                             const len = ids.length;
-                            const badgeIdx = hasServe ? currentIdx : (currentIdx + 1) % len;
+                            const badgeIdx = currentIdx;
                             if (len === 0) {
                                 return (
                                     <div className="p-6 text-center">
@@ -1428,7 +1474,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                                     {ids.map((pid, idx) => {
                                         const player = t.players[pid];
                                         const name = player?.originalName ?? '???';
-                                        const number = player?.studentNumber ?? '';
+                                        const jerseyLabel = formatJerseyLabel(player?.studentNumber);
                                         const isCurrent = idx === badgeIdx;
                                         const showLibero = liberoEnabled && player?.isLibero;
                                         return (
@@ -1454,8 +1500,8 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                                                     </span>
                                                     <div className="flex flex-col min-w-0">
                                                         <span className={`truncate ${isCurrent ? 'font-extrabold' : ''}`}>{name}{showLibero ? ' [L]' : ''}</span>
-                                                        {number && (
-                                                            <span className={`text-xs ${isCurrent ? 'text-white/80' : 'text-gray-500'}`}>{number}번</span>
+                                                        {jerseyLabel && (
+                                                            <span className={`text-xs ${isCurrent ? 'text-white/80' : 'text-gray-500'}`}>{jerseyLabel}</span>
                                                         )}
                                                     </div>
                                                 </div>
@@ -1471,6 +1517,41 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                                 </div>
                             );
                         })()}
+                    </div>
+                </div>
+            )}
+
+            {entryMode === 'club' && defenseFaultPending && matchState && (
+                <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" onClick={() => { setDefenseFaultPending(null); setDefenseFaultNote(''); }}>
+                    <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl border border-slate-600 w-full max-w-md p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <h3 className="text-lg font-bold text-orange-400 mb-1">{t('defense_fault')}</h3>
+                        <p className="text-sm text-slate-400 mb-3">
+                            {matchState[defenseFaultPending.team === 'A' ? 'teamA' : 'teamB'].players[defenseFaultPending.playerId]?.originalName ?? ''}
+                        </p>
+                        <div className="flex flex-wrap gap-2 mb-3">
+                            {CLUB_DEFENSE_FAULT_QUICK_CHIPS.map((chip) => (
+                                <button
+                                    key={chip}
+                                    type="button"
+                                    onClick={() => setDefenseFaultNote(chip)}
+                                    className="px-3 py-1.5 rounded-full text-xs font-medium bg-slate-700 hover:bg-slate-600 border border-slate-500 text-slate-200 transition-colors"
+                                >
+                                    {chip}
+                                </button>
+                            ))}
+                        </div>
+                        <input
+                            type="text"
+                            value={defenseFaultNote}
+                            onChange={(e) => setDefenseFaultNote(e.target.value)}
+                            placeholder={t('defense_fault_note_placeholder')}
+                            className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2.5 text-slate-200 text-sm placeholder:text-slate-500 mb-4"
+                            onKeyDown={(e) => e.key === 'Enter' && handleDefenseFaultSave()}
+                        />
+                        <div className="flex gap-2">
+                            <button type="button" onClick={() => { setDefenseFaultPending(null); setDefenseFaultNote(''); }} className="flex-1 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium">취소</button>
+                            <button type="button" onClick={handleDefenseFaultSave} className="flex-1 py-2.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-semibold">{t('defense_fault_save')}</button>
+                        </div>
                     </div>
                 </div>
             )}

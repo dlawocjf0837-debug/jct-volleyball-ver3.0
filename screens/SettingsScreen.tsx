@@ -93,6 +93,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ appMode = 'CLASS' }) =>
                 </p>
             </div>
             
+            {isClassMode && (
             <div className="space-y-4">
                 <h3 className="text-xl font-bold text-slate-300">🏐 연습 경기 / 일반 수업 목표 점수</h3>
                 <p className="text-slate-400 text-sm">
@@ -125,6 +126,8 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ appMode = 'CLASS' }) =>
                     />
                 </div>
             </div>
+
+            )}
 
             {!isClassMode && (
             <div className="space-y-4 pt-6 border-t border-slate-700">

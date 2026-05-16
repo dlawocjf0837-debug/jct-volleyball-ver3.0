@@ -389,7 +389,7 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
         teamBPlayers: Record<string, Player>;
         teamADetails?: Partial<TeamMatchState>;
         teamBDetails?: Partial<TeamMatchState>;
-    }, tournamentInfo?: { tournamentId: string, tournamentMatchId: string }, onCourtIds?: { teamA: Set<string>, teamB: Set<string> }, leagueInfo?: { leagueId: string, leagueMatchId: string }, options?: { maxSets?: number; tournamentTargetScore?: number; onCourtOrder?: { teamA: string[]; teamB: string[] }; isAssessment?: boolean }): MatchState => {
+    }, tournamentInfo?: { tournamentId: string, tournamentMatchId: string }, onCourtIds?: { teamA: Set<string>, teamB: Set<string> }, leagueInfo?: { leagueId: string, leagueMatchId: string }, options?: { maxSets?: number; tournamentTargetScore?: number; onCourtOrder?: { teamA: string[]; teamB: string[] }; isAssessment?: boolean; matchType?: 'practice' | 'tournament' }): MatchState => {
         const initPlayerStats = (players: Record<string, Player>): Record<string, PlayerStats> =>
             Object.keys(players).reduce((acc, playerId) => {
                 acc[playerId] = { 
@@ -398,6 +398,7 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                     serviceFaults: 0, 
                     blockingPoints: 0, 
                     spikeSuccesses: 0,
+                    directSuccesses: 0,
                     serveIn: 0,
                     digs: 0,
                     assists: 0
@@ -417,8 +418,8 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
         const orderedB = onCourtOrder?.teamB?.filter(id => onCourtBSet.has(id)) ?? allTeamBPlayerIds.filter(id => onCourtBSet.has(id));
 
         return {
-            teamA: { name: teams.teamA, key: teams.teamAKey, ...teams.teamADetails, score: 0, setsWon: 0, timeouts: 2, fairPlay: 0, threeHitPlays: 0, serviceAces: 0, serviceFaults: 0, blockingPoints: 0, spikeSuccesses: 0, players: teams.teamAPlayers, playerStats: initPlayerStats(teams.teamAPlayers), onCourtPlayerIds: orderedA, benchPlayerIds: allTeamAPlayerIds.filter(id => !onCourtASet.has(id)) },
-            teamB: { name: teams.teamB, key: teams.teamBKey, ...teams.teamBDetails, score: 0, setsWon: 0, timeouts: 2, fairPlay: 0, threeHitPlays: 0, serviceAces: 0, serviceFaults: 0, blockingPoints: 0, spikeSuccesses: 0, players: teams.teamBPlayers, playerStats: initPlayerStats(teams.teamBPlayers), onCourtPlayerIds: orderedB, benchPlayerIds: allTeamBPlayerIds.filter(id => !onCourtBSet.has(id)) },
+            teamA: { name: teams.teamA, key: teams.teamAKey, ...teams.teamADetails, score: 0, setsWon: 0, timeouts: 2, fairPlay: 0, threeHitPlays: 0, serviceAces: 0, serviceFaults: 0, blockingPoints: 0, spikeSuccesses: 0, directSuccesses: 0, players: teams.teamAPlayers, playerStats: initPlayerStats(teams.teamAPlayers), onCourtPlayerIds: orderedA, benchPlayerIds: allTeamAPlayerIds.filter(id => !onCourtASet.has(id)) },
+            teamB: { name: teams.teamB, key: teams.teamBKey, ...teams.teamBDetails, score: 0, setsWon: 0, timeouts: 2, fairPlay: 0, threeHitPlays: 0, serviceAces: 0, serviceFaults: 0, blockingPoints: 0, spikeSuccesses: 0, directSuccesses: 0, players: teams.teamBPlayers, playerStats: initPlayerStats(teams.teamBPlayers), onCourtPlayerIds: orderedB, benchPlayerIds: allTeamBPlayerIds.filter(id => !onCourtBSet.has(id)) },
             servingTeam: null,
             currentSet: 1,
             maxSets,
@@ -434,6 +435,7 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
             timeout: null,
             undoStack: [],
             ...(options?.isAssessment === true && { isAssessment: true }),
+            ...(options?.matchType && { matchType: options.matchType }),
             ...tournamentInfo,
             ...leagueInfo
         };
@@ -442,11 +444,12 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
     const updatePlayerStat = (
         playerStats: Record<string, PlayerStats>,
         playerId: string,
-        stat: keyof PlayerStats,
+        stat: Exclude<keyof PlayerStats, 'defenseFaultRecords'>,
         amount: number
     ): Record<string, PlayerStats> => {
-        const newStats = { ...(playerStats[playerId] || { points: 0, serviceAces: 0, serviceFaults: 0, blockingPoints: 0, spikeSuccesses: 0, serveIn: 0, digs: 0, assists: 0 }) };
-        newStats[stat] = (newStats[stat] || 0) + amount;
+        const newStats = { ...(playerStats[playerId] || { points: 0, serviceAces: 0, serviceFaults: 0, blockingPoints: 0, spikeSuccesses: 0, directSuccesses: 0, serveIn: 0, digs: 0, assists: 0 }) };
+        const prev = newStats[stat];
+        (newStats[stat] as number) = (typeof prev === 'number' ? prev : 0) + amount;
         return { ...playerStats, [playerId]: newStats };
     };
 
@@ -498,19 +501,19 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                             const teamName = newState[target].name;
                             const pointChange = action.amount > 0 ? `${action.amount}점 득점` : `${Math.abs(action.amount)}점 조정`;
                             newEventDescription = `${teamName}, ${pointChange}`;
-                            newEventType = 'SCORE';
+                            newEventType = appMode === 'CLUB' && action.amount > 0 ? 'MANUAL_SCORE' : 'SCORE';
+                            if (appMode === 'CLUB' && action.amount > 0) {
+                                newEvent.team = action.team;
+                            }
                             newState[target].score = newScore;
                             if (action.amount > 0) {
                                 newState.servingTeam = action.team;
-                                // CLUB 6인제만: 연속 득점=인덱스 유지, 사이드아웃=득점팀 currentServerIndex +1
-                                if (appMode === 'CLUB' && settings.volleyballRuleSystem === 6) {
+                                if (appMode === 'CLUB') {
                                     const servingTeamKey = action.team === 'A' ? 'teamA' : 'teamB';
                                     const arr = newState[servingTeamKey].onCourtPlayerIds;
-                                    const len = arr?.length || 6;
+                                    const len = arr?.length || 1;
                                     const wasAlreadyServing = state.servingTeam === action.team;
-                                    if (wasAlreadyServing) {
-                                        // 연속 득점: 로테이션 없음
-                                    } else {
+                                    if (!wasAlreadyServing) {
                                         const prev = newState[servingTeamKey].currentServerIndex ?? 0;
                                         newState[servingTeamKey] = { ...newState[servingTeamKey], currentServerIndex: (prev + 1) % len };
                                     }
@@ -531,7 +534,6 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                         newState[target].playerStats = updatePlayerStat(newState[target].playerStats, playerId, 'serviceAces', 1);
                         newState[target].playerStats = updatePlayerStat(newState[target].playerStats, playerId, 'points', 1);
                         newState.servingTeam = team;
-                        // 에이스 시 같은 서버가 다시 서브하므로 currentServerIndex 유지 (로테이션 없음)
                         scoreChanged = true;
                         break;
                     }
@@ -550,9 +552,9 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                         
                         newState[scoringTarget].score += 1;
                         newState.servingTeam = scoringTeamKey;
-                        if (appMode === 'CLUB' && settings.volleyballRuleSystem === 6) {
+                        if (appMode === 'CLUB') {
                             const prev = newState[scoringTarget].currentServerIndex ?? 0;
-                            const len = newState[scoringTarget].onCourtPlayerIds?.length || 6;
+                            const len = newState[scoringTarget].onCourtPlayerIds?.length || 1;
                             newState[scoringTarget] = { ...newState[scoringTarget], currentServerIndex: (prev + 1) % len };
                         }
                         scoreChanged = true;
@@ -569,14 +571,12 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                         newState[target].playerStats = updatePlayerStat(newState[target].playerStats, playerId, 'blockingPoints', 1);
                         newState[target].playerStats = updatePlayerStat(newState[target].playerStats, playerId, 'points', 1);
                         newState.servingTeam = team;
-                        if (appMode === 'CLUB' && settings.volleyballRuleSystem === 6) {
+                        if (appMode === 'CLUB') {
                             const servingTeamKey = team === 'A' ? 'teamA' : 'teamB';
                             const arr = newState[servingTeamKey].onCourtPlayerIds;
-                            const len = arr?.length || 6;
+                            const len = arr?.length || 1;
                             const wasAlreadyServing = state.servingTeam === team;
-                            if (wasAlreadyServing) {
-                                // 연속 득점: 로테이션 없음
-                            } else {
+                            if (!wasAlreadyServing) {
                                 const prev = newState[servingTeamKey].currentServerIndex ?? 0;
                                 newState[servingTeamKey] = { ...newState[servingTeamKey], currentServerIndex: (prev + 1) % len };
                             }
@@ -595,19 +595,76 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                         newState[target].playerStats = updatePlayerStat(newState[target].playerStats, playerId, 'spikeSuccesses', 1);
                         newState[target].playerStats = updatePlayerStat(newState[target].playerStats, playerId, 'points', 1);
                         newState.servingTeam = team;
-                        if (appMode === 'CLUB' && settings.volleyballRuleSystem === 6) {
+                        if (appMode === 'CLUB') {
                             const servingTeamKey = team === 'A' ? 'teamA' : 'teamB';
                             const arr = newState[servingTeamKey].onCourtPlayerIds;
-                            const len = arr?.length || 6;
+                            const len = arr?.length || 1;
                             const wasAlreadyServing = state.servingTeam === team;
-                            if (wasAlreadyServing) {
-                                // 연속 득점: 로테이션 없음
-                            } else {
+                            if (!wasAlreadyServing) {
                                 const prev = newState[servingTeamKey].currentServerIndex ?? 0;
                                 newState[servingTeamKey] = { ...newState[servingTeamKey], currentServerIndex: (prev + 1) % len };
                             }
                         }
                         scoreChanged = true;
+                        break;
+                    }
+                    case 'DIRECT_SUCCESS': {
+                        const { team, playerId } = action;
+                        const target = team === 'A' ? 'teamA' : 'teamB';
+                        const playerName = newState[target].players[playerId]?.originalName || '선수';
+                        newEventDescription = `${playerName}(${newState[target].name}), 다이렉트 공격 득점!`;
+                        newEventType = 'DIRECT';
+                        newState[target].score += 1;
+                        newState[target].directSuccesses = (newState[target].directSuccesses ?? 0) + 1;
+                        newState[target].playerStats = updatePlayerStat(newState[target].playerStats, playerId, 'directSuccesses', 1);
+                        newState[target].playerStats = updatePlayerStat(newState[target].playerStats, playerId, 'points', 1);
+                        newState.servingTeam = team;
+                        if (appMode === 'CLUB') {
+                            const servingTeamKey = team === 'A' ? 'teamA' : 'teamB';
+                            const arr = newState[servingTeamKey].onCourtPlayerIds;
+                            const len = arr?.length || 1;
+                            const wasAlreadyServing = state.servingTeam === team;
+                            if (!wasAlreadyServing) {
+                                const prev = newState[servingTeamKey].currentServerIndex ?? 0;
+                                newState[servingTeamKey] = { ...newState[servingTeamKey], currentServerIndex: (prev + 1) % len };
+                            }
+                        }
+                        scoreChanged = true;
+                        break;
+                    }
+                    case 'DEFENSE_FAULT': {
+                        const { team, playerId, note } = action;
+                        const faultingTeamKey = team;
+                        const scoringTeamKey = faultingTeamKey === 'A' ? 'B' : 'A';
+                        const faultingTarget = faultingTeamKey === 'A' ? 'teamA' : 'teamB';
+                        const scoringTarget = scoringTeamKey === 'A' ? 'teamA' : 'teamB';
+                        const playerName = newState[faultingTarget].players[playerId]?.originalName || '선수';
+                        const noteSuffix = note?.trim() ? ` (${note.trim()})` : '';
+                        newEventDescription = `${playerName}(${newState[faultingTarget].name}), 수비 범실${noteSuffix}.`;
+                        newEventType = 'DEFENSE_FAULT';
+                        const prevStats = newState[faultingTarget].playerStats[playerId] || { points: 0, serviceAces: 0, serviceFaults: 0, blockingPoints: 0, spikeSuccesses: 0, serveIn: 0, digs: 0, assists: 0 };
+                        const records = [...(prevStats.defenseFaultRecords ?? [])];
+                        records.push({
+                            id: `df-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                            note: note?.trim() || undefined,
+                            createdAt: new Date().toISOString(),
+                        });
+                        newState[faultingTarget].playerStats = {
+                            ...newState[faultingTarget].playerStats,
+                            [playerId]: {
+                                ...prevStats,
+                                defenseFaults: (prevStats.defenseFaults ?? 0) + 1,
+                                defenseFaultRecords: records,
+                            },
+                        };
+                        if (appMode === 'CLUB') {
+                            newState[scoringTarget].score += 1;
+                            newState.servingTeam = scoringTeamKey;
+                            const prev = newState[scoringTarget].currentServerIndex ?? 0;
+                            const len = newState[scoringTarget].onCourtPlayerIds?.length || 1;
+                            newState[scoringTarget] = { ...newState[scoringTarget], currentServerIndex: (prev + 1) % len };
+                            scoreChanged = true;
+                        }
                         break;
                     }
                     case 'SERVE_IN': {
@@ -684,10 +741,11 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                         newEventDescription = `${newState[action.team === 'A' ? 'teamA' : 'teamB'].name}, 서브 시작.`;
                         newEventType = 'UNKNOWN'; // Just an info log
                         newState.servingTeam = action.team;
-                        // CLUB 6인제만: 서브 시작 팀의 1번 서버(인덱스 0)로 세팅
-                        if (appMode === 'CLUB' && settings.volleyballRuleSystem === 6) {
+                        if (appMode === 'CLUB') {
                             const t = action.team === 'A' ? 'teamA' : 'teamB';
-                            newState[t] = { ...newState[t], currentServerIndex: 0 };
+                            if (newState[t].currentServerIndex == null) {
+                                newState[t] = { ...newState[t], currentServerIndex: 0 };
+                            }
                         }
                         break;
                     }
@@ -716,6 +774,37 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                         newEvent.substitution = { team, playerIn, playerOut };
                         break;
                     }
+                    case 'SUBSTITUTE_PLAYERS': {
+                        const { team, substitutions } = action;
+                        if (!substitutions?.length) break;
+                        const target = team === 'A' ? 'teamA' : 'teamB';
+                        const teamState = newState[target];
+                        if (!teamState.players || !teamState.onCourtPlayerIds || !teamState.benchPlayerIds) break;
+
+                        let onCourt = [...teamState.onCourtPlayerIds];
+                        let bench = [...teamState.benchPlayerIds];
+                        const names: string[] = [];
+
+                        for (const { playerIn, playerOut } of substitutions) {
+                            const benchSet = new Set(bench);
+                            if (!benchSet.has(playerIn)) continue;
+                            const idx = onCourt.indexOf(playerOut);
+                            if (idx === -1) continue;
+                            onCourt = [...onCourt];
+                            onCourt[idx] = playerIn;
+                            bench = bench.filter(id => id !== playerIn).concat(playerOut);
+                            const outName = teamState.players[playerOut]?.originalName ?? '?';
+                            const inName = teamState.players[playerIn]?.originalName ?? '?';
+                            names.push(`${outName}→${inName}`);
+                        }
+
+                        if (names.length === 0) break;
+                        newState[target].onCourtPlayerIds = onCourt;
+                        newState[target].benchPlayerIds = bench;
+                        newEventDescription = `${teamState.name}: ${names.length}명 일괄 교체 (${names.join(', ')})`;
+                        newEventType = 'SUB';
+                        break;
+                    }
                     case 'UPDATE_PLAYER_MEMO': {
                         const { team, playerId, memo } = action;
                         const target = team === 'A' ? 'teamA' : 'teamB';
@@ -737,10 +826,10 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                         newState.completedSetScore = undefined;
                         newState.lastServingTeamAtSetEnd = undefined;
                         newState.servingTeam = firstServeNext;
-                        if (appMode === 'CLUB' && settings.volleyballRuleSystem === 6) {
+                        if (appMode === 'CLUB') {
                             const t = firstServeNext === 'A' ? 'teamA' : 'teamB';
                             const arr = newState[t].onCourtPlayerIds;
-                            const len = arr?.length || 6;
+                            const len = arr?.length || 1;
                             const prev = newState[t].currentServerIndex ?? 0;
                             newState[t] = { ...newState[t], currentServerIndex: (prev + 1) % len };
                         }
@@ -769,7 +858,10 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
     
                 const maxSets = newState.maxSets ?? 1;
                 const isDecidingSet = maxSets >= 2 && newState.currentSet === maxSets;
-                const winningScoreForSet = maxSets >= 2 ? (isDecidingSet ? 15 : (newState.tournamentTargetScore ?? 25)) : settings.winningScore;
+                const clubTarget = newState.tournamentTargetScore ?? settings.tournamentTargetScore ?? 21;
+                const winningScoreForSet = appMode === 'CLUB'
+                    ? (maxSets >= 2 && isDecidingSet ? 15 : clubTarget)
+                    : (maxSets >= 2 ? (isDecidingSet ? 15 : (newState.tournamentTargetScore ?? 25)) : settings.winningScore);
                 newState.isDeuce = newState.teamA.score >= winningScoreForSet - 1 && newState.teamA.score === newState.teamB.score;
                 
                 const { teamA, teamB } = newState;
@@ -783,7 +875,13 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                     newState.setScores = [...setScoresList, { teamA: teamA.score, teamB: teamB.score }];
                     const winnerSetsWon = newState[winner === 'A' ? 'teamA' : 'teamB'].setsWon;
                     newState.lastServingTeamAtSetEnd = newState.servingTeam ?? undefined;
-                    if (maxSets <= 1 || winnerSetsWon >= Math.ceil((maxSets || 3) / 2)) {
+                    const isPracticeUnlimited = appMode === 'CLUB' && newState.matchType === 'practice';
+                    if (isPracticeUnlimited) {
+                        newEventDescription = `${newState.currentSet}세트 종료 (${winnerName} 팀 ${teamA.score}:${teamB.score}). 다음 세트 또는 결과 저장을 선택하세요.`;
+                        newEventType = 'GAME_END';
+                        newState.setEnded = true;
+                        newState.completedSetScore = { a: teamA.score, b: teamB.score };
+                    } else if (maxSets <= 1 || winnerSetsWon >= Math.ceil((maxSets || 3) / 2)) {
                         newEventDescription = `경기 종료! ${winnerName} 팀 승리!`;
                         newEventType = 'GAME_END';
                         newState.winner = winner;
@@ -1812,6 +1910,13 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
         showToast('toast_new_set_success', 'success', { name: newSet.className });
     };
 
+    const deleteTeamSet = async (setId: string) => {
+        const target = teamSets.find((s) => s.id === setId);
+        if (!target) return;
+        const newTeamSets = teamSets.filter((s) => s.id !== setId);
+        await saveTeamSets(newTeamSets, `'${target.className}' 대회(조)가 삭제되었습니다.`);
+    };
+
     const addTeamToSet = async (setId: string, teamName: string, options?: { createDefaultPlayers?: boolean }) => {
         if (!teamName.trim()) {
             showToast('팀 이름을 입력해주세요.', 'error');
@@ -1834,7 +1939,7 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
 
         const defaultPlayerIds: string[] = [];
         if (options?.createDefaultPlayers) {
-            const count = (settings?.volleyballRuleSystem === 6) ? 6 : 9;
+            const count = appMode === 'CLUB' ? 15 : ((settings?.volleyballRuleSystem === 6) ? 6 : 9);
             const ZERO_STATS = { height: 0, shuttleRun: 0, flexibility: 0, fiftyMeterDash: 0, underhand: 0, serve: 0 };
             for (let i = 1; i <= count; i++) {
                 const id = `temp_${setId}_${finalTeamName}_${i}`.replace(/\s/g, '_');
@@ -1971,6 +2076,31 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
         const p = newTeamSets[setIndex].players[playerId];
         if (p) (p as Player).memo = memo;
         await saveTeamSets(newTeamSets);
+    };
+
+    const updatePlayerNameInTeamSet = async (setId: string, playerId: string, name: string) => {
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        const newTeamSets = structuredClone(teamSets);
+        const setIndex = newTeamSets.findIndex((s: TeamSet) => s.id === setId);
+        if (setIndex === -1 || !newTeamSets[setIndex].players[playerId]) return;
+        const p = newTeamSets[setIndex].players[playerId];
+        if (p) {
+            p.originalName = trimmed;
+            p.anonymousName = trimmed;
+        }
+        await saveTeamSets(newTeamSets, '선수 이름이 저장되었습니다.');
+    };
+
+    const updatePlayerNumberInTeamSet = async (setId: string, playerId: string, studentNumber: string) => {
+        const trimmed = studentNumber.trim();
+        if (!trimmed) return;
+        const newTeamSets = structuredClone(teamSets);
+        const setIndex = newTeamSets.findIndex((s: TeamSet) => s.id === setId);
+        if (setIndex === -1 || !newTeamSets[setIndex].players[playerId]) return;
+        const p = newTeamSets[setIndex].players[playerId];
+        if (p) p.studentNumber = trimmed;
+        await saveTeamSets(newTeamSets, '등번호가 저장되었습니다.');
     };
 
     const loadAllData = useCallback(async () => {
@@ -2448,7 +2578,13 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                 teamBPlayers,
                 teamADetails,
                 teamBDetails,
-            }, tournamentInfo, onCourtIds, leagueInfo, { maxSets: options?.maxSets, tournamentTargetScore: options?.tournamentTargetScore, onCourtOrder: options?.onCourtOrder, isAssessment: options?.isAssessment });
+            }, tournamentInfo, onCourtIds, leagueInfo, {
+                maxSets: options?.maxSets,
+                tournamentTargetScore: options?.tournamentTargetScore,
+                onCourtOrder: options?.onCourtOrder,
+                isAssessment: options?.isAssessment,
+                matchType: options?.isPracticeMatch ? 'practice' : (options?.isLeagueMatch ? 'tournament' : undefined),
+            });
         }
 
         if (stateToLoad) {
@@ -2647,10 +2783,13 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
         deletePlayerFromSet,
         bulkAddPlayersToTeam,
         createTeamSet,
+        deleteTeamSet,
         addTeamToSet,
         copyTeamFromOtherSet,
         setTeamCaptain,
         updatePlayerMemoInTeamSet,
+        updatePlayerNameInTeamSet,
+        updatePlayerNumberInTeamSet,
         reloadData: loadAllData,
         exportData,
         saveImportedData,

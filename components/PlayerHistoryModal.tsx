@@ -8,6 +8,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import { BADGE_DEFINITIONS } from '../data/badges';
 import { BadgeDetailModal } from './BadgeDetailModal';
 import { HeatmapViewer, HitRecord } from './HeatmapViewer';
+import { formatJerseyNumber } from '../utils/formatJerseyNumber';
 
 type MatchPerformance = {
     match: MatchState & { date: string; _matchType?: 'regular' | 'practice' | 'tournament' };
@@ -64,21 +65,34 @@ function formatMemoDate(d: Date): string {
     return `${y}.${m}.${day} ${h}:${min}`;
 }
 
-// Updated Order: Points -> Serve Ace Rate -> Serve Success Rate -> Serve Faults -> Spike -> Assist -> Block -> Dig
-const statOrder: (keyof PlayerStats | 'serveSuccessRate' | 'serveAceRate')[] = [
-    'points',            // 득점
-    'serveAceRate',      // 서브 득점률
-    'serveSuccessRate',  // 서브 성공률
-    'serviceFaults',     // 서브 범실
-    'spikeSuccesses',    // 스파이크 성공
-    'assists',           // 어시스트
-    'blockingPoints',    // 블로킹
-    'digs'               // 디그
+const classStatOrder: (keyof PlayerStats | 'serveSuccessRate' | 'serveAceRate')[] = [
+    'points',
+    'serveAceRate',
+    'serveSuccessRate',
+    'serviceFaults',
+    'spikeSuccesses',
+    'assists',
+    'blockingPoints',
+    'digs',
+];
+
+const clubStatOrder: (keyof PlayerStats | 'serveSuccessRate' | 'serveAceRate')[] = [
+    'points',
+    'serveAceRate',
+    'serveSuccessRate',
+    'serviceFaults',
+    'spikeSuccesses',
+    'directSuccesses',
+    'assists',
+    'blockingPoints',
+    'digs',
+    'defenseFaults',
 ];
 
 export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, cumulativeStats, performanceHistory, onClose, teamSets, appMode = 'CLASS', currentMatchInfo }) => {
     const { coachingLogs, saveCoachingLog, requestPassword, playerAchievements, updatePlayerMemoInTeamSet, showToast, matchHistory, practiceMatchHistory, leagueMatchHistory } = useData();
     const { t } = useTranslation();
+    const statOrder = appMode === 'CLUB' ? clubStatOrder : classStatOrder;
     useEffect(() => {
         document.body.style.overflow = 'hidden';
         return () => { document.body.style.overflow = ''; };
@@ -98,13 +112,16 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
     const [winRateFilter, setWinRateFilter] = useState('all');
     const [rosterToShow, setRosterToShow] = useState<{ teamName: string, players: Player[], captainId?: string } | null>(null);
     const [selectedBadgeDetail, setSelectedBadgeDetail] = useState<{ badge: Badge, player: Player, stats: Partial<PlayerCumulativeStats> } | null>(null);
+    const [showDefenseFaultDetails, setShowDefenseFaultDetails] = useState(false);
 
     const statDisplayNames: Record<string, string> = {
         points: t('stat_display_points'),
         serviceAces: t('stat_display_serve_ace'),
         spikeSuccesses: t('stat_display_spike_success'),
+        directSuccesses: t('direct_success'),
         blockingPoints: t('stat_display_blocking'),
         serviceFaults: t('stat_display_serve_fault'),
+        defenseFaults: t('defense_fault'),
         digs: t('stat_display_digs'),
         assists: t('stat_display_assists'),
         serveIn: t('btn_serve_in'),
@@ -353,7 +370,7 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
 
     const filteredCumulativeStats = useMemo(() => {
         const hist = filteredPerformanceHistory ?? [];
-        const stats: any = { matchesPlayed: 0, points: 0, serviceAces: 0, serveIn: 0, serviceFaults: 0, spikeSuccesses: 0, blockingPoints: 0, digs: 0, assists: 0 };
+        const stats: any = { matchesPlayed: 0, points: 0, serviceAces: 0, serveIn: 0, serviceFaults: 0, spikeSuccesses: 0, directSuccesses: 0, blockingPoints: 0, digs: 0, assists: 0, defenseFaults: 0 };
         hist.forEach((p: any) => {
             const s = p?.stats ?? {};
             stats.matchesPlayed += 1;
@@ -363,6 +380,23 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
     }, [filteredPerformanceHistory]);
 
     const displayStats = filteredCumulativeStats;
+
+    const defenseFaultDetails = useMemo(() => {
+        if (appMode !== 'CLUB') return [];
+        const items: { date: string; opponent: string; note: string; sortKey: number }[] = [];
+        (filteredPerformanceHistory ?? []).forEach(({ match, opponent, stats }) => {
+            const records = stats?.defenseFaultRecords ?? [];
+            records.forEach((r) => {
+                items.push({
+                    date: match?.date ? new Date(match.date).toLocaleDateString('ko-KR') : '-',
+                    opponent: opponent ?? '-',
+                    note: r.note?.trim() || '사유 없음',
+                    sortKey: new Date(r.createdAt || (match?.date as string) || 0).getTime(),
+                });
+            });
+        });
+        return items.sort((a, b) => b.sortKey - a.sortKey);
+    }, [filteredPerformanceHistory, appMode]);
 
     const winRateStats = useMemo(() => {
         const base = filteredPerformanceHistory ?? [];
@@ -499,6 +533,31 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
                     onClose={() => setSelectedBadgeDetail(null)}
                 />
             )}
+            {showDefenseFaultDetails && appMode === 'CLUB' && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 p-4" onClick={() => setShowDefenseFaultDetails(false)}>
+                    <div className="bg-slate-900 rounded-xl border border-orange-500/40 w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col shadow-2xl font-sans" onClick={(e) => e.stopPropagation()}>
+                        <div className="p-4 border-b border-slate-700 flex justify-between items-center">
+                            <h3 className="text-lg font-bold text-orange-400">수비 범실 상세 ({defenseFaultDetails.length}건)</h3>
+                            <button type="button" onClick={() => setShowDefenseFaultDetails(false)} className="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                            {defenseFaultDetails.length === 0 ? (
+                                <p className="text-slate-500 text-sm text-center py-6">기록된 수비 범실 상세 내역이 없습니다.</p>
+                            ) : (
+                                defenseFaultDetails.map((item, idx) => (
+                                    <div key={`${item.sortKey}-${idx}`} className="bg-slate-800 rounded-lg p-3 border border-slate-700 text-sm">
+                                        <div className="flex flex-wrap gap-x-3 gap-y-1 text-slate-400 text-xs mb-2">
+                                            <span>📅 {item.date}</span>
+                                            <span>vs {item.opponent}</span>
+                                        </div>
+                                        <p className="text-slate-200 whitespace-pre-wrap">{item.note}</p>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
             <div
                 className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4"
                 onClick={onClose}
@@ -510,7 +569,11 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
                     <div className="flex-shrink-0 flex justify-between items-start mb-4">
                         <div>
                             <h2 className="text-3xl font-bold text-[#00A3FF]">{t('player_history_title', { name: player?.originalName ?? '' })}</h2>
-                            <p className="text-slate-400">{t('player_history_subtitle', { class: player?.class ?? '', number: player?.studentNumber ?? '' })}</p>
+                            <p className="text-slate-400">
+                                {appMode === 'CLUB'
+                                    ? (formatJerseyNumber(player?.studentNumber) ? `${formatJerseyNumber(player?.studentNumber)}번` : '')
+                                    : t('player_history_subtitle', { class: player?.class ?? '', number: formatJerseyNumber(player?.studentNumber) || (player?.studentNumber ?? '') })}
+                            </p>
                         </div>
                         <button onClick={onClose} className="text-3xl font-bold text-slate-500 hover:text-white">&times;</button>
                     </div>
@@ -577,12 +640,39 @@ export const PlayerHistoryModal: React.FC<PlayerHistoryModalProps> = ({ player, 
                                         { label: t('player_history_stat_total_blocks'), value: displayStats.blockingPoints || 0, unit: t('player_history_unit_sessions') },
                                         { label: t('stat_display_digs'), value: displayStats.digs || 0, unit: t('player_history_unit_sessions') },
                                         { label: t('stat_display_assists'), value: displayStats.assists || 0, unit: t('player_history_unit_sessions') },
-                                    ].map(stat => (
-                                        <div key={stat.label} className="bg-slate-800 p-3 rounded-lg text-center">
-                                            <p className="text-slate-400 text-sm">{stat.label}</p>
-                                            <p className="text-3xl font-bold text-sky-400 mt-1">{stat.value}<span className="text-xl">{stat.unit}</span></p>
-                                        </div>
-                                    ))}
+                                        ...(appMode === 'CLUB' ? [
+                                            { label: t('direct_success'), value: displayStats.directSuccesses || 0, unit: t('player_history_unit_sessions'), clickable: false },
+                                            { label: t('defense_fault'), value: displayStats.defenseFaults || 0, unit: t('player_history_unit_sessions'), clickable: true },
+                                        ] : []),
+                                    ].map(stat => {
+                                        const inner = (
+                                            <>
+                                                <p className="text-slate-400 text-sm">{stat.label}</p>
+                                                <p className="text-3xl font-bold text-sky-400 mt-1">{stat.value}<span className="text-xl">{stat.unit}</span></p>
+                                                {'clickable' in stat && stat.clickable && (displayStats.defenseFaults || 0) > 0 && (
+                                                    <p className="text-[10px] text-slate-500 mt-1">탭하여 상세 보기</p>
+                                                )}
+                                            </>
+                                        );
+                                        if ('clickable' in stat && stat.clickable) {
+                                            return (
+                                                <button
+                                                    key={stat.label}
+                                                    type="button"
+                                                    onClick={() => setShowDefenseFaultDetails(true)}
+                                                    disabled={(displayStats.defenseFaults || 0) === 0}
+                                                    className="bg-slate-800 p-3 rounded-lg text-center w-full border border-transparent hover:border-orange-500/50 hover:bg-slate-700/80 transition-colors disabled:opacity-50 disabled:cursor-default"
+                                                >
+                                                    {inner}
+                                                </button>
+                                            );
+                                        }
+                                        return (
+                                            <div key={stat.label} className="bg-slate-800 p-3 rounded-lg text-center">
+                                                {inner}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                                 
                                 <div className="bg-slate-800/50 p-4 rounded-lg">

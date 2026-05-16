@@ -1,13 +1,63 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
 import { Player, SavedTeamInfo, SavedOpponentTeam, Stats, MatchRoles } from '../types';
 import TeamEmblem from '../components/TeamEmblem';
-import { PlayerMemoModal } from '../components/PlayerMemoModal';
+import { AnalysisMemoModal, AnalysisMemoFocusTarget } from '../components/AnalysisMemoModal';
 import { RolePlayerPickerModal } from '../components/RolePlayerPickerModal';
+import ConfirmationModal from '../components/common/ConfirmationModal';
 import { useTranslation } from '../hooks/useTranslation';
 
 const defaultStats: Stats = { height: 0, shuttleRun: 0, flexibility: 0, fiftyMeterDash: 0, underhand: 0, serve: 0 };
+
+const CLUB_RECENT_LINEUP_KEY_V1 = 'jct_club_recent_lineup_v1';
+const CLUB_RECENT_LINEUP_HISTORY_KEY = 'jct_club_recent_lineup_history_v2';
+
+type StoredClubLineup = {
+    teamAKey: string;
+    teamBKey: string;
+    teamAOrder: string[];
+    teamBOrder: string[];
+    liberoByPlayerId?: Record<string, boolean>;
+};
+
+type StoredClubLineupHistoryEntry = StoredClubLineup & { savedAt: number };
+
+function readLineupHistory(): StoredClubLineupHistoryEntry[] {
+    try {
+        const raw = localStorage.getItem(CLUB_RECENT_LINEUP_HISTORY_KEY);
+        if (raw) return JSON.parse(raw) as StoredClubLineupHistoryEntry[];
+        const legacy = localStorage.getItem(CLUB_RECENT_LINEUP_KEY_V1);
+        if (legacy) {
+            const one = JSON.parse(legacy) as StoredClubLineup;
+            const migrated: StoredClubLineupHistoryEntry[] = [{ ...one, savedAt: Date.now() }];
+            localStorage.setItem(CLUB_RECENT_LINEUP_HISTORY_KEY, JSON.stringify(migrated));
+            return migrated;
+        }
+    } catch { /* ignore */ }
+    return [];
+}
+
+function saveLineupHistoryEntry(entry: StoredClubLineupHistoryEntry) {
+    const all = readLineupHistory();
+    const sameMatch = all.filter((e) => e.teamAKey === entry.teamAKey && e.teamBKey === entry.teamBKey);
+    const others = all.filter((e) => e.teamAKey !== entry.teamAKey || e.teamBKey !== entry.teamBKey);
+    const nextForMatch = [entry, ...sameMatch].slice(0, 3);
+    localStorage.setItem(CLUB_RECENT_LINEUP_HISTORY_KEY, JSON.stringify([...nextForMatch, ...others]));
+}
+
+function getLineupHistoryForMatch(teamAKey: string, teamBKey: string): StoredClubLineupHistoryEntry[] {
+    return readLineupHistory()
+        .filter((e) => e.teamAKey === teamAKey && e.teamBKey === teamBKey)
+        .sort((a, b) => b.savedAt - a.savedAt)
+        .slice(0, 3);
+}
+
+function lineupStorageTeamBKey(teamSelection: AttendanceScreenProps['teamSelection']): string {
+    if (teamSelection.teamBFromOpponent) return `opp_${teamSelection.teamBFromOpponent.id}`;
+    return teamSelection.teamBKey ?? '';
+}
 
 function opponentTeamToSavedInfoAndPlayers(opp: SavedOpponentTeam): { teamBInfo: SavedTeamInfo; teamBPlayers: Record<string, Player> } {
     const playerIds = opp.players.map((_, i) => `opp_${opp.id}_${i}`);
@@ -35,6 +85,146 @@ function opponentTeamToSavedInfoAndPlayers(opp: SavedOpponentTeam): { teamBInfo:
     return { teamBInfo, teamBPlayers };
 }
 
+type ClubLineupPickerProps = {
+    orderedIds: string[];
+    team: 'teamA' | 'teamB';
+    allPlayers: Player[];
+    playerById: Record<string, Player>;
+    teamColor: string;
+    maxLineupCount: number;
+    onMaxReached?: () => void;
+    showLiberoCheckbox: boolean;
+    liberoChecked: Record<string, boolean>;
+    onLiberoToggle: (playerId: string) => void;
+    onOrderChange: (ids: string[]) => void;
+    onMemoClick: (playerId: string) => void;
+    showMemoButton: boolean;
+    onDragStart: (team: 'teamA' | 'teamB', index: number) => (e: React.DragEvent) => void;
+    onDragOver: (e: React.DragEvent) => void;
+    onDragEnter: (e: React.DragEvent) => void;
+    onDragLeave: (e: React.DragEvent) => void;
+    onDragEnd: (e: React.DragEvent) => void;
+    onDrop: (team: 'teamA' | 'teamB', index: number) => (e: React.DragEvent) => void;
+};
+
+const ClubLineupPicker: React.FC<ClubLineupPickerProps> = ({
+    orderedIds,
+    team,
+    allPlayers,
+    playerById,
+    teamColor,
+    maxLineupCount,
+    onMaxReached,
+    showLiberoCheckbox,
+    liberoChecked,
+    onLiberoToggle,
+    onOrderChange,
+    onMemoClick,
+    showMemoButton,
+    onDragStart,
+    onDragOver,
+    onDragEnter,
+    onDragLeave,
+    onDragEnd,
+    onDrop,
+}) => {
+    const benchPlayers = allPlayers.filter((p) => !orderedIds.includes(p.id));
+    const atMax = orderedIds.length >= maxLineupCount;
+
+    const addToLineup = (playerId: string) => {
+        if (orderedIds.includes(playerId)) return;
+        if (orderedIds.length >= maxLineupCount) {
+            onMaxReached?.();
+            return;
+        }
+        onOrderChange([...orderedIds, playerId]);
+    };
+
+    const removeFromLineup = (playerId: string) => {
+        onOrderChange(orderedIds.filter((id) => id !== playerId));
+    };
+
+    return (
+        <div className="space-y-3">
+            <div className="rounded-lg border border-sky-500/40 bg-slate-800/60 p-3">
+                <p className="text-xs font-semibold text-sky-300 mb-2">선발 명단 · 드래그로 서브 순서(1번~)</p>
+                {orderedIds.length === 0 ? (
+                    <p className="text-slate-500 text-sm text-center py-4">아래 명단에서 선수를 선택하세요.</p>
+                ) : (
+                    <div className="space-y-1.5">
+                        {orderedIds.map((id, idx) => {
+                            const player = playerById[id];
+                            if (!player) return null;
+                            const isLibero = showLiberoCheckbox && (liberoChecked[id] ?? player.isLibero);
+                            return (
+                                <div
+                                    key={id}
+                                    draggable
+                                    onDragStart={onDragStart(team, idx)}
+                                    onDragOver={onDragOver}
+                                    onDragEnter={onDragEnter}
+                                    onDragLeave={onDragLeave}
+                                    onDragEnd={onDragEnd}
+                                    onDrop={onDrop(team, idx)}
+                                    className={`flex items-center gap-2 p-2.5 rounded-lg border-l-4 cursor-grab active:cursor-grabbing bg-slate-900/80 hover:bg-slate-800/90 transition-colors ${isLibero ? 'bg-pink-500/15 border-pink-500/50' : ''}`}
+                                    style={{ borderLeftColor: teamColor }}
+                                >
+                                    <span className="flex-shrink-0 w-7 h-7 rounded-full bg-slate-700 text-sky-300 text-xs font-bold flex items-center justify-center">{idx + 1}</span>
+                                    <span className="flex-1 font-medium text-slate-200 truncate">{player.originalName}{isLibero ? ' [L]' : ''}</span>
+                                    {showLiberoCheckbox && (
+                                        <label className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                            <input type="checkbox" checked={liberoChecked[id] ?? player.isLibero ?? false} onChange={() => onLiberoToggle(id)} className="h-4 w-4 rounded" />
+                                            <span className="text-xs text-pink-400/90">L</span>
+                                        </label>
+                                    )}
+                                    {showMemoButton && (
+                                        <button type="button" onClick={() => onMemoClick(id)} className="p-1 rounded hover:bg-slate-600/50 text-amber-400/90 text-sm" aria-label="전력 분석 메모">📝</button>
+                                    )}
+                                    <button type="button" onClick={() => removeFromLineup(id)} className="p-1 rounded text-slate-500 hover:text-red-400 text-sm" aria-label="선발 제외">✕</button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+            <div>
+                <p className="text-xs text-slate-400 mb-2">전체 명단 (클릭하여 선발 추가)</p>
+                <div className="space-y-1 max-h-[40vh] overflow-y-auto pr-1">
+                    {benchPlayers.map((player) => {
+                        const isLiberoBench = showLiberoCheckbox && (liberoChecked[player.id] ?? player.isLibero);
+                        const disabled = atMax;
+                        return (
+                            <button
+                                key={player.id}
+                                type="button"
+                                disabled={disabled}
+                                onClick={() => addToLineup(player.id)}
+                                className={`w-full flex items-center gap-3 p-2.5 rounded-lg text-left transition-colors border-l-4 border-transparent ${
+                                    disabled
+                                        ? 'bg-slate-800/30 text-slate-600 cursor-not-allowed opacity-60'
+                                        : `bg-slate-800/50 hover:bg-slate-700/60 ${isLiberoBench ? 'bg-pink-500/10 border-pink-500/40' : ''}`
+                                }`}
+                            >
+                                <span className="text-slate-500 text-lg leading-none">+</span>
+                                <span className="text-slate-300 flex-1">{player.originalName}{isLiberoBench ? ' [L]' : ''}</span>
+                                {showLiberoCheckbox && (
+                                    <label className="flex items-center gap-1 shrink-0" onClick={(e) => { e.stopPropagation(); onLiberoToggle(player.id); }}>
+                                        <input type="checkbox" checked={liberoChecked[player.id] ?? player.isLibero ?? false} onChange={() => onLiberoToggle(player.id)} className="h-4 w-4 rounded" />
+                                        <span className="text-xs text-pink-400/90">L</span>
+                                    </label>
+                                )}
+                            </button>
+                        );
+                    })}
+                    {benchPlayers.length === 0 && orderedIds.length > 0 && (
+                        <p className="text-slate-600 text-xs text-center py-2">모든 선수가 선발 명단에 포함되었습니다.</p>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 interface AttendanceScreenProps {
     appMode?: 'CLASS' | 'CLUB';
     teamSelection: {
@@ -58,7 +248,7 @@ interface AttendanceScreenProps {
 const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', teamSelection, onStartMatch }) => {
     const location = useLocation();
     const isClubMode = location.pathname.startsWith('/club');
-    const { teamSetsMap, updatePlayerMemoInTeamSet, showToast, settings } = useData();
+    const { teamSetsMap, teamSets, showToast, settings } = useData();
     const { t } = useTranslation();
     const requiredCount = isClubMode ? ((settings?.volleyballRuleSystem === 6) ? 6 : 9) : 0;
     const is6v6 = settings?.volleyballRuleSystem === 6;
@@ -107,9 +297,27 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
     
     const [onCourtOrdered, setOnCourtOrdered] = useState<{ teamA: string[], teamB: string[] }>({ teamA: [], teamB: [] });
     const [memoOverrides, setMemoOverrides] = useState<Record<string, string>>({});
-    const [memoModalPlayer, setMemoModalPlayer] = useState<{ playerId: string; name: string; side: 'teamA' | 'teamB' } | null>(null);
+    const [analysisMemoOpen, setAnalysisMemoOpen] = useState(false);
+    const [analysisMemoFocus, setAnalysisMemoFocus] = useState<AnalysisMemoFocusTarget | null>(null);
     const [matchRoles, setMatchRoles] = useState<MatchRoles>(() => teamSelection.matchRoles ?? { announcers: [], referees: [], lineJudges: [], cameraDirectors: [], recorders: [] });
     const [rolePickerTarget, setRolePickerTarget] = useState<'announcer' | 'referee' | 'lineJudge' | 'cameraDirector' | 'recorder' | null>(null);
+    const [lineupPreviewTeam, setLineupPreviewTeam] = useState<'teamA' | 'teamB' | null>(null);
+    const [lineupPreviewOrder, setLineupPreviewOrder] = useState<string[]>([]);
+    const [lineupPreviewLibero, setLineupPreviewLibero] = useState<Record<string, boolean> | undefined>(undefined);
+    const [recentLineupPickerTeam, setRecentLineupPickerTeam] = useState<'teamA' | 'teamB' | null>(null);
+    const [recentLineupEntries, setRecentLineupEntries] = useState<StoredClubLineupHistoryEntry[]>([]);
+
+    const clubModalLocksScroll = isClubMode && (
+        analysisMemoOpen
+        || (recentLineupPickerTeam !== null && recentLineupEntries.length > 0)
+        || (lineupPreviewTeam !== null && lineupPreviewOrder.length > 0)
+    );
+    useEffect(() => {
+        if (!clubModalLocksScroll) return;
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = prev; };
+    }, [clubModalLocksScroll]);
 
     useEffect(() => {
         if (isClubMode) {
@@ -179,7 +387,80 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
         (e.currentTarget as HTMLElement).classList.remove('opacity-60');
     };
 
+    const currentLineupKeys = useMemo(() => ({
+        teamAKey: teamSelection.teamAKey ?? '',
+        teamBKey: lineupStorageTeamBKey(teamSelection),
+    }), [teamSelection]);
+
+    const saveRecentLineup = () => {
+        if (!isClubMode) return;
+        const payload: StoredClubLineupHistoryEntry = {
+            teamAKey: currentLineupKeys.teamAKey,
+            teamBKey: currentLineupKeys.teamBKey,
+            teamAOrder: onCourtOrdered.teamA,
+            teamBOrder: onCourtOrdered.teamB,
+            savedAt: Date.now(),
+            ...(liberoEnabled ? { liberoByPlayerId } : {}),
+        };
+        try {
+            saveLineupHistoryEntry(payload);
+        } catch { /* ignore quota */ }
+    };
+
+    const loadRecentLineupForTeam = (team: 'teamA' | 'teamB') => {
+        if (!isClubMode) return;
+        const entries = getLineupHistoryForMatch(currentLineupKeys.teamAKey, currentLineupKeys.teamBKey);
+        if (entries.length === 0) {
+            showToast(t('attendance_load_recent_lineup_empty'));
+            return;
+        }
+        setRecentLineupPickerTeam(team);
+        setRecentLineupEntries(entries);
+    };
+
+    const selectRecentLineupEntry = (entry: StoredClubLineupHistoryEntry) => {
+        const team = recentLineupPickerTeam;
+        if (!team) return;
+        const valid = new Set(Object.keys(team === 'teamA' ? teamAPlayers : teamBPlayers));
+        const order = (team === 'teamA' ? entry.teamAOrder : entry.teamBOrder ?? []).filter((id) => valid.has(id));
+        if (order.length === 0) {
+            showToast(t('attendance_load_recent_lineup_empty'));
+            return;
+        }
+        setRecentLineupPickerTeam(null);
+        setRecentLineupEntries([]);
+        setLineupPreviewTeam(team);
+        setLineupPreviewOrder(order);
+        setLineupPreviewLibero(entry.liberoByPlayerId);
+    };
+
+    const applyLineupPreview = () => {
+        if (!lineupPreviewTeam || lineupPreviewOrder.length === 0) return;
+        setOnCourtOrdered((prev) => ({
+            ...prev,
+            [lineupPreviewTeam]: lineupPreviewOrder,
+        }));
+        if (liberoEnabled && lineupPreviewLibero) {
+            setLiberoByPlayerId((prev) => {
+                const next = { ...prev };
+                for (const id of lineupPreviewOrder) {
+                    if (lineupPreviewLibero[id]) next[id] = true;
+                }
+                return next;
+            });
+        }
+        setLineupPreviewTeam(null);
+        setLineupPreviewOrder([]);
+        setLineupPreviewLibero(undefined);
+        showToast(t('attendance_load_recent_lineup_success'));
+    };
+
+    const handleMaxLineupReached = () => {
+        showToast(t('attendance_max_players', { count: requiredCount }), 'error');
+    };
+
     const handleStart = () => {
+        if (isClubMode) saveRecentLineup();
         const mergeMemo = (players: Record<string, Player>) => {
             const out: Record<string, Player> = {};
             for (const id of Object.keys(players)) {
@@ -235,6 +516,16 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
     const excludePlayerIds = useMemo(() => [...onCourtOrdered.teamA, ...onCourtOrdered.teamB], [onCourtOrdered.teamA, onCourtOrdered.teamB]);
 
     const showPlayerMemo = appMode === 'CLUB';
+
+    const openPlayerAnalysisMemo = (playerId: string, side: 'teamA' | 'teamB') => {
+        const teamName = side === 'teamA' ? teamAInfo?.teamName : teamBInfo?.teamName;
+        const teamKey = side === 'teamA' ? teamSelection.teamAKey : teamSelection.teamBKey;
+        const setId = teamKey?.split('___')[0];
+        const category = setId ? teamSets.find((s) => s.id === setId)?.className : undefined;
+        if (!teamName) return;
+        setAnalysisMemoFocus({ playerId, teamName, category });
+        setAnalysisMemoOpen(true);
+    };
     const showServeOrder = appMode === 'CLUB';
     const playerById = useMemo(() => ({ ...teamAPlayers, ...teamBPlayers }), [teamAPlayers, teamBPlayers]);
     const CourtOrderList: React.FC<{
@@ -242,7 +533,7 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
         team: 'teamA' | 'teamB';
         allPlayers: Player[];
         onToggle: (playerId: string) => void;
-        onMemoClick: (playerId: string, name: string) => void;
+        onMemoClick: (playerId: string) => void;
         showMemoButton: boolean;
         showServeOrder: boolean;
         teamColor: string;
@@ -293,7 +584,7 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
                             </div>
                         )}
                         {showMemoButton && (
-                            <button type="button" onClick={e => { e.preventDefault(); onMemoClick(id, player.originalName); }} className="p-1 rounded hover:bg-slate-600/50 text-amber-400/90 text-sm" title="전력 분석 메모">📝</button>
+                            <button type="button" onClick={e => { e.preventDefault(); onMemoClick(id); }} className="p-1 rounded hover:bg-slate-600/50 text-amber-400/90 text-sm" aria-label="전력 분석 메모">📝</button>
                         )}
                     </label>
                 );
@@ -328,7 +619,7 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
             </p>
             {isClubMode && (
                 <p className="text-slate-400 text-sm text-center">
-                    💡 서브 순서대로 선수를 터치하여 선발 명단을 구성해주세요.
+                    💡 출전할 선수를 선택한 뒤, 선발 명단 영역에서 드래그하여 서브 순서를 정해주세요.
                 </p>
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -343,8 +634,41 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
                         ) : (
                             <p className="text-slate-400 text-sm">({onCourtOrdered.teamA.length}{t('attendance_count_suffix')})</p>
                         )}
+                        {isClubMode && (
+                            <button
+                                type="button"
+                                onClick={() => loadRecentLineupForTeam('teamA')}
+                                className="mt-1 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 border border-slate-500 text-slate-200 text-xs font-semibold transition-colors"
+                            >
+                                {t('attendance_load_recent_lineup_team_a')}
+                            </button>
+                        )}
                     </div>
-                    <CourtOrderList orderedIds={onCourtOrdered.teamA} team="teamA" allPlayers={sortedTeamAPlayers} onToggle={(id) => handleToggleOnCourt(id, 'teamA')} onMemoClick={(id, name) => setMemoModalPlayer({ playerId: id, name, side: 'teamA' })} showMemoButton={showPlayerMemo} showServeOrder={showServeOrder} teamColor={teamAInfo?.color || '#3b82f6'} showLiberoCheckbox={liberoEnabled} liberoChecked={liberoByPlayerId} onLiberoToggle={handleLiberoToggle} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragEnd={handleDragEnd} onDrop={handleDrop} />
+                    {isClubMode ? (
+                        <ClubLineupPicker
+                            orderedIds={onCourtOrdered.teamA}
+                            team="teamA"
+                            allPlayers={sortedTeamAPlayers}
+                            playerById={playerById}
+                            teamColor={teamAInfo?.color || '#3b82f6'}
+                            maxLineupCount={requiredCount}
+                            onMaxReached={handleMaxLineupReached}
+                            showLiberoCheckbox={liberoEnabled}
+                            liberoChecked={liberoByPlayerId}
+                            onLiberoToggle={handleLiberoToggle}
+                            onOrderChange={(ids) => setOnCourtOrdered((prev) => ({ ...prev, teamA: ids }))}
+                            onMemoClick={(id) => openPlayerAnalysisMemo(id, 'teamA')}
+                            showMemoButton={showPlayerMemo}
+                            onDragStart={handleDragStart}
+                            onDragOver={handleDragOver}
+                            onDragEnter={handleDragEnter}
+                            onDragLeave={handleDragLeave}
+                            onDragEnd={handleDragEnd}
+                            onDrop={handleDrop}
+                        />
+                    ) : (
+                        <CourtOrderList orderedIds={onCourtOrdered.teamA} team="teamA" allPlayers={sortedTeamAPlayers} onToggle={(id) => handleToggleOnCourt(id, 'teamA')} onMemoClick={() => {}} showMemoButton={false} showServeOrder={showServeOrder} teamColor={teamAInfo?.color || '#3b82f6'} showLiberoCheckbox={liberoEnabled} liberoChecked={liberoByPlayerId} onLiberoToggle={handleLiberoToggle} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragEnd={handleDragEnd} onDrop={handleDrop} />
+                    )}
                 </div>
                 <div className="bg-slate-900/50 p-4 rounded-lg border-2 border-slate-700">
                     <div className="flex flex-col items-center text-center gap-2 mb-4">
@@ -357,8 +681,41 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
                         ) : (
                             <p className="text-slate-400 text-sm">({onCourtOrdered.teamB.length}{t('attendance_count_suffix')})</p>
                         )}
+                        {isClubMode && (
+                            <button
+                                type="button"
+                                onClick={() => loadRecentLineupForTeam('teamB')}
+                                className="mt-1 px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 border border-slate-500 text-slate-200 text-xs font-semibold transition-colors"
+                            >
+                                {t('attendance_load_recent_lineup_team_b')}
+                            </button>
+                        )}
                     </div>
-                    <CourtOrderList orderedIds={onCourtOrdered.teamB} team="teamB" allPlayers={sortedTeamBPlayers} onToggle={(id) => handleToggleOnCourt(id, 'teamB')} onMemoClick={(id, name) => setMemoModalPlayer({ playerId: id, name, side: 'teamB' })} showMemoButton={showPlayerMemo} showServeOrder={showServeOrder} teamColor={teamBInfo?.color || '#ef4444'} showLiberoCheckbox={liberoEnabled} liberoChecked={liberoByPlayerId} onLiberoToggle={handleLiberoToggle} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragEnd={handleDragEnd} onDrop={handleDrop} />
+                    {isClubMode ? (
+                        <ClubLineupPicker
+                            orderedIds={onCourtOrdered.teamB}
+                            team="teamB"
+                            allPlayers={sortedTeamBPlayers}
+                            playerById={playerById}
+                            teamColor={teamBInfo?.color || '#ef4444'}
+                            maxLineupCount={requiredCount}
+                            onMaxReached={handleMaxLineupReached}
+                            showLiberoCheckbox={liberoEnabled}
+                            liberoChecked={liberoByPlayerId}
+                            onLiberoToggle={handleLiberoToggle}
+                            onOrderChange={(ids) => setOnCourtOrdered((prev) => ({ ...prev, teamB: ids }))}
+                            onMemoClick={(id) => openPlayerAnalysisMemo(id, 'teamB')}
+                            showMemoButton={showPlayerMemo}
+                            onDragStart={handleDragStart}
+                            onDragOver={handleDragOver}
+                            onDragEnter={handleDragEnter}
+                            onDragLeave={handleDragLeave}
+                            onDragEnd={handleDragEnd}
+                            onDrop={handleDrop}
+                        />
+                    ) : (
+                        <CourtOrderList orderedIds={onCourtOrdered.teamB} team="teamB" allPlayers={sortedTeamBPlayers} onToggle={(id) => handleToggleOnCourt(id, 'teamB')} onMemoClick={() => {}} showMemoButton={false} showServeOrder={showServeOrder} teamColor={teamBInfo?.color || '#ef4444'} showLiberoCheckbox={liberoEnabled} liberoChecked={liberoByPlayerId} onLiberoToggle={handleLiberoToggle} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnter={handleDragEnter} onDragLeave={handleDragLeave} onDragEnd={handleDragEnd} onDrop={handleDrop} />
+                    )}
                 </div>
             </div>
             {appMode === 'CLASS' && lineupComplete && (
@@ -419,22 +776,74 @@ const AttendanceScreen: React.FC<AttendanceScreenProps> = ({ appMode = 'CLASS', 
                 }}
             />
 
-            {memoModalPlayer && (
-                <PlayerMemoModal
-                    isOpen={!!memoModalPlayer}
-                    onClose={() => setMemoModalPlayer(null)}
-                    playerName={memoModalPlayer.name}
-                    initialMemo={memoOverrides[memoModalPlayer.playerId] ?? (teamAPlayers[memoModalPlayer.playerId] || teamBPlayers[memoModalPlayer.playerId])?.memo ?? ''}
-                    onSave={async (text) => {
-                        const key = memoModalPlayer.side === 'teamA' ? teamSelection.teamAKey : teamSelection.teamBKey;
-                        const setId = key?.split('___')[0];
-                        if (setId && updatePlayerMemoInTeamSet) {
-                            await updatePlayerMemoInTeamSet(setId, memoModalPlayer.playerId, text);
-                            showToast?.('메모가 성공적으로 저장되었습니다.', 'success');
-                        }
-                        setMemoOverrides(prev => ({ ...prev, [memoModalPlayer.playerId]: text }));
-                        setMemoModalPlayer(null);
-                    }}
+            {isClubMode && recentLineupPickerTeam && recentLineupEntries.length > 0 && typeof document !== 'undefined' && createPortal(
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={() => { setRecentLineupPickerTeam(null); setRecentLineupEntries([]); }}>
+                    <div className="bg-slate-800 rounded-xl border border-slate-600 w-full max-w-lg max-h-[85vh] overflow-y-auto p-5 shadow-2xl my-auto" onClick={(e) => e.stopPropagation()}>
+                        <h3 className="text-lg font-bold text-sky-300 mb-1">{t('attendance_recent_lineup_modal_title')}</h3>
+                        <p className="text-slate-400 text-sm mb-4">
+                            {recentLineupPickerTeam === 'teamA'
+                                ? t('attendance_recent_lineup_modal_subtitle_a', { teamName: teamAInfo?.teamName ?? 'A팀' })
+                                : t('attendance_recent_lineup_modal_subtitle_b', { teamName: teamBInfo?.teamName ?? 'B팀' })}
+                        </p>
+                        <div className="space-y-3">
+                            {recentLineupEntries.map((entry, idx) => {
+                                const playersMap = recentLineupPickerTeam === 'teamA' ? teamAPlayers : teamBPlayers;
+                                const order = (recentLineupPickerTeam === 'teamA' ? entry.teamAOrder : entry.teamBOrder).filter((id) => playersMap[id]);
+                                const savedLabel = new Date(entry.savedAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                                return (
+                                    <button
+                                        key={`${entry.savedAt}-${idx}`}
+                                        type="button"
+                                        onClick={() => selectRecentLineupEntry(entry)}
+                                        className="w-full text-left rounded-lg border-2 border-slate-600 bg-slate-900/80 hover:border-sky-500/60 hover:bg-slate-800/90 p-4 transition-colors"
+                                    >
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="text-sm font-bold text-sky-300">{idx + 1}번 명단</span>
+                                            <span className="text-xs text-slate-500">{savedLabel}</span>
+                                        </div>
+                                        <ol className="list-decimal list-inside text-slate-300 text-sm space-y-0.5">
+                                            {order.map((id) => (
+                                                <li key={id} className="truncate">{playersMap[id]?.originalName ?? '—'}</li>
+                                            ))}
+                                        </ol>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <button type="button" onClick={() => { setRecentLineupPickerTeam(null); setRecentLineupEntries([]); }} className="mt-4 w-full py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-sm font-medium">닫기</button>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            {isClubMode && lineupPreviewTeam && lineupPreviewOrder.length > 0 && (
+                <ConfirmationModal
+                    isOpen
+                    usePortal
+                    onClose={() => { setLineupPreviewTeam(null); setLineupPreviewOrder([]); setLineupPreviewLibero(undefined); }}
+                    onConfirm={applyLineupPreview}
+                    title={t('attendance_lineup_preview_title')}
+                    message={lineupPreviewTeam === 'teamA'
+                        ? t('attendance_lineup_preview_message_team_a', { teamName: teamAInfo?.teamName ?? 'A팀' })
+                        : t('attendance_lineup_preview_message_team_b', { teamName: teamBInfo?.teamName ?? 'B팀' })}
+                    confirmText={t('confirm')}
+                >
+                    <ol className="mt-4 list-decimal list-inside text-slate-300 text-sm space-y-1 max-h-[40vh] overflow-y-auto">
+                        {lineupPreviewOrder.map((id) => (
+                            <li key={id}>
+                                {(lineupPreviewTeam === 'teamA' ? teamAPlayers : teamBPlayers)[id]?.originalName ?? '—'}
+                            </li>
+                        ))}
+                    </ol>
+                </ConfirmationModal>
+            )}
+
+            {isClubMode && (
+                <AnalysisMemoModal
+                    isOpen={analysisMemoOpen}
+                    onClose={() => { setAnalysisMemoOpen(false); setAnalysisMemoFocus(null); }}
+                    focusTarget={analysisMemoFocus}
+                    onFocusComplete={() => setAnalysisMemoFocus(null)}
                 />
             )}
             <div className="flex flex-col items-center gap-2 pt-6">

@@ -354,12 +354,12 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
             teamBInfo: data.teamBInfo,
         };
         const isLeague = !!leagueInfoForMatch;
-        const t = isLeague ? await getTournamentSettingsForLive() : { tournamentMaxSets: 3, tournamentTargetScore: 21 };
+        const t = appMode === 'CLUB' ? await getTournamentSettingsForLive() : { tournamentMaxSets: 3, tournamentTargetScore: 21 };
         startMatch(sessionData, undefined, data.attendingPlayers, tournamentInfoForMatch || undefined, data.onCourtIds, leagueInfoForMatch || undefined, {
             onCourtOrder: data.onCourtOrder,
             isPracticeMatch: isNextMatchPractice,
-            maxSets: isLeague ? t.tournamentMaxSets : (isNextMatchPractice ? 1 : (appMode === 'CLUB' ? 3 : undefined)),
-            tournamentTargetScore: isLeague ? t.tournamentTargetScore : undefined,
+            maxSets: appMode === 'CLUB' ? (isNextMatchPractice ? 1 : t.tournamentMaxSets) : (isLeague ? t.tournamentMaxSets : undefined),
+            tournamentTargetScore: appMode === 'CLUB' ? t.tournamentTargetScore : (isLeague ? t.tournamentTargetScore : undefined),
             isLeagueMatch: isLeague,
             leagueStandingsId: leagueInfoForMatch?.leagueId ?? undefined,
             matchRoles: data.matchRoles ?? teamsForAttendance?.matchRoles,

@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { useTranslation } from '../../hooks/useTranslation';
 
 interface ConfirmationModalProps {
@@ -11,17 +12,21 @@ interface ConfirmationModalProps {
     children?: React.ReactNode;
     isConfirmDisabled?: boolean;
     isCancelDisabled?: boolean;
+    /** CLUB 등 부모 transform/overflow 영향을 피하려면 body에 Portal 렌더 */
+    usePortal?: boolean;
 }
 
-const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, onConfirm, title, message, confirmText, children, isConfirmDisabled, isCancelDisabled }) => {
+const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, onConfirm, title, message, confirmText, children, isConfirmDisabled, isCancelDisabled, usePortal = false }) => {
     const { t } = useTranslation();
     useEffect(() => {
-        if (isOpen) document.body.style.overflow = 'hidden';
-        return () => { document.body.style.overflow = ''; };
+        if (!isOpen) return;
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = prev; };
     }, [isOpen]);
     if (!isOpen) return null;
 
-    return (
+    const modal = (
         <div
             className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4"
             onClick={onClose}
@@ -55,6 +60,11 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, 
             </div>
         </div>
     );
+
+    if (usePortal && typeof document !== 'undefined') {
+        return ReactDOM.createPortal(modal, document.body);
+    }
+    return modal;
 };
 
 export default ConfirmationModal;

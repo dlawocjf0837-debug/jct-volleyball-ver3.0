@@ -9,6 +9,7 @@ import { HeatmapViewer, HitRecord } from '../components/HeatmapViewer';
 import TeamEmblem from '../components/TeamEmblem';
 import { generateMatchResultImage } from '../utils/canvasUtils';
 import { useTranslation } from '../hooks/useTranslation';
+import { buildSetScopedMatchView, buildSetScoreTrendFromEvents, type ScoreTrendPoint } from '../utils/clubSetStats';
 
 interface RecordScreenProps {
     appMode?: 'CLASS' | 'CLUB';
@@ -53,13 +54,36 @@ const getTotalScoreWinner = (match: MatchState, settings: AppSettings): 'A' | 'B
     return 'TIE';
 }
 
+const CLUB_PLAYER_STAT_ORDER: (keyof PlayerStats)[] = ['points', 'serviceAces', 'serveIn', 'spikeSuccesses', 'directSuccesses', 'blockingPoints', 'digs', 'assists', 'defenseFaults', 'serviceFaults'];
+
 const PlayerStatsTable: React.FC<{ 
     teamMatchState: TeamMatchState; 
     onPlayerClick: (player: Player, teamKey?: string) => void;
     teamSet: TeamSet | undefined;
     t: (key: string) => string;
-}> = ({ teamMatchState, onPlayerClick, teamSet, t }) => {
+    isClub?: boolean;
+}> = ({ teamMatchState, onPlayerClick, teamSet, t, isClub = false }) => {
     const { players: participatingPlayers, playerStats } = teamMatchState;
+    const topScrollRef = useRef<HTMLDivElement>(null);
+    const tableScrollRef = useRef<HTMLDivElement>(null);
+    const tableInnerRef = useRef<HTMLTableElement>(null);
+    const syncingScroll = useRef(false);
+
+    const handleSyncedScroll = (source: 'top' | 'bottom') => (e: React.UIEvent<HTMLDivElement>) => {
+        if (syncingScroll.current) return;
+        syncingScroll.current = true;
+        const left = e.currentTarget.scrollLeft;
+        if (source === 'top' && tableScrollRef.current) tableScrollRef.current.scrollLeft = left;
+        if (source === 'bottom' && topScrollRef.current) topScrollRef.current.scrollLeft = left;
+        requestAnimationFrame(() => { syncingScroll.current = false; });
+    };
+
+    const syncTopScrollWidth = useCallback(() => {
+        if (!isClub || !topScrollRef.current || !tableScrollRef.current) return;
+        const scrollWidth = tableScrollRef.current.scrollWidth;
+        const ghost = topScrollRef.current.firstElementChild as HTMLElement | null;
+        if (ghost) ghost.style.width = `${scrollWidth}px`;
+    }, [isClub]);
 
     const fullRoster = useMemo(() => {
         const teamInfo = teamSet?.teams.find(t => t.teamName === teamMatchState.name);
@@ -80,17 +104,41 @@ const PlayerStatsTable: React.FC<{
         );
     }
 
-    const statOrder: (keyof PlayerStats)[] = ['points', 'serviceAces', 'serveIn', 'spikeSuccesses', 'blockingPoints', 'digs', 'assists', 'serviceFaults'];
-    const statHeaderNames: Record<keyof PlayerStats, string> = {
+    const statOrder: (keyof PlayerStats)[] = isClub
+        ? CLUB_PLAYER_STAT_ORDER
+        : ['points', 'serviceAces', 'serveIn', 'spikeSuccesses', 'blockingPoints', 'digs', 'assists', 'serviceFaults'];
+    const statHeaderNames: Partial<Record<keyof PlayerStats, string>> = {
         points: t('record_player_stats_header_points'),
         serviceAces: t('record_player_stats_header_serve'),
         serveIn: t('btn_serve_in'),
         spikeSuccesses: t('record_player_stats_header_spike'),
+        directSuccesses: t('direct_success'),
         blockingPoints: t('record_player_stats_header_blocking'),
         digs: t('stat_display_digs'),
         assists: t('stat_display_assists'),
+        defenseFaults: t('defense_fault'),
         serviceFaults: t('record_player_stats_header_faults'),
     };
+    const statDisplay = (stats: PlayerStats, key: keyof PlayerStats): number => {
+        const v = stats[key];
+        if (typeof v === 'number') return v;
+        if (Array.isArray(v)) return v.length;
+        return 0;
+    };
+
+    useEffect(() => {
+        if (!isClub) return;
+        syncTopScrollWidth();
+        const tableEl = tableScrollRef.current;
+        if (!tableEl) return;
+        const ro = new ResizeObserver(() => syncTopScrollWidth());
+        ro.observe(tableEl);
+        window.addEventListener('resize', syncTopScrollWidth);
+        return () => {
+            ro.disconnect();
+            window.removeEventListener('resize', syncTopScrollWidth);
+        };
+    }, [isClub, syncTopScrollWidth, fullRoster.length, statOrder.length]);
     
     return (
         <div className="flex flex-col rounded-2xl overflow-hidden border border-slate-700 shadow-xl bg-slate-900/60 backdrop-blur-md print-bg-white print-border-black">
@@ -111,8 +159,22 @@ const PlayerStatsTable: React.FC<{
             </div>
 
             {/* Table Section */}
-            <div className="overflow-x-auto -mx-2 sm:mx-0 px-2 sm:px-0">
-                <table className="w-full text-center min-w-[600px]">
+            {isClub && (
+                <div
+                    ref={topScrollRef}
+                    onScroll={handleSyncedScroll('top')}
+                    className="overflow-x-scroll overflow-y-hidden h-5 shrink-0 mx-2 sm:mx-0 px-2 sm:px-0 no-print border-b border-slate-700/50"
+                    aria-label="테이블 가로 스크롤"
+                >
+                    <div className="h-1" aria-hidden />
+                </div>
+            )}
+            <div
+                ref={tableScrollRef}
+                onScroll={isClub ? handleSyncedScroll('bottom') : undefined}
+                className="overflow-x-auto -mx-2 sm:mx-0 px-2 sm:px-0"
+            >
+                <table ref={tableInnerRef} className="w-full text-center min-w-[600px]">
                     <thead>
                         <tr className="bg-slate-950/80 text-slate-400 text-xs font-bold uppercase tracking-wider border-b border-slate-700/50 print-text-black">
                             {/* Adjusted padding and width to reduce spacing */}
@@ -156,7 +218,7 @@ const PlayerStatsTable: React.FC<{
                                 </td>
                                 {didParticipate && stats ? (
                                     statOrder.map(key => {
-                                        const val = stats[key] || 0;
+                                        const val = statDisplay(stats, key);
                                         const isZero = val === 0;
                                         return (
                                             <td key={key} className={`px-1 sm:px-2 py-2 sm:py-3 text-sm sm:text-base lg:text-lg font-mono ${isZero ? 'text-slate-600 font-normal' : 'text-white font-bold'} print-text-black`}>
@@ -215,15 +277,34 @@ const RankingsModal: React.FC<{
     );
 };
 
-const ScoreTrendChart: React.FC<{ match: EnrichedMatch, t: (key: string) => string }> = ({ match, t }) => {
+const ScoreTrendChart: React.FC<{
+    match: EnrichedMatch;
+    t: (key: string) => string;
+    /** CLUB 세트 탭: 랠리 인덱스 기반 누적 점수 */
+    setTrendPoints?: ScoreTrendPoint[];
+}> = ({ match, t, setTrendPoints }) => {
+    const isSetScoped = setTrendPoints != null;
+    const teamAKey = match.teamA.name;
+    const teamBKey = match.teamB.name;
+
     const chartData = useMemo(() => {
-        if (!match.scoreHistory) return [];
-        return match.scoreHistory.map((score, index) => ({
-            point: index,
-            [match.teamA.name]: score.a,
-            [match.teamB.name]: score.b,
+        if (isSetScoped && setTrendPoints?.length) {
+            return setTrendPoints.map((p) => ({
+                rally: p.rally,
+                [teamAKey]: p.a,
+                [teamBKey]: p.b,
+            }));
+        }
+        const history = match.scoreHistory;
+        if (!history?.length) return [];
+        return history.map((score, index) => ({
+            rally: index,
+            [teamAKey]: score.a,
+            [teamBKey]: score.b,
         }));
-    }, [match.scoreHistory, match.teamA.name, match.teamB.name]);
+    }, [isSetScoped, setTrendPoints, match.scoreHistory, teamAKey, teamBKey]);
+
+    const lineType = 'linear' as const;
 
     return (
         <div className="bg-slate-800/50 p-4 rounded-lg h-80 print-bg-white">
@@ -231,12 +312,38 @@ const ScoreTrendChart: React.FC<{ match: EnrichedMatch, t: (key: string) => stri
             <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData} margin={{ top: 5, right: 20, left: -10, bottom: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                    <XAxis dataKey="point" label={{ value: '진행', position: 'insideBottom', offset: -10 }} stroke="#94a3b8" tick={{ fill: '#94a3b8' }} />
-                    <YAxis allowDecimals={false} stroke="#94a3b8" tick={{ fill: '#94a3b8' }}/>
-                    <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155' }} />
+                    <XAxis
+                        dataKey="rally"
+                        allowDecimals={false}
+                        label={{ value: isSetScoped ? '득점 순서' : '진행', position: 'insideBottom', offset: -10 }}
+                        stroke="#94a3b8"
+                        tick={{ fill: '#94a3b8' }}
+                    />
+                    <YAxis allowDecimals={false} domain={[0, 'auto']} stroke="#94a3b8" tick={{ fill: '#94a3b8' }} />
+                    <Tooltip
+                        contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155' }}
+                        labelFormatter={(rally) =>
+                            rally === 0 ? '시작 (0:0)' : `${rally}번째 득점 후`
+                        }
+                        formatter={(value: number, name: string) => [`${value}점`, name]}
+                    />
                     <Legend verticalAlign="top" />
-                    <Line type="monotone" dataKey={match.teamA.name} stroke={match.teamA.color || "#38bdf8"} strokeWidth={2} dot={false} />
-                    <Line type="monotone" dataKey={match.teamB.name} stroke={match.teamB.color || "#f87171"} strokeWidth={2} dot={false} />
+                    <Line
+                        type={lineType}
+                        dataKey={teamAKey}
+                        stroke={match.teamA.color || '#38bdf8'}
+                        strokeWidth={2}
+                        dot
+                        activeDot={{ r: 5 }}
+                    />
+                    <Line
+                        type={lineType}
+                        dataKey={teamBKey}
+                        stroke={match.teamB.color || '#f87171'}
+                        strokeWidth={2}
+                        dot
+                        activeDot={{ r: 5 }}
+                    />
                 </LineChart>
             </ResponsiveContainer>
         </div>
@@ -497,6 +604,12 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContin
         }
     }, [selectedMatch]);
 
+    useEffect(() => {
+        if (appMode === 'CLUB' && setDetailTab === 'all') {
+            setShowScoreTrend(false);
+        }
+    }, [appMode, setDetailTab]);
+
     const allTeamData = useMemo((): Record<string, FlattenedTeam> => {
         const teamData: Record<string, FlattenedTeam> = {};
         teamSets.forEach(set => {
@@ -578,6 +691,17 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContin
         return enrichedSelectedMatch.eventHistory.slice(start, end);
     }, [enrichedSelectedMatch, setDetailTab, setBoundaries]);
 
+    /** CLUB: 선택 세트 로그 — 랠리별 누적 점수 추이 */
+    const setScopedScoreTrend = useMemo((): ScoreTrendPoint[] | undefined => {
+        const match = enrichedSelectedMatch;
+        if (appMode !== 'CLUB' || setDetailTab === 'all' || !match) return undefined;
+        return buildSetScoreTrendFromEvents(
+            (currentSetEvents ?? []) as ScoreEvent[],
+            match.teamA.name,
+            match.teamB.name,
+        );
+    }, [enrichedSelectedMatch, appMode, setDetailTab, currentSetEvents]);
+
     const displayTimelineEvents = useMemo((): TimelineEvent[] => {
         if (setDetailTab === 'all') return timelineEvents;
         const raw = currentSetEvents as Array<{ type?: string; descriptionKey?: string; score?: { a: number; b: number } }>;
@@ -589,7 +713,17 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContin
             score: e.score ? `${e.score.a}:${e.score.b}` : '-',
         })).reverse();
     }, [setDetailTab, timelineEvents, currentSetEvents]);
-    
+
+    /** CLUB: 세트 탭 선택 시 해당 세트 로그만 반영한 match 뷰 (MVP·스탯·표) */
+    const displayMatch = useMemo((): EnrichedMatch | null => {
+        if (!enrichedSelectedMatch) return null;
+        if (appMode !== 'CLUB' || setDetailTab === 'all') return enrichedSelectedMatch;
+        return buildSetScopedMatchView(
+            enrichedSelectedMatch,
+            setDetailTab as number,
+            currentSetEvents as ScoreEvent[],
+        );
+    }, [enrichedSelectedMatch, appMode, setDetailTab, currentSetEvents]);
 
     const availableClasses = useMemo(() => {
         const classSet = new Set<string>();
@@ -770,16 +904,17 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContin
             return leaders;
         };
 
-        if (enrichedSelectedMatch && enrichedSelectedMatch.status === 'completed') {
-            setMvp(calculateMvp(enrichedSelectedMatch));
-            setTimelineEvents(generateTimeline(enrichedSelectedMatch));
-            setMatchLeaders(calculateMatchLeaders(enrichedSelectedMatch));
+        const matchForStats = displayMatch ?? enrichedSelectedMatch;
+        if (matchForStats && matchForStats.status === 'completed') {
+            setMvp(calculateMvp(matchForStats));
+            setTimelineEvents(generateTimeline(enrichedSelectedMatch!));
+            setMatchLeaders(calculateMatchLeaders(matchForStats));
         } else {
             setMvp(null);
             setTimelineEvents([]);
             setMatchLeaders(null);
         }
-    }, [enrichedSelectedMatch, t]);
+    }, [enrichedSelectedMatch, displayMatch, t]);
 
 
     /** 선수 클릭 시: 전역 playerCumulativeStats 사용 + teamSets에서 최신 선수 객체로 모달에 전달 (스탯 0 버그 방지) */
@@ -1041,22 +1176,33 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContin
     };
 
     const chartData = useMemo(() => {
-        if (enrichedSelectedMatch) { 
-             return [
-                { name: t('stat_display_serve_ace'), [enrichedSelectedMatch.teamA.name]: enrichedSelectedMatch.teamA.serviceAces, [enrichedSelectedMatch.teamB.name]: enrichedSelectedMatch.teamB.serviceAces },
-                { name: t('stat_display_spike_success'), [enrichedSelectedMatch.teamA.name]: enrichedSelectedMatch.teamA.spikeSuccesses, [enrichedSelectedMatch.teamB.name]: enrichedSelectedMatch.teamB.spikeSuccesses },
-                { name: t('stat_display_blocking'), [enrichedSelectedMatch.teamA.name]: enrichedSelectedMatch.teamA.blockingPoints, [enrichedSelectedMatch.teamB.name]: enrichedSelectedMatch.teamB.blockingPoints },
-                { name: t('stat_display_serve_fault'), [enrichedSelectedMatch.teamA.name]: enrichedSelectedMatch.teamA.serviceFaults, [enrichedSelectedMatch.teamB.name]: enrichedSelectedMatch.teamB.serviceFaults },
-                { name: t('stat_display_digs'), [enrichedSelectedMatch.teamA.name]: Object.values(enrichedSelectedMatch.teamA.playerStats || {}).reduce((acc, p: any) => acc + (p.digs || 0), 0), [enrichedSelectedMatch.teamB.name]: Object.values(enrichedSelectedMatch.teamB.playerStats || {}).reduce((acc, p: any) => acc + (p.digs || 0), 0) },
-                { name: t('stat_display_assists'), [enrichedSelectedMatch.teamA.name]: Object.values(enrichedSelectedMatch.teamA.playerStats || {}).reduce((acc, p: any) => acc + (p.assists || 0), 0), [enrichedSelectedMatch.teamB.name]: Object.values(enrichedSelectedMatch.teamB.playerStats || {}).reduce((acc, p: any) => acc + (p.assists || 0), 0) },
-             ];
+        const match = displayMatch ?? enrichedSelectedMatch;
+        if (match) {
+            const sumPlayerStat = (team: typeof match.teamA, key: keyof PlayerStats) =>
+                Object.values(team.playerStats || {}).reduce((acc, p) => acc + (typeof p[key] === 'number' ? (p[key] as number) : 0), 0);
+            const rows = [
+                { name: t('stat_display_serve_ace'), [match.teamA.name]: match.teamA.serviceAces, [match.teamB.name]: match.teamB.serviceAces },
+                { name: t('stat_display_spike_success'), [match.teamA.name]: match.teamA.spikeSuccesses, [match.teamB.name]: match.teamB.spikeSuccesses },
+                { name: t('stat_display_blocking'), [match.teamA.name]: match.teamA.blockingPoints, [match.teamB.name]: match.teamB.blockingPoints },
+                { name: t('stat_display_serve_fault'), [match.teamA.name]: match.teamA.serviceFaults, [match.teamB.name]: match.teamB.serviceFaults },
+                { name: t('stat_display_digs'), [match.teamA.name]: sumPlayerStat(match.teamA, 'digs'), [match.teamB.name]: sumPlayerStat(match.teamB, 'digs') },
+                { name: t('stat_display_assists'), [match.teamA.name]: sumPlayerStat(match.teamA, 'assists'), [match.teamB.name]: sumPlayerStat(match.teamB, 'assists') },
+            ];
+            if (appMode === 'CLUB') {
+                rows.splice(3, 0,
+                    { name: t('direct_success'), [match.teamA.name]: sumPlayerStat(match.teamA, 'directSuccesses'), [match.teamB.name]: sumPlayerStat(match.teamB, 'directSuccesses') },
+                    { name: t('defense_fault'), [match.teamA.name]: sumPlayerStat(match.teamA, 'defenseFaults'), [match.teamB.name]: sumPlayerStat(match.teamB, 'defenseFaults') },
+                );
+            }
+            return rows;
         }
         return [];
-    }, [enrichedSelectedMatch, t]);
+    }, [displayMatch, enrichedSelectedMatch, t, appMode]);
 
     const GameSummaryPanel = () => {
         if (!enrichedSelectedMatch) return null;
-        const { teamA, teamB } = enrichedSelectedMatch;
+        const match = displayMatch ?? enrichedSelectedMatch;
+        const { teamA, teamB } = match;
         const isClub = appMode === 'CLUB';
         const scoreA = (setDetailTab === 'all' && totalScoreFromSets) ? totalScoreFromSets.teamA : teamA.score;
         const scoreB = (setDetailTab === 'all' && totalScoreFromSets) ? totalScoreFromSets.teamB : teamB.score;
@@ -1427,7 +1573,15 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContin
                                                 </p>
                                             </div>
                                         )}
-                                        <Timeline events={displayTimelineEvents} />
+                                        {appMode === 'CLUB' && setDetailTab === 'all' ? (
+                                            <div className="bg-slate-900/50 border-2 border-slate-700 p-4 rounded-lg h-96 flex items-center justify-center print-bg-white">
+                                                <p className="text-slate-400 text-center text-sm px-6 leading-relaxed">
+                                                    경기 타임라인은 세트별 보기에서만 제공됩니다.
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <Timeline events={displayTimelineEvents} />
+                                        )}
                                     </div>
                                 </div>
                             )}
@@ -1438,11 +1592,11 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContin
                                     <table className="w-full text-center">
                                         <thead><tr className="border-b-2 border-slate-600 text-slate-300 print-text-black"><th className="p-2 text-left">{t('record_stats_table_header')}</th><th className="p-2" style={{color: enrichedSelectedMatch.teamA.color}}>{enrichedSelectedMatch.teamA.name}</th><th className="p-2" style={{color: enrichedSelectedMatch.teamB.color}}>{enrichedSelectedMatch.teamB.name}</th></tr></thead>
                                         <tbody className="font-mono text-slate-200 print-text-black">
-                                            <tr className="border-b border-slate-700"><td className="p-2 text-left font-sans text-slate-400 print-text-black">{t('record_final_score_label')}</td><td className="p-2 text-2xl font-bold">{setDetailTab === 'all' && totalScoreFromSets ? totalScoreFromSets.teamA : enrichedSelectedMatch.teamA.score}</td><td className="p-2 text-2xl font-bold">{setDetailTab === 'all' && totalScoreFromSets ? totalScoreFromSets.teamB : enrichedSelectedMatch.teamB.score}</td></tr>
-                                            <tr className="border-b border-slate-700"><td className="p-2 text-left font-sans text-slate-400 print-text-black">{t('record_serve_ace_label')}</td><td>{enrichedSelectedMatch.teamA.serviceAces}</td><td>{enrichedSelectedMatch.teamB.serviceAces}</td></tr>
-                                            <tr className="border-b border-slate-700"><td className="p-2 text-left font-sans text-slate-400 print-text-black">{t('record_serve_fault_label')}</td><td>{enrichedSelectedMatch.teamA.serviceFaults}</td><td>{enrichedSelectedMatch.teamB.serviceFaults}</td></tr>
-                                            <tr className="border-b border-slate-700"><td className="p-2 text-left font-sans text-slate-400 print-text-black">{t('record_blocking_label')}</td><td>{enrichedSelectedMatch.teamA.blockingPoints}</td><td>{enrichedSelectedMatch.teamB.blockingPoints}</td></tr>
-                                            <tr className="border-b border-slate-700"><td className="p-2 text-left font-sans text-slate-400 print-text-black">{t('record_spike_label')}</td><td>{enrichedSelectedMatch.teamA.spikeSuccesses}</td><td>{enrichedSelectedMatch.teamB.spikeSuccesses}</td></tr>
+                                            <tr className="border-b border-slate-700"><td className="p-2 text-left font-sans text-slate-400 print-text-black">{t('record_final_score_label')}</td><td className="p-2 text-2xl font-bold">{setDetailTab === 'all' && totalScoreFromSets ? totalScoreFromSets.teamA : (displayMatch ?? enrichedSelectedMatch).teamA.score}</td><td className="p-2 text-2xl font-bold">{setDetailTab === 'all' && totalScoreFromSets ? totalScoreFromSets.teamB : (displayMatch ?? enrichedSelectedMatch).teamB.score}</td></tr>
+                                            <tr className="border-b border-slate-700"><td className="p-2 text-left font-sans text-slate-400 print-text-black">{t('record_serve_ace_label')}</td><td>{(displayMatch ?? enrichedSelectedMatch).teamA.serviceAces}</td><td>{(displayMatch ?? enrichedSelectedMatch).teamB.serviceAces}</td></tr>
+                                            <tr className="border-b border-slate-700"><td className="p-2 text-left font-sans text-slate-400 print-text-black">{t('record_serve_fault_label')}</td><td>{(displayMatch ?? enrichedSelectedMatch).teamA.serviceFaults}</td><td>{(displayMatch ?? enrichedSelectedMatch).teamB.serviceFaults}</td></tr>
+                                            <tr className="border-b border-slate-700"><td className="p-2 text-left font-sans text-slate-400 print-text-black">{t('record_blocking_label')}</td><td>{(displayMatch ?? enrichedSelectedMatch).teamA.blockingPoints}</td><td>{(displayMatch ?? enrichedSelectedMatch).teamB.blockingPoints}</td></tr>
+                                            <tr className="border-b border-slate-700"><td className="p-2 text-left font-sans text-slate-400 print-text-black">{t('record_spike_label')}</td><td>{(displayMatch ?? enrichedSelectedMatch).teamA.spikeSuccesses}</td><td>{(displayMatch ?? enrichedSelectedMatch).teamB.spikeSuccesses}</td></tr>
                                             {appMode !== 'CLUB' && (
                                                 <>
                                                     <tr className="border-b border-slate-700"><td className="p-2 text-left font-sans text-slate-400 print-text-black">{t('record_3hit_label')}</td><td>{enrichedSelectedMatch.teamA.threeHitPlays}</td><td>{enrichedSelectedMatch.teamB.threeHitPlays}</td></tr>
@@ -1455,22 +1609,36 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContin
                                 <div className="bg-slate-800/50 p-4 rounded-lg min-h-[300px] print-bg-white">
                                     <div className="flex justify-between items-center mb-2 no-print">
                                         <h3 className="font-bold text-xl text-center">{t('record_team_stats_graph')}</h3>
-                                        <button
-                                            onClick={() => setShowScoreTrend(prev => !prev)}
-                                            className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-1 px-3 rounded-lg text-sm transition duration-200"
-                                        >
-                                            {showScoreTrend ? t('record_close_trend') : t('record_score_trend_label')}
-                                        </button>
+                                        {!(appMode === 'CLUB' && setDetailTab === 'all') && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowScoreTrend(prev => !prev)}
+                                                className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-1 px-3 rounded-lg text-sm transition duration-200"
+                                            >
+                                                {showScoreTrend ? t('record_close_trend') : t('record_score_trend_label')}
+                                            </button>
+                                        )}
                                      </div>
                                     {showScoreTrend ? (
                                         <div className="animate-fade-in h-[250px]">
-                                            <ScoreTrendChart match={enrichedSelectedMatch} t={t} />
+                                            <ScoreTrendChart
+                                                match={enrichedSelectedMatch}
+                                                t={t}
+                                                setTrendPoints={setScopedScoreTrend}
+                                            />
                                         </div>
                                     ) : (
-                                        <ResponsiveContainer width="100%" height={250}>
-                                            <BarChart data={chartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                                        <ResponsiveContainer width="100%" height={appMode === 'CLUB' ? 300 : 250}>
+                                            <BarChart data={chartData} margin={{ top: 5, right: 20, left: -10, bottom: appMode === 'CLUB' ? 80 : 5 }}>
                                                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                                                <XAxis dataKey="name" tick={{ fill: '#94a3b8' }} interval={0} />
+                                                <XAxis
+                                                    dataKey="name"
+                                                    tick={{ fill: '#94a3b8', fontSize: appMode === 'CLUB' ? 10 : 12 }}
+                                                    interval={0}
+                                                    angle={appMode === 'CLUB' ? -45 : 0}
+                                                    textAnchor={appMode === 'CLUB' ? 'end' : 'middle'}
+                                                    height={appMode === 'CLUB' ? 80 : 30}
+                                                />
                                                 <YAxis tick={{ fill: '#94a3b8' }} allowDecimals={false} />
                                                 <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155' }} />
                                                 <Legend />
@@ -1488,16 +1656,18 @@ const RecordScreen: React.FC<RecordScreenProps> = ({ appMode = 'CLASS', onContin
                                 </div>
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                     <PlayerStatsTable 
-                                        teamMatchState={enrichedSelectedMatch.teamA} 
+                                        teamMatchState={(displayMatch ?? enrichedSelectedMatch).teamA} 
                                         onPlayerClick={calculatePlayerHistory} 
                                         teamSet={findTeamSetForMatchTeam(enrichedSelectedMatch.teamA.key)}
                                         t={t}
+                                        isClub={appMode === 'CLUB'}
                                     />
                                     <PlayerStatsTable 
-                                        teamMatchState={enrichedSelectedMatch.teamB} 
+                                        teamMatchState={(displayMatch ?? enrichedSelectedMatch).teamB} 
                                         onPlayerClick={calculatePlayerHistory}
                                         teamSet={findTeamSetForMatchTeam(enrichedSelectedMatch.teamB.key)}
                                         t={t}
+                                        isClub={appMode === 'CLUB'}
                                     />
                                 </div>
                                 {appMode === 'CLUB' && enrichedSelectedMatch.status === 'completed' && (() => {

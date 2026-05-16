@@ -62,7 +62,7 @@ interface TeamManagementScreenProps {
 }
 
 const TeamManagementScreen: React.FC<TeamManagementScreenProps> = ({ appMode = 'CLASS' }) => {
-    const { teamSets, saveTeamSets, deleteTeam, createTeamSet, addTeamToSet, copyTeamFromOtherSet, teamSetsMap, removePlayerFromTeam, addPlayerToTeam, setTeamCaptain } = useData();
+    const { teamSets, saveTeamSets, deleteTeam, createTeamSet, deleteTeamSet, addTeamToSet, copyTeamFromOtherSet, teamSetsMap, removePlayerFromTeam, addPlayerToTeam, setTeamCaptain } = useData();
     const isClub = appMode === 'CLUB';
     const { t } = useTranslation();
     const [configs, setConfigs] = useState<Record<string, Config>>({});
@@ -72,6 +72,7 @@ const TeamManagementScreen: React.FC<TeamManagementScreenProps> = ({ appMode = '
     const [viewingProfileTeam, setViewingProfileTeam] = useState<{ team: SavedTeamInfo, players: Player[] } | null>(null);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [teamToDeleteKey, setTeamToDeleteKey] = useState<string | null>(null);
+    const [deleteSetTarget, setDeleteSetTarget] = useState<{ id: string; className: string } | null>(null);
     const [isRosterModalOpen, setIsRosterModalOpen] = useState(false);
     const [managingRosterTeamKey, setManagingRosterTeamKey] = useState<string | null>(null);
 
@@ -243,6 +244,16 @@ const TeamManagementScreen: React.FC<TeamManagementScreenProps> = ({ appMode = '
             setTeamToDeleteKey(null);
             setIsDeleteModalOpen(false);
         }
+    };
+
+    const handleConfirmDeleteSet = async () => {
+        if (!deleteSetTarget) return;
+        await deleteTeamSet(deleteSetTarget.id);
+        if (selectedClassFilter === deleteSetTarget.className) {
+            setSelectedClassFilter('all');
+            setSelectedFormatFilter('all');
+        }
+        setDeleteSetTarget(null);
     };
     
     const handleOpenRosterModal = (key: string) => {
@@ -441,6 +452,16 @@ const TeamManagementScreen: React.FC<TeamManagementScreenProps> = ({ appMode = '
                 message={t('delete_team_confirm_message', { teamName: configs[teamToDeleteKey!]?.teamName || '' })}
                 confirmText={t('delete')}
             />
+            {isClub && (
+                <ConfirmationModal
+                    isOpen={!!deleteSetTarget}
+                    onClose={() => setDeleteSetTarget(null)}
+                    onConfirm={handleConfirmDeleteSet}
+                    title="대회(조) 삭제"
+                    message="정말 삭제하시겠습니까? 관련 데이터가 모두 지워집니다."
+                    confirmText={t('delete')}
+                />
+            )}
             <RosterManagementModal
                 isOpen={isRosterModalOpen}
                 onClose={() => {
@@ -458,6 +479,7 @@ const TeamManagementScreen: React.FC<TeamManagementScreenProps> = ({ appMode = '
                 tradeSource={tradeSource}
                 onPlayerClick={handlePlayerClick}
                 onSetCaptain={handleSetCaptain}
+                enableInlinePlayerRename={isClub}
             />
             {selectingForTeamKey && (
                 <PlayerSelectionModal
@@ -604,22 +626,51 @@ const TeamManagementScreen: React.FC<TeamManagementScreenProps> = ({ appMode = '
                             >
                                 {t('player_input_class_all')}
                             </button>
-                            {availableClasses.map(className => (
-                                <button
-                                    key={className}
-                                    onClick={() => {
-                                        setSelectedClassFilter(className);
-                                        setSelectedFormatFilter('all');
-                                    }}
-                                    className={`px-4 py-2 text-sm rounded-md transition-colors min-h-[44px] font-semibold ${
-                                        selectedClassFilter === className
-                                            ? 'bg-[#00A3FF] text-white'
-                                            : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
-                                    }`}
-                                >
-                                    {className}
-                                </button>
-                            ))}
+                            {isClub ? (
+                                teamSets.map((set) => (
+                                    <div key={set.id} className="inline-flex items-center gap-0.5">
+                                        <button
+                                            onClick={() => {
+                                                setSelectedClassFilter(set.className);
+                                                setSelectedFormatFilter('all');
+                                            }}
+                                            className={`px-4 py-2 text-sm rounded-l-md transition-colors min-h-[44px] font-semibold ${
+                                                selectedClassFilter === set.className
+                                                    ? 'bg-[#00A3FF] text-white'
+                                                    : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                                            }`}
+                                        >
+                                            {set.className}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setDeleteSetTarget({ id: set.id, className: set.className })}
+                                            className="px-2 py-2 min-h-[44px] rounded-r-md bg-slate-700 hover:bg-red-900/60 text-slate-400 hover:text-red-300 border-l border-slate-600 transition-colors"
+                                            title={`${set.className} 삭제`}
+                                            aria-label={`${set.className} 대회 삭제`}
+                                        >
+                                            <TrashIcon className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                ))
+                            ) : (
+                                availableClasses.map(className => (
+                                    <button
+                                        key={className}
+                                        onClick={() => {
+                                            setSelectedClassFilter(className);
+                                            setSelectedFormatFilter('all');
+                                        }}
+                                        className={`px-4 py-2 text-sm rounded-md transition-colors min-h-[44px] font-semibold ${
+                                            selectedClassFilter === className
+                                                ? 'bg-[#00A3FF] text-white'
+                                                : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                                        }`}
+                                    >
+                                        {className}
+                                    </button>
+                                ))
+                            )}
                         </div>
                     </div>
                     

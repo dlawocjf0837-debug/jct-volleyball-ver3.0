@@ -1,4 +1,9 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+const fs = require('fs');
+const path = require('path');
+
+const filePath = path.join(__dirname, '..', 'components', 'AnalysisMemoModal.tsx');
+
+const content = `import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useData } from '../contexts/DataContext';
 import localforage from 'localforage';
 import type { SavedOpponentTeam } from '../types';
@@ -21,24 +26,24 @@ interface Props {
 }
 
 function getMemoForTeam(map: Record<string, string>, teamName: string): string {
-    return map[`red_${teamName}`] ?? map[`blue_${teamName}`] ?? '';
+    return map[\`red_\${teamName}\`] ?? map[\`blue_\${teamName}\`] ?? '';
 }
 
 async function setMemoForTeam(teamName: string, memo: string): Promise<void> {
     const map = (await localforage.getItem(TACTICAL_MEMOS_KEY) as Record<string, string> | null) ?? {};
     if (memo.trim()) {
-        map[`red_${teamName}`] = memo.trim();
-        map[`blue_${teamName}`] = memo.trim();
+        map[\`red_\${teamName}\`] = memo.trim();
+        map[\`blue_\${teamName}\`] = memo.trim();
     } else {
-        delete map[`red_${teamName}`];
-        delete map[`blue_${teamName}`];
+        delete map[\`red_\${teamName}\`];
+        delete map[\`blue_\${teamName}\`];
     }
     await localforage.setItem(TACTICAL_MEMOS_KEY, map);
 }
 
 function formatPlayerNumber(number?: string): string {
     if (!number || number === '??') return '';
-    return `#${number} `;
+    return \`#\${number} \`;
 }
 
 export const AnalysisMemoModal: React.FC<Props> = ({ isOpen, onClose, focusTarget, onFocusComplete }) => {
@@ -57,7 +62,7 @@ export const AnalysisMemoModal: React.FC<Props> = ({ isOpen, onClose, focusTarge
         return [
             ...tournamentNames,
             ...leagueItems.map((d) => d.tournamentName).filter((n) => !tournamentNames.includes(n)),
-            ...(opponentTeams.length ? ['상대팀'] : []),
+            ...(opponentTeams.length ? ['\uC0C1\uB300\uD300'] : []),
         ];
     }, [teamSets, leagueItems, opponentTeams]);
 
@@ -66,7 +71,7 @@ export const AnalysisMemoModal: React.FC<Props> = ({ isOpen, onClose, focusTarge
 
     const getTeamsForCat = (cat: string): TeamItem[] => {
         const out: TeamItem[] = [];
-        if (cat === '상대팀') {
+        if (cat === '\uC0C1\uB300\uD300') {
             opponentTeams.forEach((opp) => out.push({ teamName: opp.name, label: opp.name, isOpp: opp }));
             return out;
         }
@@ -120,7 +125,7 @@ export const AnalysisMemoModal: React.FC<Props> = ({ isOpen, onClose, focusTarge
     const uniqueTeams = useMemo(() => {
         const seen = new Set<string>();
         return teams.filter((t) => {
-            const id = `${t.setId ?? 'x'}-${t.teamName}`;
+            const id = \`\${t.setId ?? 'x'}-\${t.teamName}\`;
             if (seen.has(id)) return false;
             seen.add(id);
             return true;
@@ -180,7 +185,7 @@ export const AnalysisMemoModal: React.FC<Props> = ({ isOpen, onClose, focusTarge
     useEffect(() => {
         const next: Record<string, MemoEntry[]> = {};
         if (selectedTeam?.isOpp?.players?.length) {
-            selectedTeam.isOpp.players.forEach((p) => { next[`${p.number ?? p.name}`] = parseMemoEntries(p.memo); });
+            selectedTeam.isOpp.players.forEach((p) => { next[\`\${p.number ?? p.name}\`] = parseMemoEntries(p.memo); });
         } else if (selectedTeam?.players?.length) {
             selectedTeam.players.forEach((p) => { next[p.id] = parseMemoEntries(p.memo); });
         }
@@ -189,10 +194,10 @@ export const AnalysisMemoModal: React.FC<Props> = ({ isOpen, onClose, focusTarge
 
     useEffect(() => {
         if (!isOpen || !focusTarget || selectedTeamName !== focusTarget.teamName) return;
-        const focusKey = `${focusTarget.teamName}-${focusTarget.playerId}`;
+        const focusKey = \`\${focusTarget.teamName}-\${focusTarget.playerId}\`;
         if (focusHandledRef.current === focusKey) return;
         const timer = window.setTimeout(() => {
-            const el = document.getElementById(`analysis-memo-player-${focusTarget.playerId}`);
+            const el = document.getElementById(\`analysis-memo-player-\${focusTarget.playerId}\`);
             if (el) {
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 el.classList.add('ring-2', 'ring-sky-400', 'ring-offset-2', 'ring-offset-slate-800');
@@ -213,15 +218,15 @@ export const AnalysisMemoModal: React.FC<Props> = ({ isOpen, onClose, focusTarge
         setStorage((prev) => {
             const next = { ...prev };
             if (payload.trim()) {
-                next[`red_${selectedTeamName}`] = payload;
-                next[`blue_${selectedTeamName}`] = payload;
+                next[\`red_\${selectedTeamName}\`] = payload;
+                next[\`blue_\${selectedTeamName}\`] = payload;
             } else {
-                delete next[`red_${selectedTeamName}`];
-                delete next[`blue_${selectedTeamName}`];
+                delete next[\`red_\${selectedTeamName}\`];
+                delete next[\`blue_\${selectedTeamName}\`];
             }
             return next;
         });
-        showToast?.('메모가 성공적으로 저장되었습니다.', 'success');
+        showToast?.('\uBA54\uBAA8\uAC00 \uC131\uACF5\uC801\uC73C\uB85C \uC800\uC7A5\uB418\uC5C8\uC2B5\uB2C8\uB2E4.', 'success');
     }, [selectedTeamName, showToast]);
 
     const persistPlayerMemos = useCallback(async (playerKey: string, entries: MemoEntry[]) => {
@@ -229,7 +234,7 @@ export const AnalysisMemoModal: React.FC<Props> = ({ isOpen, onClose, focusTarge
         const opp = selectedTeam?.isOpp;
         if (opp?.id && opp?.players) {
             const updated = (opp.players ?? []).map((p) => {
-                const key = `${p?.number ?? p?.name}`;
+                const key = \`\${p?.number ?? p?.name}\`;
                 return key === playerKey ? { ...p, memo: payload } : p;
             });
             await updateOpponentTeam(opp.id, { players: updated });
@@ -237,7 +242,7 @@ export const AnalysisMemoModal: React.FC<Props> = ({ isOpen, onClose, focusTarge
             await updatePlayerMemoInTeamSet(selectedTeam.setId, playerKey, payload);
         } else return;
         setPlayerMemoEntries((prev) => ({ ...prev, [playerKey]: entries }));
-        showToast?.('메모가 성공적으로 저장되었습니다.', 'success');
+        showToast?.('\uBA54\uBAA8\uAC00 \uC131\uACF5\uC801\uC73C\uB85C \uC800\uC7A5\uB418\uC5C8\uC2B5\uB2C8\uB2E4.', 'success');
     }, [selectedTeam, updateOpponentTeam, updatePlayerMemoInTeamSet, showToast]);
 
     if (!isOpen) return null;
@@ -248,39 +253,39 @@ export const AnalysisMemoModal: React.FC<Props> = ({ isOpen, onClose, focusTarge
             onClick={onClose}
             role="dialog"
             aria-modal="true"
-            aria-label="전력 분석 메모"
+            aria-label="\uC804\uB825 \uBD84\uC11D \uBA54\uBAA8"
         >
             <div
                 className="bg-slate-800 rounded-xl border border-slate-600 w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl font-sans"
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="p-4 border-b border-slate-600 font-semibold text-slate-200 text-center text-xl">
-                    📊 전력 분석 메모
+                    \uD83D\uDCCA \uC804\uB825 \uBD84\uC11D \uBA54\uBAA8
                 </div>
 
                 <div className="flex-1 flex min-h-0">
                     <div className="w-64 flex-shrink-0 flex flex-col border-r border-slate-600 p-3 bg-slate-800/50">
-                        <label className="text-slate-400 text-xs font-medium mb-1">대회</label>
+                        <label className="text-slate-400 text-xs font-medium mb-1">\uB300\uD68C</label>
                         <select
                             value={category || (cats[0] ?? '')}
                             onChange={(e) => { setCategory(e.target.value); setSelectedTeamName(''); focusHandledRef.current = null; }}
                             className="w-full px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-slate-200 text-sm mb-3"
                         >
                             {cats.map((c, idx) => (
-                                <option key={`cat-${idx}-${c}`} value={c}>{c}</option>
+                                <option key={\`cat-\${idx}-\${c}\`} value={c}>{c}</option>
                             ))}
                         </select>
-                        <label className="text-slate-400 text-xs font-medium mb-1">팀 선택</label>
+                        <label className="text-slate-400 text-xs font-medium mb-1">\uD300 \uC120\uD0DD</label>
                         <div className="flex-1 overflow-y-auto rounded-lg bg-slate-700/50 border border-slate-600 min-h-0">
                             {uniqueTeams.length === 0 ? (
-                                <p className="p-3 text-slate-500 text-sm">팀이 없습니다.</p>
+                                <p className="p-3 text-slate-500 text-sm">\uD300\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.</p>
                             ) : (
                                 uniqueTeams.map((t) => (
                                     <button
-                                        key={`${t.setId ?? 'no-set'}-${t.teamName}`}
+                                        key={\`\${t.setId ?? 'no-set'}-\${t.teamName}\`}
                                         type="button"
                                         onClick={() => { setSelectedTeamName(t.teamName); focusHandledRef.current = null; }}
-                                        className={`block w-full text-left px-3 py-2 text-sm rounded-none border-b border-slate-600/50 last:border-b-0 ${selectedTeamName === t.teamName ? 'bg-sky-600/30 text-sky-200' : 'text-slate-300 hover:bg-slate-600/50'}`}
+                                        className={\`block w-full text-left px-3 py-2 text-sm rounded-none border-b border-slate-600/50 last:border-b-0 \${selectedTeamName === t.teamName ? 'bg-sky-600/30 text-sky-200' : 'text-slate-300 hover:bg-slate-600/50'}\`}
                                     >
                                         {t.label}
                                     </button>
@@ -292,28 +297,28 @@ export const AnalysisMemoModal: React.FC<Props> = ({ isOpen, onClose, focusTarge
                     <div ref={rightPanelRef} className="flex-1 flex flex-col min-w-0 p-4 overflow-y-auto">
                         {selectedTeamName ? (
                             <>
-                                <p className="text-slate-300 font-medium mb-1">팀 전체 전력 분석</p>
-                                <p className="text-slate-500 text-xs mb-3">{(selectedTeam?.label ?? selectedTeamName)} · 전술판/전광판 메모와 동일</p>
+                                <p className="text-slate-300 font-medium mb-1">\uD300 \uC804\uCCB4 \uC804\uB825 \uBD84\uC11D</p>
+                                <p className="text-slate-500 text-xs mb-3">{(selectedTeam?.label ?? selectedTeamName)} \u00B7 \uC804\uC220\uD310/\uC804\uAD11\uD310 \uBA54\uBAA8\uC640 \uB3D9\uC77C</p>
                                 <MemoTimelinePanel
                                     disableInnerScroll
                                     entries={teamMemoEntries}
                                     onChange={setTeamMemoEntries}
                                     onSave={persistTeamMemos}
-                                    placeholder="팀 전체에 대한 전력 분석을 작성하세요."
+                                    placeholder="\uD300 \uC804\uCCB4\uC5D0 \uB300\uD55C \uC804\uB825 \uBD84\uC11D\uC744 \uC791\uC131\uD558\uC138\uC694."
                                 />
 
                                 <div className="mt-6 border-t border-slate-600 pt-4">
-                                    <p className="text-slate-300 font-medium mb-2">선수 개인별 전력 분석</p>
-                                    <p className="text-slate-500 text-xs mb-3">선수별 메모는 전술판·전광판 선수 자석 메모와 동일하게 공유됩니다.</p>
+                                    <p className="text-slate-300 font-medium mb-2">\uC120\uC218 \uAC1C\uC778\uBCC4 \uC804\uB825 \uBD84\uC11D</p>
+                                    <p className="text-slate-500 text-xs mb-3">\uC120\uC218\uBCC4 \uBA54\uBAA8\uB294 \uC804\uC220\uD310\u00B7\uC804\uAD11\uD310 \uC120\uC218 \uC790\uC11D \uBA54\uBAA8\uC640 \uB3D9\uC77C\uD558\uAC8C \uACF5\uC720\uB429\uB2C8\uB2E4.</p>
                                     <div className="space-y-6">
                                         {(selectedTeam?.isOpp?.players ?? []).map((p, idx) => {
-                                            const key = `${p?.number ?? p?.name ?? ''}`;
-                                            const domId = `analysis-memo-player-opp-${key}`;
+                                            const key = \`\${p?.number ?? p?.name ?? ''}\`;
+                                            const domId = \`analysis-memo-player-opp-\${key}\`;
                                             const isFocus = focusTarget?.playerId === key;
                                             return (
                                                 <div
-                                                    id={isFocus ? `analysis-memo-player-${focusTarget!.playerId}` : domId}
-                                                    key={`opp-${selectedTeam?.isOpp?.id ?? 'opp'}-${idx}-${key}`}
+                                                    id={isFocus ? \`analysis-memo-player-\${focusTarget!.playerId}\` : domId}
+                                                    key={\`opp-\${selectedTeam?.isOpp?.id ?? 'opp'}-\${idx}-\${key}\`}
                                                     className="bg-slate-700/50 rounded-lg p-3 border border-slate-600 scroll-mt-4"
                                                 >
                                                     <label className="block text-slate-300 text-sm font-medium mb-2">{formatPlayerNumber(p?.number)}{p?.name}</label>
@@ -323,15 +328,15 @@ export const AnalysisMemoModal: React.FC<Props> = ({ isOpen, onClose, focusTarge
                                                         entries={playerMemoEntries[key] ?? []}
                                                         onChange={(entries) => setPlayerMemoEntries((prev) => ({ ...prev, [key]: entries }))}
                                                         onSave={(entries) => persistPlayerMemos(key, entries)}
-                                                        placeholder="개인 전력 분석 메모"
+                                                        placeholder="\uAC1C\uC778 \uC804\uB825 \uBD84\uC11D \uBA54\uBAA8"
                                                     />
                                                 </div>
                                             );
                                         })}
                                         {(selectedTeam?.players ?? []).map((p, idx) => (
                                             <div
-                                                id={`analysis-memo-player-${p.id}`}
-                                                key={`club-${p.id}-${idx}`}
+                                                id={\`analysis-memo-player-\${p.id}\`}
+                                                key={\`club-\${p.id}-\${idx}\`}
                                                 className="bg-slate-700/50 rounded-lg p-3 border border-slate-600 scroll-mt-4"
                                             >
                                                 <label className="block text-slate-300 text-sm font-medium mb-2">{formatPlayerNumber(p?.number)}{p?.name}</label>
@@ -341,26 +346,30 @@ export const AnalysisMemoModal: React.FC<Props> = ({ isOpen, onClose, focusTarge
                                                     entries={playerMemoEntries[p.id] ?? []}
                                                     onChange={(entries) => setPlayerMemoEntries((prev) => ({ ...prev, [p.id]: entries }))}
                                                     onSave={(entries) => persistPlayerMemos(p.id, entries)}
-                                                    placeholder="개인 전력 분석 메모"
+                                                    placeholder="\uAC1C\uC778 \uC804\uB825 \uBD84\uC11D \uBA54\uBAA8"
                                                 />
                                             </div>
                                         ))}
                                         {((selectedTeam?.isOpp?.players?.length ?? 0) === 0 && (selectedTeam?.players?.length ?? 0) === 0) && (
-                                            <p className="p-3 text-slate-500 text-sm">등록된 선수가 없습니다. 팀 관리에서 선수를 추가하세요.</p>
+                                            <p className="p-3 text-slate-500 text-sm">\uB4F1\uB85D\uB41C \uC120\uC218\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4. \uD300 \uAD00\uB9AC\uC5D0\uC11C \uC120\uC218\uB97C \uCD94\uAC00\uD558\uC138\uC694.</p>
                                         )}
                                     </div>
                                 </div>
                             </>
                         ) : (
-                            <div className="flex-1 flex items-center justify-center text-slate-500 text-sm">왼쪽에서 팀을 선택하세요.</div>
+                            <div className="flex-1 flex items-center justify-center text-slate-500 text-sm">\uC67C\uCABD\uC5D0\uC11C \uD300\uC744 \uC120\uD0DD\uD558\uC138\uC694.</div>
                         )}
                     </div>
                 </div>
 
                 <div className="p-3 border-t border-slate-600">
-                    <button type="button" onClick={onClose} className="w-full py-2 rounded-lg bg-slate-600 hover:bg-slate-500 text-slate-200 text-sm">닫기</button>
+                    <button type="button" onClick={onClose} className="w-full py-2 rounded-lg bg-slate-600 hover:bg-slate-500 text-slate-200 text-sm">\uB2EB\uAE30</button>
                 </div>
             </div>
         </div>
     );
 };
+`;
+
+fs.writeFileSync(filePath, content, 'utf8');
+console.log('written', filePath);

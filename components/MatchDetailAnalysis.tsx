@@ -410,15 +410,22 @@ const MatchDetailAnalysis: React.FC<MatchDetailAnalysisProps> = ({ matchData, te
         }
 
         const statOrder: (keyof PlayerStats)[] = ['points', 'serviceAces', 'serveIn', 'spikeSuccesses', 'blockingPoints', 'digs', 'assists', 'serviceFaults'];
-        const statHeaderNames: Record<keyof PlayerStats, string> = {
+        const statHeaderNames: Partial<Record<keyof PlayerStats, string>> = {
             points: t('record_player_stats_header_points'),
             serviceAces: t('record_player_stats_header_serve'),
             serveIn: t('btn_serve_in'),
             spikeSuccesses: t('record_player_stats_header_spike'),
+            directSuccesses: t('direct_success'),
             blockingPoints: t('record_player_stats_header_blocking'),
             digs: t('stat_display_digs'),
             assists: t('stat_display_assists'),
             serviceFaults: t('record_player_stats_header_faults'),
+        };
+        const statDisplay = (stats: PlayerStats, key: keyof PlayerStats): number => {
+            const v = stats[key];
+            if (typeof v === 'number') return v;
+            if (Array.isArray(v)) return v.length;
+            return 0;
         };
         
         return (
@@ -447,7 +454,7 @@ const MatchDetailAnalysis: React.FC<MatchDetailAnalysisProps> = ({ matchData, te
                                     <tr key={player.id} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
                                         <td className="p-3 font-semibold text-slate-200">{player.originalName}</td>
                                         {statOrder.map(stat => (
-                                            <td key={stat} className="p-3 text-center text-slate-300 font-mono">{stats[stat] || 0}</td>
+                                            <td key={stat} className="p-3 text-center text-slate-300 font-mono">{statDisplay(stats, stat)}</td>
                                         ))}
                                     </tr>
                                 );
