@@ -118,4 +118,4 @@ ${matchDataSummary}
     );
 };
 
-export default AnalysisReportModal;
+export default AnalysisReportModal; 
