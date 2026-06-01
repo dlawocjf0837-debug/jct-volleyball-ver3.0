@@ -165,6 +165,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
         matchState, matchTime, timerOn, dispatch, setTimerOn,
         matchHistory, saveMatchHistory, saveRoleHistoryAfterMatch, showToast, p2p, clearInProgressMatch,
         settings, setHostTournamentMode, sendTicker, sendEffect,
+        broadcastVideoId, sendBroadcastVideoId,
         isChatEnabled, setChatEnabled, isChatWindowVisible, setChatWindowVisible, receivedChatMessages, sendChat, removeChatMessage, banViewer, blockedViewerIds = new Set(), toggleBlockViewer = () => {},
         receivedEffects = [], removeReceivedEffect,
         practiceMatchHistory = [], leagueMatchHistory = [], playerCumulativeStats = {}, teamSets = []
@@ -199,6 +200,8 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
     const [showTournamentPasswordModal, setShowTournamentPasswordModal] = useState(false);
     const [tournamentPasswordInput, setTournamentPasswordInput] = useState('');
     const [tickerInput, setTickerInput] = useState('');
+    const [showLiveBroadcastSettings, setShowLiveBroadcastSettings] = useState(false);
+    const [youtubeVideoIdInput, setYoutubeVideoIdInput] = useState('');
     const [isSwapped, setIsSwapped] = useState(false);
     const courtChangeAt8DoneRef = useRef(false);
     const latestIsTournamentModeRef = useRef(false);
@@ -938,7 +941,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                 <div className="flex-1 flex items-center justify-start min-w-0">
                     {matchState.status === 'in_progress' && p2p.isHost && p2p.peerId && (() => {
                         const pin = p2p.peerId.replace(/^jive-/, '');
-                        const joinUrl = `${window.location.origin}/?code=${encodeURIComponent(pin)}`;
+                        const joinUrl = `${window.location.origin}/?code=${encodeURIComponent(pin)}${entryMode === 'club' ? '&liveView=broadcast' : ''}`;
                         return (
                             <div className="hidden md:flex items-center gap-2 bg-slate-800 border-2 border-yellow-500/50 rounded-lg px-3 py-2 flex-shrink-0">
                                 <button
@@ -967,7 +970,7 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                     })()}
                     {matchState.status === 'in_progress' && p2p.isHost && p2p.peerId && (() => {
                         const pin = p2p.peerId.replace(/^jive-/, '');
-                        const joinUrl = `${window.location.origin}/?code=${encodeURIComponent(pin)}`;
+                        const joinUrl = `${window.location.origin}/?code=${encodeURIComponent(pin)}${entryMode === 'club' ? '&liveView=broadcast' : ''}`;
                         return (
                             <div className="md:hidden flex items-center gap-2 bg-slate-800 border-2 border-yellow-500/50 rounded-lg p-2 flex-shrink-0">
                                 <button
@@ -1018,6 +1021,20 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
                         >
                             <span>📋</span>
                             <span className="hidden sm:inline">전술판</span>
+                        </button>
+                    )}
+                    {entryMode === 'club' && matchState.status === 'in_progress' && p2p.isHost && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setYoutubeVideoIdInput(broadcastVideoId || '');
+                                setShowLiveBroadcastSettings(true);
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-700 hover:bg-sky-600/80 border border-slate-600 hover:border-sky-500/50 text-slate-200 hover:text-white font-semibold text-sm min-h-[44px] transition-colors flex-shrink-0"
+                            title="Live Broadcast YouTube 설정"
+                        >
+                            <span>📺</span>
+                            <span className="hidden sm:inline">라이브 중계</span>
                         </button>
                     )}
                     {/* 🏆 대회 전광판 모드 토글 (CLASS/CLUB 공통) */}
@@ -1324,6 +1341,37 @@ export const ScoreboardScreen: React.FC<ScoreboardProps> = ({ onBackToMenu, mode
 
             {/* Modals */}
             {entryMode === 'club' && <TacticalBoardModal isOpen={showTacticalBoard} onClose={() => setShowTacticalBoard(false)} appMode="CLUB" initialMatchState={matchState} />}
+            {entryMode === 'club' && p2p.isHost && matchState.status === 'in_progress' && showLiveBroadcastSettings && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4" onClick={() => setShowLiveBroadcastSettings(false)}>
+                    <div className="bg-slate-900 rounded-2xl border border-slate-700 shadow-2xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+                        <h3 className="text-lg font-bold text-sky-300 mb-2">📺 Live Broadcast (YouTube)</h3>
+                        <p className="text-sm text-slate-400 mb-4">YouTube URL 또는 영상 ID를 입력하면 시청자 화면 배경에 즉시 반영됩니다.</p>
+                        <input
+                            type="text"
+                            value={youtubeVideoIdInput}
+                            onChange={(e) => setYoutubeVideoIdInput(e.target.value)}
+                            placeholder="https://youtu.be/... 또는 영상 ID"
+                            className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 mb-4"
+                            autoFocus
+                        />
+                        <div className="flex gap-2">
+                            <button type="button" onClick={() => setShowLiveBroadcastSettings(false)} className="flex-1 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold">취소</button>
+                            <button
+                                type="button"
+                                disabled={!youtubeVideoIdInput.trim()}
+                                onClick={() => {
+                                    sendBroadcastVideoId?.(youtubeVideoIdInput.trim());
+                                    setShowLiveBroadcastSettings(false);
+                                    showToast('라이브 중계 영상 ID가 전송되었습니다.', 'success');
+                                }}
+                                className="flex-1 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold disabled:bg-slate-600 disabled:opacity-60"
+                            >
+                                저장
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             {entryMode !== 'club' && showRulesModal && <RulesModal onClose={() => setShowRulesModal(false)} />}
             {matchState.timeout && <TimeoutModal timeLeft={matchState.timeout.timeLeft} onClose={handleCloseTimeout} />}
             {entryMode === 'club' && (

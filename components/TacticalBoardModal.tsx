@@ -66,6 +66,19 @@ const POS_9_OPP = [
 const LABELS_6 = ['S', 'A', 'A', 'A', 'L', 'L'];
 const LABELS_9 = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
+/** CLUB 6인제: 포지션 라벨 + 전위3/후위3 진형 좌표 + 리베로(Li) */
+const CLUB_LABELS_6_COURT = ['OH1', 'MB1', 'OH2', 'OP', 'S', 'MB2'];
+const CLUB_POS_6 = [
+    { x: 22, y: 18 }, { x: 30, y: 18 }, { x: 38, y: 18 },
+    { x: 24, y: 52 }, { x: 32, y: 52 }, { x: 40, y: 52 },
+];
+const CLUB_POS_6_OPP = [
+    { x: 62, y: 18 }, { x: 70, y: 18 }, { x: 78, y: 18 },
+    { x: 60, y: 52 }, { x: 68, y: 52 }, { x: 76, y: 52 },
+];
+const CLUB_LIBERO_POS_RED = { x: 30, y: 42 };
+const CLUB_LIBERO_POS_BLUE = { x: 70, y: 42 };
+
 /** 벤치: y 88% 고정(안전지대, 창 크기 변화 시 잘림/겹침 방지). Red: 20+5*i, Blue: 80-5*i */
 const BENCH_Y = 88;
 
@@ -78,14 +91,20 @@ function benchPos(n: number, side: 'left' | 'right'): { x: number; y: number }[]
     return arr;
 }
 
-function buildTokens(ruleMode: 6 | 9, benchRed: number, benchBlue: number): Token[] {
+function buildTokens(ruleMode: 6 | 9, benchRed: number, benchBlue: number, clubMode: boolean): Token[] {
     const t: Token[] = [];
-    const rPos = ruleMode === 6 ? POS_6 : POS_9;
-    const bPos = ruleMode === 6 ? POS_6_OPP : POS_9_OPP;
-    const rLab = ruleMode === 6 ? LABELS_6 : LABELS_9;
-    const bLab = ruleMode === 6 ? LABELS_6 : LABELS_9;
+    const rPos = ruleMode === 6 ? (clubMode ? CLUB_POS_6 : POS_6) : POS_9;
+    const bPos = ruleMode === 6 ? (clubMode ? CLUB_POS_6_OPP : POS_6_OPP) : POS_9_OPP;
+    const rLab = ruleMode === 6 ? (clubMode ? CLUB_LABELS_6_COURT : LABELS_6) : LABELS_9;
+    const bLab = ruleMode === 6 ? (clubMode ? CLUB_LABELS_6_COURT : LABELS_6) : LABELS_9;
     rPos.forEach((p, i) => t.push({ id: `r${i + 1}`, label: rLab[i] ?? '', team: 'red', x: p.x, y: p.y }));
     bPos.forEach((p, i) => t.push({ id: `b${i + 1}`, label: bLab[i] ?? '', team: 'blue', x: p.x, y: p.y }));
+
+    if (ruleMode === 6 && clubMode) {
+        t.push({ id: 'r_libero', label: 'Li', team: 'red', x: CLUB_LIBERO_POS_RED.x, y: CLUB_LIBERO_POS_RED.y });
+        t.push({ id: 'b_libero', label: 'Li', team: 'blue', x: CLUB_LIBERO_POS_BLUE.x, y: CLUB_LIBERO_POS_BLUE.y });
+    }
+
     benchPos(benchRed, 'left').forEach((p, i) => t.push({ id: `r_bench_${i}`, label: `${(ruleMode === 6 ? 7 : 10) + i}`, team: 'red', x: p.x, y: p.y }));
     benchPos(benchBlue, 'right').forEach((p, i) => t.push({ id: `b_bench_${i}`, label: `${(ruleMode === 6 ? 7 : 10) + i}`, team: 'blue', x: p.x, y: p.y }));
     t.push({ id: 'ball', label: '', team: 'ball', x: 50, y: 90 });
@@ -103,7 +122,7 @@ export const TacticalBoardModal: React.FC<Props> = ({ isOpen, onClose, appMode =
     const [ruleMode, setRuleMode] = useState<6 | 9>(6);
     const [benchRed, setBenchRed] = useState(INITIAL_BENCH);
     const [benchBlue, setBenchBlue] = useState(INITIAL_BENCH);
-    const [tokens, setTokens] = useState<Token[]>(() => buildTokens(6, INITIAL_BENCH, INITIAL_BENCH));
+    const [tokens, setTokens] = useState<Token[]>(() => buildTokens(6, INITIAL_BENCH, INITIAL_BENCH, appMode === 'CLUB'));
     const [editId, setEditId] = useState<string | null>(null);
     const [editVal, setEditVal] = useState('');
     const [editMemoVisible, setEditMemoVisible] = useState(false);
@@ -225,7 +244,7 @@ export const TacticalBoardModal: React.FC<Props> = ({ isOpen, onClose, appMode =
             setRuleMode(rule);
             setBenchRed(INITIAL_BENCH);
             setBenchBlue(INITIAL_BENCH);
-            setTokens(buildTokens(rule, INITIAL_BENCH, INITIAL_BENCH));
+            setTokens(buildTokens(rule, INITIAL_BENCH, INITIAL_BENCH, appMode === 'CLUB'));
             setStrokes([]);
             setEraseStrokes([]);
             setCurrentStroke([]);
@@ -242,12 +261,16 @@ export const TacticalBoardModal: React.FC<Props> = ({ isOpen, onClose, appMode =
         }
     }, [isOpen, rule, appMode]);
 
-    const applyMode = useCallback((m: 6 | 9) => { setRuleMode(m); setTokens(buildTokens(m, benchRed, benchBlue)); }, [benchRed, benchBlue]);
-    const resetTokens = useCallback(() => { setTokens(buildTokens(ruleMode, benchRed, benchBlue)); setStrokes([]); setEraseStrokes([]); setCurrentStroke([]); setUndoStack([]); }, [ruleMode, benchRed, benchBlue]);
+    const applyMode = useCallback((m: 6 | 9) => { setRuleMode(m); setTokens(buildTokens(m, benchRed, benchBlue, appMode === 'CLUB')); }, [benchRed, benchBlue, appMode]);
+    const resetTokens = useCallback(() => { setTokens(buildTokens(ruleMode, benchRed, benchBlue, appMode === 'CLUB')); setStrokes([]); setEraseStrokes([]); setCurrentStroke([]); setUndoStack([]); }, [ruleMode, benchRed, benchBlue, appMode]);
 
     const courtCount = ruleMode === 6 ? 6 : 9;
-    const redBenchCount = tokens.filter((t) => t.team === 'red').length - courtCount;
-    const blueBenchCount = tokens.filter((t) => t.team === 'blue').length - courtCount;
+    const redBenchCount = (appMode === 'CLUB' && ruleMode === 6)
+        ? tokens.filter((t) => t.team === 'red' && t.y >= 80).length
+        : tokens.filter((t) => t.team === 'red').length - courtCount;
+    const blueBenchCount = (appMode === 'CLUB' && ruleMode === 6)
+        ? tokens.filter((t) => t.team === 'blue' && t.y >= 80).length
+        : tokens.filter((t) => t.team === 'blue').length - courtCount;
     const redBenchFull = redBenchCount >= 6;
     const blueBenchFull = blueBenchCount >= 6;
 

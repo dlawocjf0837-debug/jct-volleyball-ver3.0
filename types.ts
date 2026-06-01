@@ -473,6 +473,9 @@ export type P2PMessage = {
     type: 'ticker_sync';
     payload: string;
 } | {
+    type: 'broadcast_video_sync';
+    payload: { videoId: string };
+} | {
     type: 'REACTION';
     payload: { emoji: string };
 } | {
@@ -609,6 +612,8 @@ export interface DataContextType {
     sendReaction?: (emoji: string) => void;
     sendTimeoutViewer?: (active: boolean, timeLeft?: number) => void;
     sendEffect?: (effectType: 'SPIKE' | 'BLOCK') => void;
+    broadcastVideoId: string;
+    sendBroadcastVideoId?: (videoId: string) => void;
     isChatEnabled: boolean;
     setChatEnabled?: (value: boolean) => void;
     isChatWindowVisible: boolean;

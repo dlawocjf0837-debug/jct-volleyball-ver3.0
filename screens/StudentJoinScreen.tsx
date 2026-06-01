@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useData } from '../contexts/DataContext';
 import AnnouncerScreen from './AnnouncerScreen';
+import LiveBroadcastScreen from './LiveBroadcastScreen';
 import { useTranslation } from '../hooks/useTranslation';
 
 interface StudentJoinScreenProps {
@@ -13,6 +14,7 @@ interface StudentJoinScreenProps {
 const StudentJoinScreen: React.FC<StudentJoinScreenProps> = ({ onBackToLock, appMode = 'CLASS', pendingJoinCode, clearPendingJoinCode }) => {
     const { joinSession, p2p } = useData();
     const { t } = useTranslation();
+    const liveView = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('liveView') : null;
     const [joinId, setJoinId] = useState(pendingJoinCode ?? '');
     const [isJoining, setIsJoining] = useState(false);
     const [joinError, setJoinError] = useState('');
@@ -47,6 +49,9 @@ const StudentJoinScreen: React.FC<StudentJoinScreenProps> = ({ onBackToLock, app
     };
 
     if (p2p.isConnected) {
+        if (appMode === 'CLUB' || liveView === 'broadcast') {
+            return <LiveBroadcastScreen />;
+        }
         return (
             <div className="min-h-screen flex flex-col bg-slate-900">
                 <div className="flex-shrink-0 flex justify-end items-center p-3 bg-slate-800/80 border-b border-slate-700">

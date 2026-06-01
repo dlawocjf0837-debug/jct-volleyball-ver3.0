@@ -23,6 +23,7 @@ import TournamentScreen from './screens/TournamentScreen';
 import LeagueScreen from './screens/LeagueScreen';
 import LeagueLobbyScreen from './screens/LeagueLobbyScreen';
 import AnnouncerScreen from './screens/AnnouncerScreen';
+import LiveBroadcastScreen from './screens/LiveBroadcastScreen';
 import CameraDirectorScreen from './screens/CameraDirectorScreen';
 import CompetitionScreen from './screens/CompetitionScreen';
 import AdminLockScreen from './screens/AdminLockScreen';
@@ -486,6 +487,9 @@ const AppContent = ({ appMode, onReturnToInitialScreen }: { appMode: 'CLASS' | '
                     />
                 );
             case 'announcer':
+                if (appMode === 'CLUB') {
+                    return <LiveBroadcastScreen />;
+                }
                 return (
                     <AnnouncerScreen
                         onNavigateToHistory={() => setView('history')}

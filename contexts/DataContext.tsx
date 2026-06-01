@@ -6,6 +6,7 @@ import { translations } from '../data/translations';
 import localforage from 'localforage';
 import { filterProfanity } from '../utils/filterProfanity';
 import { hashToColor, ADMIN_CHAT_LABEL, ADMIN_CHAT_COLOR } from '../utils/chatUtils';
+import { extractYoutubeVideoId } from '../utils/extractYoutubeVideoId';
 
 const P2P_PIN_PREFIX = 'jive-';
 const PIN_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 영문대문자+숫자 (혼동 가능 문자 제외)
@@ -246,6 +247,16 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
     const sendTicker = useCallback((message: string) => {
         if (!message.trim()) return;
         broadcast({ type: 'ticker_sync', payload: message.trim() });
+    }, [broadcast]);
+
+    const [broadcastVideoId, setBroadcastVideoId] = useState<string>('');
+    const latestBroadcastVideoIdRef = useRef<string>('');
+
+    const sendBroadcastVideoId = useCallback((videoId: string) => {
+        const v = extractYoutubeVideoId(videoId);
+        latestBroadcastVideoIdRef.current = v;
+        setBroadcastVideoId(v);
+        broadcast({ type: 'broadcast_video_sync', payload: { videoId: v } });
     }, [broadcast]);
 
     const sendReaction = useCallback((emoji: string) => {
@@ -2264,6 +2275,8 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
         peerRef.current = null;
         setP2p({ peerId: null, isHost: false, isConnected: false, connections: [], status: 'disconnected', error: undefined, clientTournamentMode: undefined, viewerCount: undefined, timeoutViewer: undefined });
         setReceivedTickerMessage(null);
+        setBroadcastVideoId('');
+        latestBroadcastVideoIdRef.current = '';
         setReceivedReactions([]);
         setReceivedEffects([]);
         setReceivedChatMessages([]);
@@ -2340,6 +2353,7 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                 conn.send({ type: 'chat_enabled_sync', payload: latestHostChatEnabledRef.current });
                 conn.send({ type: 'chat_visibility_sync', payload: latestChatWindowVisibleRef.current });
                 conn.send({ type: 'chat_blocked_sync', payload: Array.from(blockedViewerIdsRef.current) });
+                conn.send({ type: 'broadcast_video_sync', payload: { videoId: latestBroadcastVideoIdRef.current } });
 
                 connRef.current.push(conn);
                 const viewerCount = connRef.current.length;
@@ -2429,6 +2443,8 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
                     setP2p(prev => ({ ...prev, clientTournamentMode: data.payload }));
                 } else if (data.type === 'ticker_sync') {
                     setReceivedTickerMessage(data.payload);
+                } else if (data.type === 'broadcast_video_sync') {
+                    setBroadcastVideoId(extractYoutubeVideoId(data.payload?.videoId ?? '') || '');
                 } else if (data.type === 'reaction_broadcast') {
                     addReceivedReaction(data.payload.emoji);
                 } else if (data.type === 'viewer_count_sync') {
@@ -2817,6 +2833,8 @@ export const DataProvider = ({ children, appMode = 'CLASS' }: PropsWithChildren<
         p2p,
         setHostTournamentMode,
         sendTicker,
+        broadcastVideoId,
+        sendBroadcastVideoId,
         sendReaction,
         sendTimeoutViewer,
         sendEffect,

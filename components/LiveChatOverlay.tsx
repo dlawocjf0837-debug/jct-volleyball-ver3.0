@@ -71,7 +71,7 @@ export const LiveChatOverlay: React.FC<LiveChatOverlayProps> = ({
             <button
                 type="button"
                 onClick={() => setIsChatMinimized(false)}
-                className={`fixed right-4 bottom-4 z-20 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-600/60 shadow-xl text-slate-200 font-semibold text-sm transition-all ${raiseOnMobile ? 'max-md:bottom-24' : ''}`}
+                className={`fixed right-4 bottom-4 z-[9999] pointer-events-auto flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-600/60 shadow-xl text-slate-200 font-semibold text-sm transition-all ${raiseOnMobile ? 'max-md:bottom-24' : ''}`}
                 title="채팅 열기"
             >
                 💬 채팅 열기
@@ -80,7 +80,7 @@ export const LiveChatOverlay: React.FC<LiveChatOverlayProps> = ({
     }
 
     return (
-        <div className={`fixed left-4 z-20 flex flex-col bg-black/70 backdrop-blur-sm rounded-xl border border-slate-600/60 overflow-hidden shadow-xl transition-all duration-300 ${raiseOnMobile ? 'bottom-4 max-md:bottom-24' : 'bottom-4'} ${isExpanded ? 'w-[min(28rem,90vw)] h-[min(600px,80vh)] max-h-[80vh]' : 'w-[min(320px,85vw)] max-h-[200px]'}`}>
+        <div className={`fixed left-4 z-[9999] pointer-events-auto flex flex-col bg-black/70 backdrop-blur-sm rounded-xl border border-slate-600/60 overflow-hidden shadow-xl transition-all duration-300 ${raiseOnMobile ? 'bottom-4 max-md:bottom-24' : 'bottom-4'} ${isExpanded ? 'w-[min(28rem,90vw)] h-[min(600px,80vh)] max-h-[80vh]' : 'w-[min(320px,85vw)] max-h-[200px]'}`}>
             <div className="px-3 py-2 border-b border-slate-600/60 text-xs font-semibold text-slate-300 flex items-center justify-between gap-2 shrink-0">
                 <span>💬 실시간 채팅</span>
                 <div className="flex items-center gap-1">
